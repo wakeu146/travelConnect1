@@ -137,7 +137,7 @@
                 <div
                     class="invisible absolute left-1/2 top-full z-40 w-52 -translate-x-1/2 translate-y-2 rounded-xl border border-[#dbe3e5] bg-white p-2 opacity-0 shadow-[0_14px_30px_rgba(23,48,66,.12)] transition-all duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100">
 
-                    <a href="{{ route('email-us', ['lang' => app()->getLocale()]) }}"
+                    <a href="{{ route('home', ['lang' => app()->getLocale()]) }}"
                         class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[#607985] transition hover:bg-[#f1f6f4] hover:text-[#173042]">
 
                         <!--<span
@@ -145,19 +145,14 @@
                             <i class="fa-regular fa-envelope text-sm"></i>
                         </span>-->
 
-                        <span>{{ __('messages.email_us') }}</span>
+                        <span>{{ __('messages.contact_us') }}</span>
                     </a>
 
-                    <a href="{{ route('agency-resources', ['lang' => app()->getLocale()]) }}"
+                    <a href="{{ route('home', ['lang' => app()->getLocale()]) }}"
                         class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[#607985] transition hover:bg-[#f1f6f4] hover:text-[#173042]">
-
-                        <!--<span
-                            class="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f1f6f4] text-[#173042]">
-                            <i class="fa-solid fa-book-open text-sm"></i>
-                        </span>-->
-
-                        <span>{{ __('messages.agency_resources') }}</span>
+                        <span>{{ __('messages.help_faq') }}</span>
                     </a>
+
                 </div>
             </div>
 
@@ -462,26 +457,20 @@
                         <div class="ml-10 mt-0.5 space-y-0.5 px-5 pl-2.5">
 
                             <a
-                                href="{{ route('email-us', ['lang' => app()->getLocale()]) }}"
+                                href="{{ route('home', ['lang' => app()->getLocale()]) }}"
                                 class="flex items-center gap-2 rounded-md px-2.5 py-2 text-xs text-[#607985] transition hover:bg-[#f1f6f4] hover:text-[#173042]">
 
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-3.5 w-3.5" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
 
-                                <span>{{ __('messages.email_us') }}</span>
+                                <span>{{ __('messages.contact_us') }}</span>
 
                             </a>
 
                             <a
-                                href="{{ route('agency-resources', ['lang' => app()->getLocale()]) }}"
+                                href="{{ route('home', ['lang' => app()->getLocale()]) }}"
                                 class="flex items-center gap-2 rounded-md px-2.5 py-2 text-xs text-[#607985] transition hover:bg-[#f1f6f4] hover:text-[#173042]">
-
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-3.5 w-3.5" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H12v17H6.5A2.5 2.5 0 0 0 4 22V5.5ZM20 5.5A2.5 2.5 0 0 0 17.5 3H12v17h5.5A2.5 2.5 0 0 1 20 22V5.5Z"/></svg>
-
-                                <span>{{ __('messages.agency_resources') }}</span>
-
+                                <span>{{ __('messages.help_faq') }}</span>
                             </a>
-
-                        </div>
 
                     </details>
 
@@ -497,16 +486,6 @@
                     <div class="mb-2 px-2.5">
                         <p class="text-[9px] font-bold uppercase tracking-[0.18em] text-[#9aabad]">
                             {{ __('messages.account') }}
-                        </p>
-                    </div>
-
-                    <a
-                        href="{{ auth()->check() ? route('settings', ['lang' => app()->getLocale()]) : route('login', ['lang' => app()->getLocale()]) }}"
-                        data-loading-link
-                        class="group flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-[#526b76] transition hover:bg-[#f7f9f8] hover:text-[#173042]">
-
-                        <span
-                            class="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f4f7f6] text-[#607985] transition group-hover:bg-white group-hover:text-[#173042] group-hover:shadow-sm">
 
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true"><path d="M10 5H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h5M13 8l4 4-4 4M8 12h9"/></svg>
 

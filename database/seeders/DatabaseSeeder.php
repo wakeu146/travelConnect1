@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use App\Models\{Agency, AgencyDocument, Country, Inquiry, Review, Service, TrustScoreLog, User};
+use App\Models\{Agency, AgencyDocument, AgencyExperience, Country, Inquiry, Review, Service, TrustScoreLog, User};
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -49,6 +49,15 @@ class DatabaseSeeder extends Seeder
                 $agency->countries()->attach($countries->random(fake()->numberBetween(2, 4))->pluck('id'));
                 $agency->services()->attach($services->random(fake()->numberBetween(2, 5))->pluck('id'));
                 AgencyDocument::factory(fake()->numberBetween(1, 3))->create(['agency_id' => $agency->id, 'status' => 'approved']);
+                foreach (['p1.jpeg', 'p2.jpeg', 'p3.jpeg'] as $index => $image) {
+                    AgencyExperience::create([
+                        'agency_id' => $agency->id,
+                        'image_path' => 'images/traveler_experience/'.$image,
+                        'caption' => ['A traveler beginning a new journey.', 'A shared trip made memorable.', 'A real traveler experience on the move.'][$index],
+                        'alt_text' => 'Traveler experience shared by '.$companyName,
+                        'published_at' => now()->subDays(3 - $index),
+                    ]);
+                }
                 Review::factory(fake()->numberBetween(2, 5))->create([
                     'agency_id' => $agency->id,
                     'user_id' => fn () => $travelers->random()->id,

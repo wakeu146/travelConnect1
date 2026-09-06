@@ -39,6 +39,7 @@ class User extends Authenticatable
     public function agency(): HasOne { return $this->hasOne(Agency::class); }
     public function reviews(): HasMany { return $this->hasMany(Review::class); }
     public function inquiries(): HasMany { return $this->hasMany(Inquiry::class); }
+    public function travelRequests(): HasMany { return $this->hasMany(TravelRequest::class); }
     public function favorites(): HasMany { return $this->hasMany(Favorite::class); }
     public function favoriteAgencies(): BelongsToMany { return $this->belongsToMany(Agency::class, 'favorites')->withTimestamps(); }
     public function isAdmin(): bool { return $this->role === UserRole::ADMIN; }

@@ -103,6 +103,41 @@ class TravelerDashboardTest extends TestCase
         $response->assertRedirect(route('login'));
     }
 
+    public function test_agency_profile_only_shows_the_top_five_published_reviews(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        $agency = Agency::factory()->create(['company_name' => 'Atlas Horizon Voyages']);
+
+        $topReviews = [
+            ['rating' => 5, 'comment' => 'Top review one', 'user' => 'Alpha Traveler'],
+            ['rating' => 5, 'comment' => 'Top review two', 'user' => 'Bravo Traveler'],
+            ['rating' => 5, 'comment' => 'Top review three', 'user' => 'Charlie Traveler'],
+            ['rating' => 4, 'comment' => 'Top review four', 'user' => 'Delta Traveler'],
+            ['rating' => 4, 'comment' => 'Top review five', 'user' => 'Echo Traveler'],
+            ['rating' => 3, 'comment' => 'Lower review one', 'user' => 'Foxtrot Traveler'],
+            ['rating' => 2, 'comment' => 'Lower review two', 'user' => 'Golf Traveler'],
+        ];
+
+        foreach ($topReviews as $reviewData) {
+            $user = User::factory()->create(['name' => $reviewData['user'], 'role' => 'traveler']);
+            Review::factory()->create([
+                'agency_id' => $agency->id,
+                'user_id' => $user->id,
+                'rating' => $reviewData['rating'],
+                'comment' => $reviewData['comment'],
+                'status' => 'published',
+            ]);
+        }
+
+        $response = $this->actingAs($traveler)->get(route('agency.show', ['slug' => 'atlas-horizon-voyages']));
+
+        $response->assertOk();
+        $response->assertSee('Top review one');
+        $response->assertSee('Top review five');
+        $response->assertDontSee('Lower review one');
+        $response->assertDontSee('Lower review two');
+    }
+
     public function test_a_traveler_can_upload_a_profile_photo(): void
     {
         Storage::fake('public');

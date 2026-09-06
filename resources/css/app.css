@@ -9,6 +9,38 @@
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
 
+:root {
+    --review-surface: #f5f7f5;
+    --review-surface-strong: #edf3f1;
+    --review-border: rgba(23, 48, 66, 0.12);
+    --review-text: #173042;
+    --review-text-muted: #607985;
+    --review-text-soft: #7d8ea0;
+    --review-accent: #e76f51;
+    --review-accent-soft: rgba(231, 111, 81, 0.12);
+    --review-star: #f5b14d;
+    --review-star-outline: rgba(23, 48, 66, 0.2);
+    --review-avatar-bg: rgba(231, 111, 81, 0.12);
+    --review-avatar-text: #173042;
+    --review-divider: rgba(23, 48, 66, 0.1);
+}
+
+.dashboard-dark {
+    --review-surface: #173042;
+    --review-surface-strong: #1d3a4a;
+    --review-border: rgba(199, 214, 220, 0.18);
+    --review-text: #edf3f5;
+    --review-text-muted: #bfd0d3;
+    --review-text-soft: #d7e5e7;
+    --review-accent: #f29c84;
+    --review-accent-soft: rgba(242, 156, 132, 0.12);
+    --review-star: #f6bf61;
+    --review-star-outline: rgba(237, 243, 245, 0.28);
+    --review-avatar-bg: rgba(242, 156, 132, 0.15);
+    --review-avatar-text: #edf3f5;
+    --review-divider: rgba(199, 214, 220, 0.12);
+}
+
 input:not([type='checkbox']):not([type='radio']) {
     border-color: #173042;
 }
@@ -165,6 +197,61 @@ input:not([type='checkbox']):not([type='radio']) {
 
 [data-agency-show] #reviews > div:first-child > a {
     display: none;
+}
+
+[data-agency-show] #reviews .uppercase {
+    text-transform: none;
+}
+
+[data-agency-show] #reviews > div:nth-of-type(2) {
+    border: 1px solid var(--review-border);
+    border-radius: 16px;
+    background: var(--review-surface);
+    padding: 20px;
+}
+
+[data-agency-show] #reviews > div:nth-of-type(2) .h-2 {
+    height: 6px;
+}
+
+[data-agency-show] #reviews > div:nth-of-type(2) .space-y-2 {
+    row-gap: 6px;
+}
+
+[data-agency-show] #reviews > div:nth-of-type(2) .text-right {
+    color: var(--review-text-muted);
+    font-weight: 400;
+}
+
+[data-agency-show] #reviews > div:nth-of-type(3) article {
+    border-width: 0 0 1px;
+    border-color: var(--review-divider);
+    padding-block: 18px;
+}
+
+[data-agency-show] #reviews > div:nth-of-type(3) article:first-child {
+    padding-top: 0;
+}
+
+[data-agency-show] #reviews > div:nth-of-type(3) article:last-child {
+    border-bottom: 0;
+}
+
+[data-agency-show] #reviews > div:nth-of-type(3) article > div > div > p + div {
+    color: var(--review-text-soft);
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+[data-agency-show] #reviews > div:nth-of-type(3) article > div > div > p + div span:first-child {
+    background: var(--review-accent-soft);
+    color: var(--review-accent);
+    font-size: 0.65rem;
+}
+
+[data-agency-show] #reviews > div:nth-of-type(3) article > div > div > p + div span:last-child {
+    color: var(--review-text-soft);
+    font-weight: 400;
 }
 
 .dashboard-dark [data-agency-show] > section,

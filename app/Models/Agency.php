@@ -15,10 +15,11 @@ class Agency extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $fillable = ['user_id', 'company_name', 'description', 'license_number', 'verification_status', 'trust_score', 'address', 'phone', 'email', 'website'];
+    protected $fillable = ['user_id', 'company_name', 'description', 'license_number', 'verification_status', 'trust_score', 'address', 'phone', 'email', 'website', 'logo_path', 'cover_image_path'];
     protected function casts(): array { return ['verification_status' => VerificationStatus::class, 'trust_score' => 'integer']; }
     public function owner(): BelongsTo { return $this->belongsTo(User::class, 'user_id'); }
     public function documents(): HasMany { return $this->hasMany(AgencyDocument::class); }
+    public function experiences(): HasMany { return $this->hasMany(AgencyExperience::class); }
     public function countries(): BelongsToMany { return $this->belongsToMany(Country::class, 'agency_country')->withTimestamps(); }
     public function services(): BelongsToMany { return $this->belongsToMany(Service::class, 'agency_service')->withTimestamps(); }
     public function reviews(): HasMany { return $this->hasMany(Review::class); }

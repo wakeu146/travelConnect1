@@ -52,10 +52,10 @@ Route::get('/account/discover', function () {
 })->middleware('auth')->name('account.discover');
 Route::get('/agencies/{slug}', function (string $slug) {
     $agencies = [
-        'atlas-horizon-voyages' => ['name' => 'Atlas Horizon Voyages', 'country' => 'France', 'service' => 'Adventure travel', 'rating' => '4.9', 'reviews' => '38', 'description' => 'Tailor-made adventures across Europe and beyond, planned by a team that knows the routes personally.', 'cover' => 'https://images.unsplash.com/photo-1530789253388-582c481c54b0?auto=format&fit=crop&w=1600&q=85'],
-        'lumiere-routes' => ['name' => 'Lumiere Routes', 'country' => 'Portugal', 'service' => 'Luxury escapes', 'rating' => '4.8', 'reviews' => '31', 'description' => 'Slow travel and beautiful escapes, thoughtfully planned around the details that make a journey memorable.', 'cover' => 'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=1600&q=85'],
-        'northstar-escapes' => ['name' => 'Northstar Escapes', 'country' => 'Canada', 'service' => 'Family holidays', 'rating' => '4.9', 'reviews' => '44', 'description' => 'Family journeys built around practical planning, local insight, and the moments that matter.', 'cover' => 'https://images.unsplash.com/photo-1522083165195-3424ed129620?auto=format&fit=crop&w=1600&q=85'],
-        'sirocco-travel-house' => ['name' => 'Sirocco Travel House', 'country' => 'Morocco', 'service' => 'Cultural tours', 'rating' => '4.7', 'reviews' => '26', 'description' => 'Cultural journeys shaped by local knowledge, meaningful encounters, and carefully chosen routes.', 'cover' => 'https://images.unsplash.com/photo-1539650116574-75c0c6d73f6e?auto=format&fit=crop&w=1600&q=85'],
+        'atlas-horizon-voyages' => ['name' => 'Atlas Horizon Voyages', 'country' => 'France', 'service' => 'Adventure travel', 'rating' => '4.9', 'reviews' => '38', 'description' => 'Tailor-made adventures across Europe and beyond, planned by a team that knows the routes personally.', 'cover' => asset('images/agencies/atlas-horizon.jpg')],
+        'lumiere-routes' => ['name' => 'Lumiere Routes', 'country' => 'Portugal', 'service' => 'Luxury escapes', 'rating' => '4.8', 'reviews' => '31', 'description' => 'Slow travel and beautiful escapes, thoughtfully planned around the details that make a journey memorable.', 'cover' => asset('images/agencies/lumiere-routes.jpg')],
+        'northstar-escapes' => ['name' => 'Northstar Escapes', 'country' => 'Canada', 'service' => 'Family holidays', 'rating' => '4.9', 'reviews' => '44', 'description' => 'Family journeys built around practical planning, local insight, and the moments that matter.', 'cover' => asset('images/agencies/northstar-escapes.jpg')],
+        'sirocco-travel-house' => ['name' => 'Sirocco Travel House', 'country' => 'Morocco', 'service' => 'Cultural tours', 'rating' => '4.7', 'reviews' => '26', 'description' => 'Cultural journeys shaped by local knowledge, meaningful encounters, and carefully chosen routes.', 'cover' => asset('images/agencies/sirocco-travel.jpg')],
         'blue-fern-expeditions' => ['name' => 'Blue Fern Expeditions', 'country' => 'New Zealand', 'service' => 'Adventure travel', 'rating' => '4.8', 'reviews' => '22', 'description' => 'Outdoor journeys shaped by local expertise, flexible planning, and unforgettable landscapes.', 'cover' => asset('images/agencies/blue-fern.jpg')],
     ];
 
@@ -72,24 +72,19 @@ Route::get('/agencies/{slug}', function (string $slug) {
 
     /** @var User $user */
     $user = Auth::user();
-    $agencyModel = Agency::where('company_name', $agencies[$slug]['name'])->first();
-    $publishedReviews = $agencyModel?->reviews()->with('user')->where('status', 'published')->latest()->get() ?? collect();
-    $visibleReviewCount = $publishedReviews->count() ?: (int) $agencies[$slug]['reviews'];
-    $visibleRating = $publishedReviews->count() ? number_format($publishedReviews->avg('rating'), 1) : $agencies[$slug]['rating'];
-    $ratingCounts = $publishedReviews->count() ? $publishedReviews->groupBy('rating')->map->count() : collect();
+    $agencyModel = Agency::where('company_name', $agencies[$slug]['name'])->with(['experiences' => fn ($query) => $query->latest('published_at')])->first();
+    $publishedReviewCount = $agencyModel?->reviews()->where('status', 'published')->count() ?? 0;
+    $publishedReviews = $agencyModel?->reviews()->with('user')->where('status', 'published')->orderByDesc('rating')->orderByDesc('created_at')->limit(5)->get() ?? collect();
+    $visibleReviewCount = $publishedReviewCount ?: (int) $agencies[$slug]['reviews'];
+    $visibleRating = $publishedReviewCount ? number_format($agencyModel->reviews()->where('status', 'published')->avg('rating') ?? 0, 1) : $agencies[$slug]['rating'];
+    $ratingCounts = $agencyModel && $publishedReviewCount ? $agencyModel->reviews()->where('status', 'published')->get()->groupBy('rating')->map->count() : collect();
     $pendingReview = $agencyModel?->reviews()->where('user_id', $user->id)->where('status', 'pending')->latest()->first();
-    return view('agency-show', ['agency' => $agencies[$slug], 'agencyModel' => $agencyModel, 'isSaved' => $agencyModel && $user->favoriteAgencies()->whereKey($agencyModel->id)->exists(), 'publishedReviews' => $publishedReviews, 'visibleReviewCount' => $visibleReviewCount, 'visibleRating' => $visibleRating, 'ratingCounts' => $ratingCounts, 'pendingReview' => $pendingReview, 'gallery' => [
-        ['image' => 'https://images.unsplash.com/photo-1527631746610-bca00a040d60?auto=format&fit=crop&w=1000&q=85', 'alt' => 'Travelers hiking through a mountain landscape'],
-        ['image' => 'https://images.unsplash.com/photo-1526772662000-3f88f10405ff?auto=format&fit=crop&w=1000&q=85', 'alt' => 'Traveler viewing a scenic destination'],
-        ['image' => 'https://images.unsplash.com/photo-1501555088652-021faaa?auto=format&fit=crop&w=1000&q=85', 'alt' => 'Travelers exploring an outdoor destination'],
-    ]]);
+    return view('agency-show', ['agency' => $agencies[$slug], 'agencyModel' => $agencyModel, 'isSaved' => $agencyModel && $user->favoriteAgencies()->whereKey($agencyModel->id)->exists(), 'publishedReviews' => $publishedReviews, 'publishedReviewCount' => $publishedReviewCount, 'visibleReviewCount' => $visibleReviewCount, 'visibleRating' => $visibleRating, 'ratingCounts' => $ratingCounts, 'pendingReview' => $pendingReview]);
 })->middleware('auth')->name('agency.show');
 Route::post('/agencies/{slug}/reviews', [ReviewController::class, 'store'])->middleware('auth')->name('reviews.store');
 Route::post('/agencies/{slug}/favorite', [FavoriteController::class, 'toggle'])->middleware('auth')->name('favorites.toggle');
 Route::view('/how-it-works', 'how-it-works')->name('how-it-works');
 Route::view('/for-agencies', 'for-agencies')->name('for-agencies');
-Route::get('/email-us', fn () => view('static-page', ['pageTitle' => __('messages.email_us'), 'pageIntro' => __('messages.email_us_intro'), 'pageBody' => __('messages.email_us_body')]))->name('email-us');
-Route::get('/agency-resources', fn () => view('static-page', ['pageTitle' => __('messages.agency_resources'), 'pageIntro' => __('messages.agency_resources_intro'), 'pageBody' => __('messages.agency_resources_body')]))->name('agency-resources');
 Route::get('/terms', fn () => view('static-page', ['pageTitle' => __('messages.terms_of_use'), 'pageIntro' => __('messages.terms_intro'), 'pageBody' => __('messages.terms_body')]))->name('terms');
 Route::get('/privacy', fn () => view('static-page', ['pageTitle' => __('messages.privacy_policy'), 'pageIntro' => __('messages.privacy_intro'), 'pageBody' => __('messages.privacy_body')]))->name('privacy');
 Route::get('/accessibility', fn () => view('static-page', ['pageTitle' => __('messages.accessibility'), 'pageIntro' => __('messages.accessibility_intro'), 'pageBody' => __('messages.accessibility_body')]))->name('accessibility');
