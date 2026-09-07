@@ -33,7 +33,7 @@ This README is also the continuation handoff for future AI agents. Read the curr
 
 ## Current implementation state
 
-The traveler-facing marketplace is the active product surface. The original small authenticated dashboard is still used for both traveler and agency-owner login until the agency dashboard is rebuilt properly.
+The traveler-facing marketplace and the agency workspace are active product surfaces. Agency owners can manage their public profile, media, verification documents, and travel experiences; inquiry response/status actions and notifications remain deferred.
 
 ### Latest session handoff
 
@@ -43,13 +43,18 @@ The traveler-facing marketplace is the active product surface. The original smal
 - Agency profile routes use local cover assets instead of remote Unsplash URLs. The reusable agency card also maps these agency names to the same local files.
 - The review Blade view was validated with `php artisan view:cache`; the focused feature suite passed with 14 tests and 61 assertions.
 - Frontend assets were rebuilt successfully with `npm run build`.
+- The protected agency dashboard overview is available at `GET /agency/dashboard` as `agency.dashboard` and reuses `x-account-shell`.
+- Agency owners can edit their company/contact details, destinations, services, logo, cover image, upload verification documents, and publish travel experiences from `agency.settings`.
+- Agency owners are redirected from the shared `/dashboard` entry point to the agency workspace; travelers retain the existing dashboard.
 
-The following agency-dashboard work was intentionally removed from the runtime after an unstable implementation:
+The following agency-dashboard work was intentionally removed from the runtime after an unstable implementation and remains deferred:
 
-- No `agency.dashboard` route currently exists
-- No agency dashboard controller or agency dashboard Blade view is active
+- Agency profile CRUD is active for the current profile/media fields
+- Agency experience publishing is active
+- Agency document upload is active; review/approval management remains an admin workflow
+- Agency inquiry response/status actions are not active
 - No traveler-request posting route is active
-- Agency owners currently fall back to the small `auth.dashboard` view after login
+- Agency owners now use the protected dashboard overview at `agency.dashboard`
 
 The data foundation was intentionally preserved for future work:
 
@@ -140,13 +145,16 @@ npm run build
 ## Application structure
 
 - `app/Models`: User, Agency, AgencyExperience, Favorite, Review, Inquiry, TravelRequest, and related models
-- `app/Http/Controllers`: authentication, favorite, and review actions; the agency dashboard controller was intentionally removed for a future rebuild
+- `app/Http/Controllers`: authentication, favorite, review, and agency dashboard overview actions
 - `app/Enums`: user roles, verification states, review states, document states, and document types
 - `app/Http/Middleware/SetLocale.php`: validates and stores the active locale
+- `app/Http/Middleware/EnsureAgencyOwner.php`: protects agency-owner routes and verifies an owned agency record
+- `app/Policies/AgencyPolicy.php`: authorizes agency dashboard ownership
 - `routes/web.php`: web routes and current agency directory data
 - `resources/views/components/account-shell.blade.php`: authenticated navigation shell, theme toggle, and header search
 - `resources/views/components/agency-card.blade.php`: reusable agency card
 - `resources/views/auth`: traveler dashboard, saved agencies, activity, and settings pages
+- `resources/views/agencies`: agency dashboard views and future agency-only workspace views
 - `resources/views/agency-show.blade.php`: agency profile and review experience
 - `resources/css/app.css`: theme, responsive, and account UI rules
 - `resources/js/app.js`: locale-preserving navigation, favorites, carousels, and UI interactions
@@ -157,7 +165,7 @@ npm run build
 Role-specific view convention:
 
 - `auth/` is currently used for authentication and the existing small dashboard because that is the stable legacy structure.
-- When the agency dashboard is rebuilt, create a dedicated `agency/` view folder and move agency-only views there.
+- Agency-only views live in the dedicated `agencies/` view folder.
 - Keep traveler-only dashboard views in a dedicated `traveler/` folder only as part of a deliberate migration, updating every route and test reference together.
 
 ## Route map
@@ -168,7 +176,7 @@ Authenticated traveler routes include `/dashboard`, `/account/discover`, `/accou
 
 Authentication routes include login, registration, password recovery, verification-code reset, and logout.
 
-There is currently no active agency-dashboard route. Reintroduce one only after implementing its controller, policies, requests, views, and tests together.
+The active agency-dashboard route is `GET /agency/dashboard` (`agency.dashboard`). It is protected by `auth` and `agency-owner`. Add profile, experience, document, and inquiry mutations only with policies, requests, and feature tests together.
 
 ## Important behavior
 
@@ -194,6 +202,10 @@ Gallery images use local paths such as `images/traveler_experience/p1.jpeg`; do 
 
 The gallery is agency-specific. Do not place a generic experience feed on the traveler dashboard. Future agency posting forms must save the selected agency, uploaded image, destination, caption, and alt text to `agency_experiences`.
 
+### Agency dashboard overview
+
+The agency dashboard loads only the authenticated owner’s agency and displays profile completion, verification status, trust score, inquiry activity, published review summaries, recent reviews, recent inquiries, pending documents, and recent travel experiences. Agency settings persist public company information, contact details, destinations, services, logo, and cover image; the public agency profile reads these saved values.
+
 ### Localization
 
 Use `?lang=en` or `?lang=fr`. `SetLocale` validates the value, applies it to the request, and stores it in the session. Language links are excluded from the generic locale-preservation handler and navigate directly.
@@ -218,17 +230,14 @@ Factory-created user passwords default to `password` for local testing. Never us
 
 ## Next recommended work
 
-Rebuild the agency workspace step by step without changing the stable traveler output:
+Continue the agency workspace step by step without changing the stable traveler output:
 
-1. Add an agency-only controller and policy boundary.
-2. Add a dedicated `agency/` view folder and an agency dashboard route.
-3. Redirect agency owners to that route after login; keep travelers on the existing flow.
-4. Add agency profile CRUD for company data, logo, cover image, countries, and services.
-5. Add agency experience CRUD requiring image, destination, caption, and alt text.
-6. Add agency document upload and verification status management.
-7. Add inquiry inbox and response/status workflow.
-8. Add database notifications for traveler inquiries and admin actions.
-9. Add feature tests for role authorization and ownership before expanding the UI.
+1. Add agency profile CRUD for company data, logo, cover image, countries, and services.
+2. Add agency experience CRUD requiring image, destination, caption, and alt text.
+3. Add agency document upload and verification status management.
+4. Add inquiry inbox and response/status workflow.
+5. Add database notifications for traveler inquiries and admin actions.
+6. Add feature tests for each role authorization and ownership boundary before expanding the UI.
 
 Do not begin by adding a large dashboard Blade file. Establish controller, Form Request, policy, route, model relationship, and feature-test boundaries first.
 

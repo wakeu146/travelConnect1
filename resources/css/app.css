@@ -195,6 +195,29 @@ input:not([type='checkbox']):not([type='radio']) {
     box-shadow: 0 0 0 3px rgb(242 154 131 / 18%);
 }
 
+.dashboard-dark [data-account-shell] [class~="bg-white"] {
+    background-color: #173042;
+    color: #edf3f5;
+}
+
+.dashboard-dark [data-account-shell] [class~="text-[#173042]"] {
+    color: #edf3f5;
+}
+
+.dashboard-dark [data-account-shell] [class~="text-[#607985]"] {
+    color: #bfd0d3;
+}
+
+.dashboard-dark [data-account-shell] [class~="border-[#e4e9e7]"],
+.dashboard-dark [data-account-shell] [class~="border-[#e7eceb]"],
+.dashboard-dark [data-account-shell] [class~="border-[#d7e0e1]"] {
+    border-color: #31515d;
+}
+
+.dashboard-dark [data-account-shell] a[class~="border-[#d7e0e1]"] {
+    color: #edf3f5;
+}
+
 [data-agency-show] #reviews > div:first-child > a {
     display: none;
 }
