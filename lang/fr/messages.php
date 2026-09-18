@@ -294,6 +294,8 @@ return [
     'services' => 'Services',
     'select_destinations' => 'Sélectionner les destinations',
     'select_services' => 'Sélectionner les services',
+    'add_service' => 'Ajouter un service',
+    'service_name_placeholder' => 'Par exemple : voyages éducatifs ou voyages professionnels',
     'verification_documents' => 'Documents de vérification',
     'document_type' => 'Type de document',
     'choose_document' => 'Choisir un document',

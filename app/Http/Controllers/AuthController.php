@@ -183,18 +183,26 @@ class AuthController extends Controller
         return redirect()->route('password.code');
     }
 
-    public function showCodeForm(Request $request): View
+    public function showCodeForm(Request $request): View|RedirectResponse
     {
-        return view('auth.verify-reset-code', ['email' => session('password_reset_email')]);
+        if (! $request->session()->has('password_reset_email')) {
+            return redirect()->route('password.request');
+        }
+
+        return view('auth.verify-reset-code');
     }
 
     public function verifyResetCode(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'email' => ['required', 'email'],
             'code' => ['required', 'digits:6'],
         ]);
-        $email = Str::lower($data['email']);
+        $email = $request->session()->get('password_reset_email');
+
+        if (! $email) {
+            return redirect()->route('password.request');
+        }
+
         $resetCode = DB::table('password_reset_codes')->where('email', $email)->first();
 
         if (! $resetCode || now()->greaterThan($resetCode->expires_at) || $resetCode->attempts >= 5) {

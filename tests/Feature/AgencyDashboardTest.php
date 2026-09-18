@@ -31,6 +31,51 @@ class AgencyDashboardTest extends TestCase
         $response->assertSee('1');
     }
 
+    public function test_an_agency_owner_can_open_their_profile_form_from_settings(): void
+    {
+        $agency = Agency::factory()->create();
+
+        $response = $this->actingAs($agency->owner)->get(route('agency.settings'));
+
+        $response->assertOk();
+        $response->assertSee(__('messages.company_name'));
+        $response->assertSee(__('messages.verification_documents'));
+        $response->assertSee('Afghanistan');
+        $response->assertSee(route('agency.settings.update'), false);
+    }
+
+    public function test_an_agency_owner_can_manage_their_gallery(): void
+    {
+        Storage::fake('public');
+        $agency = Agency::factory()->create();
+        $experience = $agency->experiences()->create(['image_path' => 'agency-experiences/old.jpg', 'destination' => 'Paris', 'caption' => 'Old caption', 'alt_text' => 'Old alt', 'published_at' => now()]);
+
+        $gallery = $this->actingAs($agency->owner)->get(route('agency.gallery'));
+        $gallery->assertOk()->assertSee('Paris');
+
+        $this->actingAs($agency->owner)->put(route('agency.experiences.update', ['experience' => $experience]), [
+            'destination' => 'Kyoto',
+            'caption' => 'Updated caption',
+            'alt_text' => 'Updated alt',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('agency_experiences', ['id' => $experience->id, 'destination' => 'Kyoto']);
+
+        $this->actingAs($agency->owner)->delete(route('agency.experiences.destroy', ['experience' => $experience]))->assertRedirect();
+        $this->assertDatabaseMissing('agency_experiences', ['id' => $experience->id]);
+    }
+
+    public function test_an_agency_owner_can_add_a_custom_service(): void
+    {
+        $agency = Agency::factory()->create();
+
+        $response = $this->actingAs($agency->owner)->post(route('agency.services.store'), ['name' => 'Education travel']);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('services', ['name' => 'Education travel']);
+        $this->assertTrue($agency->refresh()->services()->where('name', 'Education travel')->exists());
+    }
+
     public function test_a_traveler_is_redirected_away_from_the_agency_dashboard(): void
     {
         $traveler = User::factory()->create(['role' => 'traveler']);

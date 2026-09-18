@@ -26,6 +26,17 @@ class PasswordRecoveryTest extends TestCase
         Notification::assertSentTo($user, PasswordResetCode::class);
     }
 
+    public function test_the_code_form_does_not_repeat_the_email_field(): void
+    {
+        $response = $this->withSession(['password_reset_email' => 'traveler@example.com'])
+            ->get(route('password.code'));
+
+        $response->assertOk();
+        $response->assertSee('name="code"', false);
+        $response->assertDontSee('name="email"', false);
+        $response->assertDontSee('traveler@example.com');
+    }
+
     public function test_an_invalid_code_cannot_continue_recovery(): void
     {
         $email = 'traveler@example.com';
@@ -39,10 +50,9 @@ class PasswordRecoveryTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $response = $this->from(route('password.code'))->post(route('password.code.verify'), [
-            'email' => $email,
-            'code' => '654321',
-        ]);
+        $response = $this->withSession(['password_reset_email' => $email])
+            ->from(route('password.code'))
+            ->post(route('password.code.verify'), ['code' => '654321']);
 
         $response->assertRedirect(route('password.code'));
         $response->assertSessionHasErrors('code');
@@ -63,7 +73,7 @@ class PasswordRecoveryTest extends TestCase
         ]);
 
         $this->withSession(['password_reset_email' => $email])
-            ->post(route('password.code.verify'), ['email' => $email, 'code' => '123456'])
+            ->post(route('password.code.verify'), ['code' => '123456'])
             ->assertRedirect(route('password.reset'));
 
         $response = $this->post(route('password.update'), [

@@ -1,12 +1,14 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\AgencyDashboardController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\FavoriteController;
 use App\Models\Agency;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Str;
 
 Route::get('/', function () {
     return view('public-home');
@@ -67,12 +69,35 @@ Route::get('/agencies/{slug}', function (string $slug) {
         'blue-fern-expeditions' => ['New Zealand', 'Australia', 'Fiji'],
     ];
 
-    abort_unless(isset($agencies[$slug]), 404);
-    $agencies[$slug]['countries'] = $agencyCountries[$slug] ?? [$agencies[$slug]['country']];
-
     /** @var User $user */
     $user = Auth::user();
-    $agencyModel = Agency::where('company_name', $agencies[$slug]['name'])->with(['experiences' => fn ($query) => $query->latest('published_at')])->first();
+    $agencyModel = Agency::with(['countries', 'services', 'experiences' => fn ($query) => $query->latest('published_at')])
+        ->get()
+        ->first(fn (Agency $agency) => Str::slug($agency->company_name) === $slug);
+
+    abort_unless(isset($agencies[$slug]) || $agencyModel, 404);
+
+    if (! isset($agencies[$slug])) {
+        $agencies[$slug] = [
+            'name' => $agencyModel->company_name,
+            'country' => $agencyModel->countries->first()?->name ?? '',
+            'service' => $agencyModel->services->first()?->name ?? '',
+            'rating' => '0.0',
+            'reviews' => '0',
+            'description' => $agencyModel->description,
+            'cover' => asset('images/agencies/blue-fern.jpg'),
+        ];
+    }
+
+    $agencies[$slug]['countries'] = $agencyModel?->countries?->pluck('name')->all() ?: ($agencyCountries[$slug] ?? [$agencies[$slug]['country']]);
+
+    if ($agencyModel) {
+        $agencies[$slug]['name'] = $agencyModel->company_name;
+        $agencies[$slug]['description'] = $agencyModel->description;
+        $agencies[$slug]['service'] = $agencyModel->services->first()?->name ?? $agencies[$slug]['service'];
+        $agencies[$slug]['cover'] = $agencyModel->cover_image_path ? asset('storage/'.$agencyModel->cover_image_path) : $agencies[$slug]['cover'];
+    }
+
     $publishedReviewCount = $agencyModel?->reviews()->where('status', 'published')->count() ?? 0;
     $publishedReviews = $agencyModel?->reviews()->with('user')->where('status', 'published')->orderByDesc('rating')->orderByDesc('created_at')->limit(5)->get() ?? collect();
     $visibleReviewCount = $publishedReviewCount ?: (int) $agencies[$slug]['reviews'];
@@ -106,6 +131,10 @@ Route::get('/dashboard', function () {
     /** @var User $user */
     $user = Auth::user();
 
+    if ($user->isAgencyOwner()) {
+        return redirect()->route('agency.dashboard', ['lang' => app()->getLocale()]);
+    }
+
     if (! $user->isTraveler()) {
         return view('auth.dashboard');
     }
@@ -125,7 +154,29 @@ Route::get('/dashboard', function () {
         'recommendedAgencies' => Agency::verified()->latest()->take(3)->get(),
     ]);
 })->middleware('auth')->name('dashboard');
-Route::view('/settings', 'auth.settings')->middleware('auth')->name('settings');
+Route::get('/agency/dashboard', [AgencyDashboardController::class, 'index'])
+    ->middleware(['auth', 'agency-owner'])
+    ->name('agency.dashboard');
+Route::get('/agency/settings', [AgencyDashboardController::class, 'edit'])
+    ->middleware(['auth', 'agency-owner'])
+    ->name('agency.settings');
+Route::get('/agency/gallery', [AgencyDashboardController::class, 'gallery'])
+    ->middleware(['auth', 'agency-owner'])
+    ->name('agency.gallery');
+Route::put('/agency/settings', [AgencyDashboardController::class, 'updateProfile'])->middleware(['auth', 'agency-owner'])->name('agency.settings.update');
+Route::post('/agency/services', [AgencyDashboardController::class, 'storeService'])->middleware(['auth', 'agency-owner'])->name('agency.services.store');
+Route::post('/agency/documents', [AgencyDashboardController::class, 'storeDocument'])->middleware(['auth', 'agency-owner'])->name('agency.documents.store');
+Route::post('/agency/experiences', [AgencyDashboardController::class, 'storeExperience'])->middleware(['auth', 'agency-owner'])->name('agency.experiences.store');
+Route::put('/agency/experiences/{experience}', [AgencyDashboardController::class, 'updateExperience'])->middleware(['auth', 'agency-owner'])->name('agency.experiences.update');
+Route::delete('/agency/experiences/{experience}', [AgencyDashboardController::class, 'destroyExperience'])->middleware(['auth', 'agency-owner'])->name('agency.experiences.destroy');
+Route::get('/settings', function () {
+    /** @var User $user */
+    $user = Auth::user();
+
+    return $user->isAgencyOwner()
+        ? redirect()->route('agency.settings', ['lang' => app()->getLocale()])
+        : view('auth.settings');
+})->middleware('auth')->name('settings');
 Route::put('/settings/profile', [AuthController::class, 'updateProfile'])->middleware('auth')->name('settings.profile');
 Route::post('/settings/profile-photo', [AuthController::class, 'updateProfilePhoto'])->middleware('auth')->name('settings.profile-photo');
 Route::get('/account/saved', function () {
