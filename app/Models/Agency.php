@@ -20,6 +20,7 @@ class Agency extends Model
     public function owner(): BelongsTo { return $this->belongsTo(User::class, 'user_id'); }
     public function documents(): HasMany { return $this->hasMany(AgencyDocument::class); }
     public function experiences(): HasMany { return $this->hasMany(AgencyExperience::class); }
+    public function packages(): HasMany { return $this->hasMany(Package::class); }
     public function countries(): BelongsToMany { return $this->belongsToMany(Country::class, 'agency_country')->withTimestamps(); }
     public function services(): BelongsToMany { return $this->belongsToMany(Service::class, 'agency_service')->withTimestamps(); }
     public function reviews(): HasMany { return $this->hasMany(Review::class); }

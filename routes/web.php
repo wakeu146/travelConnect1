@@ -7,6 +7,7 @@ use App\Models\Agency;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Str;
 
 Route::get('/', function () {
     return view('public-home');
@@ -51,7 +52,7 @@ Route::get('/account/discover', function () {
     return view('discover', ['agencies' => $agencies, 'savedAgencyNames' => $user->favoriteAgencies()->pluck('company_name')->all()]);
 })->middleware('auth')->name('account.discover');
 Route::get('/agencies/{slug}', function (string $slug) {
-    $agencies = [
+    $fallbackAgencies = [
         'atlas-horizon-voyages' => ['name' => 'Atlas Horizon Voyages', 'country' => 'France', 'service' => 'Adventure travel', 'rating' => '4.9', 'reviews' => '38', 'description' => 'Tailor-made adventures across Europe and beyond, planned by a team that knows the routes personally.', 'cover' => asset('images/agencies/atlas-horizon.jpg')],
         'lumiere-routes' => ['name' => 'Lumiere Routes', 'country' => 'Portugal', 'service' => 'Luxury escapes', 'rating' => '4.8', 'reviews' => '31', 'description' => 'Slow travel and beautiful escapes, thoughtfully planned around the details that make a journey memorable.', 'cover' => asset('images/agencies/lumiere-routes.jpg')],
         'northstar-escapes' => ['name' => 'Northstar Escapes', 'country' => 'Canada', 'service' => 'Family holidays', 'rating' => '4.9', 'reviews' => '44', 'description' => 'Family journeys built around practical planning, local insight, and the moments that matter.', 'cover' => asset('images/agencies/northstar-escapes.jpg')],
@@ -67,19 +68,40 @@ Route::get('/agencies/{slug}', function (string $slug) {
         'blue-fern-expeditions' => ['New Zealand', 'Australia', 'Fiji'],
     ];
 
-    abort_unless(isset($agencies[$slug]), 404);
-    $agencies[$slug]['countries'] = $agencyCountries[$slug] ?? [$agencies[$slug]['country']];
-
     /** @var User $user */
     $user = Auth::user();
-    $agencyModel = Agency::where('company_name', $agencies[$slug]['name'])->with(['experiences' => fn ($query) => $query->latest('published_at')])->first();
+    $agencyModel = Agency::query()
+        ->with(['countries', 'services', 'experiences' => fn ($query) => $query->latest('published_at')])
+        ->get()
+        ->first(fn (Agency $agency) => Str::slug($agency->company_name) === $slug);
+
+    if (! $agencyModel && ! isset($fallbackAgencies[$slug])) {
+        abort(404);
+    }
+
+    $agencyData = $agencyModel
+        ? [
+            'name' => $agencyModel->company_name,
+            'country' => $agencyModel->countries->first()?->name ?? 'Worldwide',
+            'service' => $agencyModel->services->first()?->name ?? 'Travel planning',
+            'rating' => (string) number_format((float) ($agencyModel->reviews()->where('status', 'published')->avg('rating') ?? 0), 1),
+            'reviews' => (string) ($agencyModel->reviews()->where('status', 'published')->count() ?? 0),
+            'description' => $agencyModel->description ?: 'Travel planning with local expertise.',
+            'cover' => $agencyModel->cover_image_path ? asset('storage/'.$agencyModel->cover_image_path) : asset('images/agencies/default-agency.jpg'),
+            'countries' => $agencyModel->countries->pluck('name')->all() ?: ['Worldwide'],
+        ]
+        : $fallbackAgencies[$slug];
+
+    $agencyData['countries'] = $agencyModel ? $agencyData['countries'] : ($agencyCountries[$slug] ?? [$agencyData['country']]);
+
     $publishedReviewCount = $agencyModel?->reviews()->where('status', 'published')->count() ?? 0;
     $publishedReviews = $agencyModel?->reviews()->with('user')->where('status', 'published')->orderByDesc('rating')->orderByDesc('created_at')->limit(5)->get() ?? collect();
-    $visibleReviewCount = $publishedReviewCount ?: (int) $agencies[$slug]['reviews'];
-    $visibleRating = $publishedReviewCount ? number_format($agencyModel->reviews()->where('status', 'published')->avg('rating') ?? 0, 1) : $agencies[$slug]['rating'];
+    $visibleReviewCount = $publishedReviewCount ?: (int) ($agencyData['reviews'] ?? 0);
+    $visibleRating = $publishedReviewCount ? number_format($agencyModel->reviews()->where('status', 'published')->avg('rating') ?? 0, 1) : ($agencyData['rating'] ?? '0');
     $ratingCounts = $agencyModel && $publishedReviewCount ? $agencyModel->reviews()->where('status', 'published')->get()->groupBy('rating')->map->count() : collect();
     $pendingReview = $agencyModel?->reviews()->where('user_id', $user->id)->where('status', 'pending')->latest()->first();
-    return view('agency-show', ['agency' => $agencies[$slug], 'agencyModel' => $agencyModel, 'isSaved' => $agencyModel && $user->favoriteAgencies()->whereKey($agencyModel->id)->exists(), 'publishedReviews' => $publishedReviews, 'publishedReviewCount' => $publishedReviewCount, 'visibleReviewCount' => $visibleReviewCount, 'visibleRating' => $visibleRating, 'ratingCounts' => $ratingCounts, 'pendingReview' => $pendingReview]);
+
+    return view('agency-show', ['agency' => $agencyData, 'agencyModel' => $agencyModel, 'isSaved' => $agencyModel && $user->favoriteAgencies()->whereKey($agencyModel->id)->exists(), 'publishedReviews' => $publishedReviews, 'publishedReviewCount' => $publishedReviewCount, 'visibleReviewCount' => $visibleReviewCount, 'visibleRating' => $visibleRating, 'ratingCounts' => $ratingCounts, 'pendingReview' => $pendingReview]);
 })->middleware('auth')->name('agency.show');
 Route::post('/agencies/{slug}/reviews', [ReviewController::class, 'store'])->middleware('auth')->name('reviews.store');
 Route::post('/agencies/{slug}/favorite', [FavoriteController::class, 'toggle'])->middleware('auth')->name('favorites.toggle');
@@ -102,6 +124,27 @@ Route::post('/verify-reset-code', [AuthController::class, 'verifyResetCode'])->m
 Route::get('/reset-password', [AuthController::class, 'showResetForm'])->name('password.reset');
 Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:password.reset')->name('password.update');
 Route::view('/login-successful', 'auth.success')->middleware('auth')->name('auth.success');
+Route::middleware(['auth', 'agency-owner'])->prefix('agency')->name('agency.')->group(function () {
+    Route::get('/dashboard', [\App\Http\Controllers\AgencyController::class, 'dashboard'])->name('dashboard');
+    Route::get('/profile', [\App\Http\Controllers\AgencyController::class, 'profile'])->name('profile');
+    Route::put('/profile', [\App\Http\Controllers\AgencyController::class, 'updateProfile'])->name('settings.update');
+    Route::post('/documents', [\App\Http\Controllers\AgencyController::class, 'storeDocument'])->name('documents.store');
+    Route::post('/experiences', [\App\Http\Controllers\AgencyController::class, 'storeExperience'])->name('experiences.store');
+    Route::get('/packages', [\App\Http\Controllers\AgencyController::class, 'indexPackages'])->name('packages.index');
+    Route::get('/packages/create', [\App\Http\Controllers\AgencyController::class, 'createPackage'])->name('packages.create');
+    Route::post('/packages', [\App\Http\Controllers\AgencyController::class, 'storePackage'])->name('packages.store');
+    Route::get('/packages/{package}/edit', [\App\Http\Controllers\AgencyController::class, 'editPackage'])->name('packages.edit');
+    Route::put('/packages/{package}', [\App\Http\Controllers\AgencyController::class, 'updatePackage'])->name('packages.update');
+    Route::delete('/packages/{package}', [\App\Http\Controllers\AgencyController::class, 'destroyPackage'])->name('packages.destroy');
+    Route::post('/packages/{package}/images', [\App\Http\Controllers\AgencyController::class, 'uploadPackageImage'])->name('packages.images.store');
+    Route::delete('/packages/{package}/images/{image}', [\App\Http\Controllers\AgencyController::class, 'deletePackageImage'])->name('packages.images.destroy');
+    Route::post('/packages/{package}/images/{image}/primary', [\App\Http\Controllers\AgencyController::class, 'setPrimaryPackageImage'])->name('packages.images.primary');
+    Route::post('/packages/{package}/days', [\App\Http\Controllers\AgencyController::class, 'storePackageDay'])->name('packages.days.store');
+    Route::post('/packages/{package}/days/{day}/move', [\App\Http\Controllers\AgencyController::class, 'movePackageDay'])->name('packages.days.move');
+    Route::put('/packages/{package}/days/{day}', [\App\Http\Controllers\AgencyController::class, 'updatePackageDay'])->name('packages.days.update');
+    Route::delete('/packages/{package}/days/{day}', [\App\Http\Controllers\AgencyController::class, 'deletePackageDay'])->name('packages.days.destroy');
+});
+
 Route::get('/dashboard', function () {
     /** @var User $user */
     $user = Auth::user();
