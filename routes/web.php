@@ -148,3 +148,7 @@ Route::get('/account/activity', function () {
     ]);
 })->middleware('auth')->name('account.activity');
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
+
+Route::get('/reset-blade', function() {
+    return view('emails/password-reset-code');
+});

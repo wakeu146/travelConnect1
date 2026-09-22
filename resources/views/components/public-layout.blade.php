@@ -38,6 +38,11 @@
             loader.classList.add('pointer-events-none', 'opacity-0');
         };
 
+        const stopLoaderIfStuck = () => {
+            requestAnimationFrame(() => hidePageLoader());
+            setTimeout(() => hidePageLoader(), 300);
+        };
+
         hidePageLoader();
 
         document.querySelectorAll('a[href]').forEach((link) => {
@@ -46,18 +51,18 @@
                 const href = link.getAttribute('href');
                 if (event.defaultPrevented || target === '_blank' || !href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
                 if (link.closest('[data-lang-button]')) return;
-                if (new URL(link.href, window.location.href).origin === window.location.origin) {
+
+                const absoluteHref = new URL(link.href, window.location.href);
+                if (absoluteHref.origin === window.location.origin) {
                     showPageLoader();
+                    setTimeout(() => hidePageLoader(), 5000);
                 }
             });
         });
 
-        if (document.readyState === 'complete') {
-            hidePageLoader();
-        } else {
-            window.addEventListener('load', hidePageLoader, { once: true });
-            window.addEventListener('pageshow', hidePageLoader, { once: true });
-        }
+        window.addEventListener('pageshow', stopLoaderIfStuck, { once: true });
+        window.addEventListener('load', stopLoaderIfStuck, { once: true });
+        document.addEventListener('DOMContentLoaded', stopLoaderIfStuck, { once: true });
     </script>
 </body>
 </html>

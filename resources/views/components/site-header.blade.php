@@ -486,16 +486,29 @@
                     <div class="mb-2 px-2.5">
                         <p class="text-[9px] font-bold uppercase tracking-[0.18em] text-[#9aabad]">
                             {{ __('messages.account') }}
+                        </p>
+                    </div>
+
+                    @guest
+                        <a
+                            href="{{ route('login', ['lang' => app()->getLocale()]) }}"
+                            data-loading-link
+                            class="flex w-full items-center justify-center gap-2 rounded-xl bg-[#173042] px-3 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#26495d]">
 
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true"><path d="M10 5H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h5M13 8l4 4-4 4M8 12h9"/></svg>
 
-                        </span>
+                            <span>{{ __('messages.login') }}</span>
+                        </a>
+                    @else
+                        <a
+                            href="{{ route('settings', ['lang' => app()->getLocale()]) }}"
+                            class="flex w-full items-center justify-center gap-2 rounded-xl border border-[#dbe3e5] bg-white px-3 py-2.5 text-xs font-bold text-[#607985] transition hover:border-[#173042] hover:text-[#173042]">
 
-                        <span class="text-[13px] font-semibold">
-                            {{ auth()->check() ? __('messages.settings') : __('messages.login') }}
-                        </span>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true"><path d="M12 3v6M12 15v6M4.5 12h6M13.5 12h6M9 9l-3 3 3 3M15 9l3 3-3 3"/></svg>
 
-                    </a>
+                            <span>{{ __('messages.settings') }}</span>
+                        </a>
+                    @endguest
 
                 </div>
 
