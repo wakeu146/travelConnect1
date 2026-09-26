@@ -129,9 +129,19 @@ class AuthController extends Controller
             return back()->withErrors(['email' => 'These credentials do not match our records.'])->onlyInput('email');
         }
 
+        $user = Auth::user();
+        $successRedirect = route('dashboard');
+
+        if ($user && $user->isAgencyOwner()) {
+            $successRedirect = route('agency.dashboard');
+        }
+
         $request->session()->regenerate();
 
-        return redirect()->route('auth.success')->with('message', 'Login successful');
+        return redirect()->route('auth.success')->with([
+            'message' => 'Login successful',
+            'success_redirect' => $successRedirect,
+        ]);
     }
 
     public function logout(Request $request): RedirectResponse

@@ -133,6 +133,7 @@ Route::middleware(['auth', 'agency-owner'])->prefix('agency')->name('agency.')->
     Route::get('/packages', [\App\Http\Controllers\AgencyController::class, 'indexPackages'])->name('packages.index');
     Route::get('/packages/create', [\App\Http\Controllers\AgencyController::class, 'createPackage'])->name('packages.create');
     Route::post('/packages', [\App\Http\Controllers\AgencyController::class, 'storePackage'])->name('packages.store');
+    Route::post('/packages/{package}/duplicate', [\App\Http\Controllers\AgencyController::class, 'duplicatePackage'])->name('packages.duplicate');
     Route::get('/packages/{package}/edit', [\App\Http\Controllers\AgencyController::class, 'editPackage'])->name('packages.edit');
     Route::put('/packages/{package}', [\App\Http\Controllers\AgencyController::class, 'updatePackage'])->name('packages.update');
     Route::delete('/packages/{package}', [\App\Http\Controllers\AgencyController::class, 'destroyPackage'])->name('packages.destroy');
@@ -143,7 +144,35 @@ Route::middleware(['auth', 'agency-owner'])->prefix('agency')->name('agency.')->
     Route::post('/packages/{package}/days/{day}/move', [\App\Http\Controllers\AgencyController::class, 'movePackageDay'])->name('packages.days.move');
     Route::put('/packages/{package}/days/{day}', [\App\Http\Controllers\AgencyController::class, 'updatePackageDay'])->name('packages.days.update');
     Route::delete('/packages/{package}/days/{day}', [\App\Http\Controllers\AgencyController::class, 'deletePackageDay'])->name('packages.days.destroy');
+
+    Route::get('/availability', [\App\Http\Controllers\AgencyAvailabilityController::class, 'index'])->name('availability.index');
+    Route::get('/availability/create', [\App\Http\Controllers\AgencyAvailabilityController::class, 'create'])->name('availability.create');
+    Route::post('/availability', [\App\Http\Controllers\AgencyAvailabilityController::class, 'store'])->name('availability.store');
+    Route::get('/availability/{availability}/edit', [\App\Http\Controllers\AgencyAvailabilityController::class, 'edit'])->name('availability.edit');
+    Route::put('/availability/{availability}', [\App\Http\Controllers\AgencyAvailabilityController::class, 'update'])->name('availability.update');
+    Route::patch('/availability/{availability}/status', [\App\Http\Controllers\AgencyAvailabilityController::class, 'updateStatus'])->name('availability.status');
+
+    Route::get('/bookings', [\App\Http\Controllers\AgencyBookingController::class, 'index'])->name('bookings.index');
+    Route::get('/bookings/{booking}', [\App\Http\Controllers\AgencyBookingController::class, 'show'])->name('bookings.show');
+    Route::patch('/bookings/{booking}/confirm', [\App\Http\Controllers\AgencyBookingController::class, 'confirm'])->name('bookings.confirm');
+    Route::patch('/bookings/{booking}/reject', [\App\Http\Controllers\AgencyBookingController::class, 'reject'])->name('bookings.reject');
+    Route::patch('/bookings/{booking}/cancel', [\App\Http\Controllers\AgencyBookingController::class, 'cancel'])->name('bookings.cancel');
+    Route::patch('/bookings/{booking}/complete', [\App\Http\Controllers\AgencyBookingController::class, 'complete'])->name('bookings.complete');
+
+    Route::get('/customers', [\App\Http\Controllers\AgencyOperationsController::class, 'customers'])->name('customers.index');
+    Route::get('/reviews', [\App\Http\Controllers\AgencyOperationsController::class, 'reviews'])->name('reviews.index');
+    Route::get('/payments', [\App\Http\Controllers\AgencyOperationsController::class, 'payments'])->name('payments.index');
+    Route::get('/analytics', [\App\Http\Controllers\AgencyOperationsController::class, 'analytics'])->name('analytics.index');
 });
+
+Route::get('/packages/{package}', [\App\Http\Controllers\BookingController::class, 'packageShow'])->name('packages.show');
+Route::middleware(['auth'])->get('/packages/{package}/book', [\App\Http\Controllers\BookingController::class, 'create'])->name('bookings.create');
+Route::middleware(['auth'])->prefix('bookings')->name('bookings.')->group(function () {
+    Route::get('/{booking}', [\App\Http\Controllers\BookingController::class, 'show'])->name('show');
+    Route::get('/{booking}/confirmation', [\App\Http\Controllers\BookingController::class, 'confirmation'])->name('confirmation');
+    Route::post('/{booking}/cancel', [\App\Http\Controllers\BookingController::class, 'cancel'])->name('cancel');
+});
+Route::middleware(['auth'])->post('/packages/{package}/book', [\App\Http\Controllers\BookingController::class, 'store'])->name('bookings.store');
 
 Route::get('/dashboard', function () {
     /** @var User $user */

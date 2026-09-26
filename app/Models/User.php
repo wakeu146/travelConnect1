@@ -37,6 +37,7 @@ class User extends Authenticatable
     }
 
     public function agency(): HasOne { return $this->hasOne(Agency::class); }
+    public function bookings(): HasMany { return $this->hasMany(Booking::class, 'user_id'); }
     public function reviews(): HasMany { return $this->hasMany(Review::class); }
     public function inquiries(): HasMany { return $this->hasMany(Inquiry::class); }
     public function travelRequests(): HasMany { return $this->hasMany(TravelRequest::class); }

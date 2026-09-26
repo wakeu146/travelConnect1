@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 class Agency extends Model
 {
@@ -25,8 +26,29 @@ class Agency extends Model
     public function services(): BelongsToMany { return $this->belongsToMany(Service::class, 'agency_service')->withTimestamps(); }
     public function reviews(): HasMany { return $this->hasMany(Review::class); }
     public function inquiries(): HasMany { return $this->hasMany(Inquiry::class); }
+    public function bookings(): HasMany { return $this->hasMany(Booking::class); }
     public function favorites(): HasMany { return $this->hasMany(Favorite::class); }
     public function trustScoreLogs(): HasMany { return $this->hasMany(TrustScoreLog::class); }
+    public function logoUrl(): ?string
+    {
+        /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
+        $disk = Storage::disk('public');
+
+        return $this->logo_path && $disk->exists($this->logo_path)
+            ? $disk->url($this->logo_path)
+            : null;
+    }
+
+    public function coverImageUrl(): ?string
+    {
+        /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
+        $disk = Storage::disk('public');
+
+        return $this->cover_image_path && $disk->exists($this->cover_image_path)
+            ? $disk->url($this->cover_image_path)
+            : null;
+    }
+
     public function scopeVerified($query) { return $query->where('verification_status', VerificationStatus::VERIFIED); }
     // Example: Agency::with(['countries', 'services'])->withAvg(['reviews' => fn ($q) => $q->where('status', 'published')], 'rating')->get();
 }

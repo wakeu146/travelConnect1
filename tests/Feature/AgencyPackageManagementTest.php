@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\PackageStatus;
 use App\Models\Agency;
 use App\Models\Package;
+use App\Models\PackageAvailability;
 use App\Models\PackageImage;
 use App\Models\PackageItineraryDay;
 use App\Models\User;
@@ -106,6 +107,44 @@ class AgencyPackageManagementTest extends TestCase
         $this->assertSoftDeleted('packages', ['id' => $package->id]);
     }
 
+    public function test_package_duplication_copies_content_and_images_but_not_departures_or_bookings(): void
+    {
+        Storage::fake('public');
+        $agency = Agency::factory()->create();
+        $package = Package::factory()->create(['agency_id' => $agency->id, 'title' => 'Coastal Passage', 'status' => PackageStatus::PUBLISHED]);
+        $imagePath = UploadedFile::fake()->image('coast.jpg')->store('package-images', 'public');
+        $package->images()->create(['path' => $imagePath, 'caption' => 'Coast', 'is_primary' => true, 'sort_order' => 1]);
+        $package->itineraryDays()->create(['day_number' => 1, 'title' => 'Arrival', 'description' => 'Check in']);
+        PackageAvailability::create(['package_id' => $package->id, 'departure_date' => '2026-12-10', 'capacity' => 8, 'status' => 'active']);
+
+        $response = $this->actingAs($agency->owner)->post(route('agency.packages.duplicate', ['package' => $package->id]));
+
+        /** @var Package $duplicate */
+        $duplicate = $agency->packages()->where('id', '!=', $package->id)->firstOrFail();
+        $response->assertRedirect(route('agency.packages.edit', ['package' => $duplicate->id]));
+        $this->assertSame('draft', $duplicate->status->value);
+        $this->assertSame('Coastal Passage', $package->title);
+        $this->assertSame('Copy of Coastal Passage', $duplicate->title);
+        $this->assertCount(1, $duplicate->itineraryDays);
+        $this->assertCount(1, $duplicate->images);
+        $this->assertNotSame($imagePath, $duplicate->images->first()->path);
+        $this->assertTrue(Storage::disk('public')->exists($imagePath));
+        $this->assertTrue(Storage::disk('public')->exists($duplicate->images->first()->path));
+        $this->assertDatabaseMissing('package_availability', ['package_id' => $duplicate->id]);
+        $this->assertDatabaseMissing('bookings', ['package_id' => $duplicate->id]);
+    }
+
+    public function test_agency_owner_cannot_duplicate_another_agencys_package(): void
+    {
+        $agency = Agency::factory()->create();
+        $otherAgency = Agency::factory()->create();
+        $otherPackage = Package::factory()->create(['agency_id' => $otherAgency->id]);
+
+        $this->actingAs($agency->owner)
+            ->post(route('agency.packages.duplicate', ['package' => $otherPackage->id]))
+            ->assertForbidden();
+    }
+
     public function test_package_images_require_valid_upload_and_primary_image_selection_is_enforced(): void
     {
         Storage::fake('public');
@@ -131,6 +170,11 @@ class AgencyPackageManagementTest extends TestCase
             'caption' => 'Second image',
             'is_primary' => true,
         ])->assertRedirect();
+
+        $this->actingAs($agency->owner)
+            ->get(route('agency.packages.edit', ['package' => $package->id]))
+            ->assertOk()
+            ->assertSee(Storage::disk('public')->url($package->fresh()->images()->where('caption', 'Second image')->firstOrFail()->path));
 
         $this->assertDatabaseHas('package_images', ['package_id' => $package->id, 'caption' => 'First image', 'is_primary' => false]);
         $this->assertDatabaseHas('package_images', ['package_id' => $package->id, 'caption' => 'Second image', 'is_primary' => true]);

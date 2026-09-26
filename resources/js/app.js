@@ -85,6 +85,41 @@ const applyLocaleToLinks = () => {
 applyLocaleToLinks();
 document.addEventListener('DOMContentLoaded', applyLocaleToLinks);
 
+const previewObjectUrls = new WeakMap();
+document.addEventListener('change', (event) => {
+	const input = event.target.closest('[data-image-preview-input]');
+	const file = input?.files?.[0];
+	if (!input || !file || !file.type.startsWith('image/')) return;
+	const preview = document.querySelector(input.dataset.imagePreviewInput);
+	if (!preview) return;
+	const previousUrl = previewObjectUrls.get(preview);
+	if (previousUrl) URL.revokeObjectURL(previousUrl);
+	const objectUrl = URL.createObjectURL(file);
+	previewObjectUrls.set(preview, objectUrl);
+	preview.src = objectUrl;
+	preview.classList.remove('hidden');
+	const fallback = document.getElementById(`${preview.id}-fallback`);
+	fallback?.classList.add('hidden');
+	const removeInput = input.name === 'logo' ? document.querySelector('[name="remove_logo"]') : (input.name === 'cover_image' ? document.querySelector('[name="remove_cover_image"]') : null);
+	if (removeInput) removeInput.checked = false;
+});
+
+document.addEventListener('change', (event) => {
+	const removeInput = event.target.closest('[name="remove_logo"], [name="remove_cover_image"]');
+	if (!removeInput) return;
+	const targetId = removeInput.name === 'remove_logo' ? 'agency-logo-preview' : 'agency-cover-preview';
+	const preview = document.getElementById(targetId);
+	const fallback = document.getElementById(`${targetId}-fallback`);
+	if (removeInput.checked) {
+		preview?.classList.add('hidden');
+		fallback?.classList.remove('hidden');
+	} else if (preview?.dataset.originalSrc) {
+		preview.src = preview.dataset.originalSrc;
+		preview.classList.remove('hidden');
+		fallback?.classList.add('hidden');
+	}
+});
+
 document.addEventListener('click', (event) => {
 	const link = event.target.closest('a[href]');
 	if (!link || link.closest('[data-lang-button]')) return;

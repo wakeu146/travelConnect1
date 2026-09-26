@@ -1,169 +1,331 @@
-<x-auth-layout title="{{ __('messages.agency_dashboard') }} | TravelConnect">
+<x-agency-shell>
     @php
         $user = auth()->user();
         $agency = $agency ?? $user->agency;
+
+        $pendingBookingCount = $pendingBookingCount ?? 0;
+        $confirmedBookingCount = $confirmedBookingCount ?? 0;
+        $openInquiryCount = $openInquiryCount ?? 0;
+        $draftPackageCount = $draftPackageCount ?? 0;
+        $publishedPackageCount = $publishedPackageCount ?? 0;
+        $incompletePackageCount = $incompletePackageCount ?? 0;
+        $bookingStatusCounts = $bookingStatusCounts ?? collect();
+
+        $profileCompletion = collect([
+            $agency->company_name,
+            $agency->description,
+            $agency->email,
+            $agency->phone,
+            $agency->address,
+            $agency->website,
+            $agency->logo_path,
+            $agency->cover_image_path,
+            $agency->countries->count() > 0,
+            $agency->services->count() > 0,
+        ])->filter(fn ($value) => filled($value) || $value === true)->count();
+
+        $completionPercent = min(100, (int) round(($profileCompletion / 10) * 100));
+
+        $attentionItems = collect();
+
+        if ($pendingBookingCount > 0) {
+            $attentionItems->push([
+                'title' => __('messages.pending_bookings_need_confirmation'),
+                'copy' => trans_choice('messages.pending_booking_action_copy', $pendingBookingCount, ['count' => $pendingBookingCount]),
+                'action' => route('agency.bookings.index', ['lang' => app()->getLocale()]),
+                'label' => __('messages.view_all'),
+            ]);
+        }
+
+        if ($draftPackageCount > 0) {
+            $attentionItems->push([
+                'title' => __('messages.draft_packages_need_review'),
+                'copy' => trans_choice('messages.draft_package_action_copy', $draftPackageCount, ['count' => $draftPackageCount]),
+                'action' => route('agency.packages.index', ['lang' => app()->getLocale()]),
+                'label' => __('messages.manage_travel_packages'),
+            ]);
+        }
+
+        $nearCapacityDepartures = collect($upcomingDepartures ?? [])->filter(function ($item) {
+            return ($item['remaining_capacity'] ?? 0) <= 5;
+        })->take(2);
+
+        foreach ($nearCapacityDepartures as $item) {
+            $soldOut = ($item['remaining_capacity'] ?? 0) <= 0;
+            $attentionItems->push([
+                'title' => $soldOut
+                    ? __('messages.departure_sold_out_for', ['title' => $item['package']->title ?? __('messages.package')])
+                    : __('messages.package_nearly_full', ['title' => $item['package']->title ?? __('messages.package')]),
+                'copy' => __('messages.seats_left_for_departure', [
+                    'count' => $item['remaining_capacity'] ?? 0,
+                    'date' => $item['availability']->departure_date?->format('d M Y') ?? __('messages.next_departure'),
+                ]),
+                'action' => route('agency.availability.index', ['lang' => app()->getLocale()]),
+                'label' => __('messages.manage_departures'),
+            ]);
+        }
+
+        if ($attentionItems->isEmpty()) {
+            $attentionItems->push([
+                'title' => __('messages.everything_steady'),
+                'copy' => __('messages.no_immediate_actions'),
+                'action' => route('agency.dashboard', ['lang' => app()->getLocale()]),
+                'label' => __('messages.overview'),
+            ]);
+        }
     @endphp
 
-    <div data-agency-shell class="dashboard-shell min-h-screen bg-[#f7f8f6] text-[#173042]">
-        <aside data-agency-sidebar class="fixed inset-y-0 left-0 z-50 flex w-72 -translate-x-full flex-col border-r border-[#e4e9e7] bg-white px-5 py-6 shadow-xl transition-transform duration-300 lg:translate-x-0 lg:shadow-none">
-            <div class="flex items-center justify-between gap-2 px-2">
-                <a href="{{ route('home', ['lang' => app()->getLocale()]) }}" class="flex items-center gap-3 text-lg font-semibold">
-                    <span class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#f1f6f4]"><img src="{{ asset('images/logo.png') }}" alt="TravelConnect logo" class="h-full w-full object-contain"></span>
-                    <span>Travel<span class="font-normal text-[#e76f51]">Connect</span></span>
-                </a>
-                <button type="button" data-agency-close class="flex h-9 w-9 items-center justify-center rounded-lg text-[#607985] hover:bg-[#f1f6f4] lg:hidden" aria-label="{{ __('messages.close_navigation') }}">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-5 w-5" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
-                </button>
-            </div>
-
-            <div class="mt-10">
-                <p class="px-3 text-[10px] font-bold uppercase tracking-[.2em] text-[#9aadb2]">{{ __('messages.agency_workspace') }}</p>
-                <nav class="mt-3 grid gap-1" aria-label="{{ __('messages.dashboard_navigation') }}">
-                    <a href="{{ route('agency.dashboard', ['lang' => app()->getLocale()]) }}" class="flex items-center gap-3 rounded-xl bg-[#f1f6f4] px-3 py-3 text-sm font-bold text-[#e76f51]">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>
-                        {{ __('messages.overview') }}
-                    </a>
-                    <a href="{{ route('agency.profile', ['lang' => app()->getLocale()]) }}" class="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-[#607985] transition hover:bg-[#f7f8f6] hover:text-[#173042]">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 8a7 7 0 0 1 14 0"/><path d="M17.5 5.5A2.5 2.5 0 0 1 20 8v8"/></svg>
-                        {{ __('messages.profile') }}
-                    </a>
-                    <a href="{{ route('agency.packages.index', ['lang' => app()->getLocale()]) }}" class="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-[#607985] transition hover:bg-[#f7f8f6] hover:text-[#173042]">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5" aria-hidden="true"><path d="M4 7.5 12 3l8 4.5-8 4.5-8-4.5Zm0 9 8 4.5 8-4.5M4 7.5V16l8 4.5V12"/></svg>
-                        {{ __('messages.travel_packages') }}
-                    </a>
-                </nav>
-            </div>
-
-            <div class="mt-auto border-t border-[#e4e9e7] pt-5">
-                <div class="flex items-center gap-3 px-2">
-                    <span class="flex h-10 w-10 items-center justify-center rounded-full bg-[#173042] text-sm font-bold text-white">{{ strtoupper(substr($user->name, 0, 1)) }}</span>
-                    <div class="min-w-0">
-                        <p class="truncate text-sm font-bold">{{ $user->name }}</p>
-                        <p class="truncate text-xs text-[#607985]">{{ $agency->company_name }}</p>
-                    </div>
-                </div>
-                <form action="{{ route('logout') }}" method="POST" class="mt-4">@csrf<button type="submit" class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-[#607985] hover:bg-[#fff1ed] hover:text-[#e76f51]"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5" aria-hidden="true"><path d="M10 5H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h5M13 8l4 4-4 4M8 12h9"/></svg>{{ __('messages.logout') }}</button></form>
-            </div>
-        </aside>
-
-        <div data-agency-backdrop class="fixed inset-0 z-40 hidden bg-[#102936]/40 opacity-0 transition-opacity duration-300 lg:hidden"></div>
-
-        <div class="lg:pl-72">
-            <header class="sticky top-0 z-30 border-b border-[#e4e9e7] bg-white/95 px-5 py-4 backdrop-blur sm:px-8">
-                <div class="flex items-center gap-4">
-                    <button type="button" data-agency-open class="flex h-10 w-10 items-center justify-center rounded-xl border border-[#dbe3e5] text-[#173042] lg:hidden" aria-label="{{ __('messages.open_navigation') }}">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-5 w-5" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-                    </button>
-                    <div class="flex-1">
-                        <p class="text-[10px] font-bold uppercase tracking-[.2em] text-[#e76f51]">{{ __('messages.agency_dashboard') }}</p>
-                        <h1 class="mt-1 text-xl font-bold text-[#173042]">{{ $agency->company_name }}</h1>
-                    </div>
-                    <a href="{{ route('agency.show', ['slug' => \Illuminate\Support\Str::slug($agency->company_name), 'lang' => app()->getLocale()]) }}" class="inline-flex items-center justify-center rounded-xl border border-[#dbe3e5] px-3 py-2 text-sm font-semibold text-[#173042] hover:border-[#e76f51] hover:text-[#e76f51]">
-                        {{ __('messages.view_public_profile') }}
-                    </a>
-                </div>
-            </header>
-
-            <main class="mx-auto max-w-7xl px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
-                <div class="flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
+    <div class="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
                     <div>
                         <p class="text-xs font-bold uppercase tracking-[.2em] text-[#e76f51]">{{ __('messages.agency_workspace') }}</p>
                         <h2 class="mt-3 font-serif text-4xl tracking-tight sm:text-5xl">{{ __('messages.welcome_agency_user', ['name' => $user->name]) }}</h2>
                         <p class="mt-3 max-w-2xl text-sm leading-6 text-[#607985]">{{ __('messages.agency_dashboard_intro') }}</p>
                     </div>
-                    <a href="{{ route('agency.packages.create', ['lang' => app()->getLocale()]) }}" class="inline-flex items-center justify-center gap-2 rounded-xl bg-[#e76f51] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#d95f42]">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-                        {{ __('messages.create_package') }}
-                    </a>
+                    <div class="agency-panel w-full max-w-md rounded-2xl border p-5 shadow-sm">
+                        <div class="flex items-center justify-between text-sm agency-text-subtle">
+                            <span>{{ __('messages.profile_completion') }}</span>
+                            <span class="font-bold agency-text-primary">{{ $completionPercent }}%</span>
+                        </div>
+                        <div class="agency-progress-track mt-3 h-2 overflow-hidden rounded-full">
+                            <div class="agency-progress-bar h-full rounded-full" style="width: {{ $completionPercent }}%"></div>
+                        </div>
+                        <p class="mt-3 text-xs agency-text-subtle">{{ $completionPercent < 100 ? __('messages.agency_profile_completion_hint') : __('messages.agency_profile_complete_hint') }}</p>
+                    </div>
                 </div>
 
-                <div class="mt-9 grid gap-4 sm:grid-cols-3">
-                    <div class="rounded-2xl border border-[#e7eceb] bg-white p-5">
+                <div class="mt-9 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                    <div class="agency-panel agency-kpi rounded-2xl border p-5 shadow-sm">
                         <div class="flex items-center justify-between">
                             <p class="text-sm font-bold">{{ __('messages.travel_packages') }}</p>
-                            <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-[#fff1ed] text-[#e76f51]">●</span>
+                            <span class="agency-icon agency-icon-accent flex h-9 w-9 items-center justify-center rounded-lg">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true"><path d="M4 7.5 12 3l8 4.5-8 4.5-8-4.5Zm0 9 8 4.5 8-4.5M4 7.5V16l8 4.5V12"/></svg>
+                            </span>
                         </div>
                         <p class="mt-5 text-3xl font-bold">{{ $packageCount }}</p>
-                        <p class="mt-1 text-xs text-[#607985]">Saved package inventory</p>
+                        <p class="mt-1 text-xs agency-text-subtle">{{ __('messages.total_packages') }}</p>
                     </div>
-                    <div class="rounded-2xl border border-[#e7eceb] bg-white p-5">
+                    <div class="agency-panel agency-kpi rounded-2xl border p-5 shadow-sm">
                         <div class="flex items-center justify-between">
                             <p class="text-sm font-bold">{{ __('messages.published') }}</p>
-                            <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-[#edf4f3] text-[#2f9e7a]">✓</span>
+                            <span class="agency-icon agency-icon-success flex h-9 w-9 items-center justify-center rounded-lg">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true"><path d="m5 12 4 4L19 2"/></svg>
+                            </span>
                         </div>
                         <p class="mt-5 text-3xl font-bold">{{ $publishedPackageCount }}</p>
-                        <p class="mt-1 text-xs text-[#607985]">Live to travelers</p>
+                        <p class="mt-1 text-xs agency-text-subtle">{{ __('messages.live_to_travelers') }}</p>
                     </div>
-                    <div class="rounded-2xl border border-[#e7eceb] bg-white p-5">
+                    <div class="agency-panel agency-kpi rounded-2xl border p-5 shadow-sm">
                         <div class="flex items-center justify-between">
-                            <p class="text-sm font-bold">{{ __('messages.draft') }}</p>
-                            <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-[#fff8e8] text-[#c58b27]">•</span>
+                            <p class="text-sm font-bold">{{ __('messages.pending') }}</p>
+                            <span class="agency-icon agency-icon-warning flex h-9 w-9 items-center justify-center rounded-lg">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true"><path d="M12 8v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+                            </span>
                         </div>
-                        <p class="mt-5 text-3xl font-bold">{{ $draftPackageCount }}</p>
-                        <p class="mt-1 text-xs text-[#607985]">Work in progress</p>
+                        <p class="mt-5 text-3xl font-bold">{{ $pendingBookingCount }}</p>
+                        <p class="mt-1 text-xs agency-text-subtle">{{ __('messages.needs_confirmation') }}</p>
+                    </div>
+                    <div class="agency-panel agency-kpi rounded-2xl border p-5 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <p class="text-sm font-bold">{{ __('messages.upcoming_departures') }}</p>
+                            <span class="agency-icon agency-icon-neutral flex h-9 w-9 items-center justify-center rounded-lg">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>
+                            </span>
+                        </div>
+                        <p class="mt-5 text-3xl font-bold">{{ count($upcomingDepartures ?? []) }}</p>
+                        <p class="mt-1 text-xs agency-text-subtle">{{ __('messages.scheduled_departures') }}</p>
+                    </div>
+                    <div class="agency-panel agency-kpi rounded-2xl border p-5 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <p class="text-sm font-bold">{{ __('messages.open_inquiries') }}</p>
+                            <span class="agency-icon agency-icon-accent flex h-9 w-9 items-center justify-center rounded-lg">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H7l-4 2v-6.5A7.5 7.5 0 1 1 20 11.5Z"/><path d="M8 11h8M8 14h5"/></svg>
+                            </span>
+                        </div>
+                        <p class="mt-5 text-3xl font-bold">{{ $openInquiryCount }}</p>
+                        <p class="mt-1 text-xs agency-text-subtle">{{ __('messages.inquiries_needing_response') }}</p>
                     </div>
                 </div>
 
-                <div class="mt-10 grid gap-8 xl:grid-cols-[1.3fr_.7fr]">
-                    <section class="rounded-2xl border border-[#e7eceb] bg-white p-6">
+                <div class="agency-panel-muted mt-5 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <p class="agency-text-subtle text-xs font-bold uppercase tracking-[.15em]">{{ __('messages.quick_actions') }}</p>
+                    <div class="flex flex-wrap gap-2">
+                        <a href="{{ route('agency.packages.create', ['lang' => app()->getLocale()]) }}" class="agency-button-primary rounded-lg px-3 py-2 text-xs font-bold">{{ __('messages.create_package') }}</a>
+                        <a href="{{ route('agency.availability.create', ['lang' => app()->getLocale()]) }}" class="agency-button-secondary rounded-lg border px-3 py-2 text-xs font-bold">{{ __('messages.add_departure') }}</a>
+                        <a href="{{ route('agency.bookings.index', ['status' => 'pending', 'lang' => app()->getLocale()]) }}" class="agency-button-secondary rounded-lg border px-3 py-2 text-xs font-bold">{{ __('messages.review_pending_bookings') }}</a>
+                        <a href="{{ route('agency.profile', ['lang' => app()->getLocale()]) }}" class="agency-button-secondary rounded-lg border px-3 py-2 text-xs font-bold">{{ __('messages.agency_profile_link') }}</a>
+                    </div>
+                </div>
+
+                <div class="mt-10 grid gap-8 xl:grid-cols-[1.05fr_.95fr]">
+                    <section class="agency-panel rounded-2xl border p-6 shadow-sm">
                         <div class="flex items-center justify-between gap-4">
                             <div>
-                                <p class="text-xs font-bold uppercase tracking-[.18em] text-[#e76f51]">{{ __('messages.recent_activity') }}</p>
-                                <h3 class="mt-2 text-2xl font-bold">{{ __('messages.travel_packages') }}</h3>
+                                <p class="agency-accent-text text-xs font-bold uppercase tracking-[.18em]">{{ __('messages.needs_attention') }}</p>
+                                <h3 class="mt-2 text-2xl font-bold">{{ __('messages.daily_action_center') }}</h3>
                             </div>
-                            <a href="{{ route('agency.packages.index', ['lang' => app()->getLocale()]) }}" class="text-sm font-bold text-[#e76f51]">{{ __('messages.view_all') }}</a>
+                            <span class="agency-pill agency-pill-accent rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.15em]">{{ trans_choice('messages.attention_items', $attentionItems->count(), ['count' => $attentionItems->count()]) }}</span>
+                        </div>
+                        <div class="mt-6 space-y-3">
+                            @foreach ($attentionItems as $item)
+                                <div class="agency-panel-muted flex items-start justify-between gap-4 rounded-xl border p-4">
+                                    <div>
+                                        <p class="agency-text-primary text-sm font-bold">{{ $item['title'] }}</p>
+                                        <p class="agency-text-subtle mt-1 text-xs leading-5">{{ $item['copy'] }}</p>
+                                    </div>
+                                    <a href="{{ $item['action'] }}" class="agency-button-secondary shrink-0 rounded-lg border px-3 py-2 text-xs font-bold">{{ $item['label'] }}</a>
+                                </div>
+                            @endforeach
+                        </div>
+                    </section>
+
+                    <section class="agency-panel rounded-2xl border p-6 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="agency-accent-text text-xs font-bold uppercase tracking-[.18em]">{{ __('messages.business_snapshot') }}</p>
+                                <h3 class="mt-2 text-2xl font-bold">{{ __('messages.bookable_inventory') }}</h3>
+                            </div>
+                            <a href="{{ route('agency.availability.index', ['lang' => app()->getLocale()]) }}" class="agency-accent-text text-sm font-bold">{{ __('messages.view_all') }}</a>
+                        </div>
+                        <div class="mt-6 space-y-4">
+                            @forelse ($upcomingDepartures as $item)
+                                @php
+                                    $availability = $item['availability'];
+                                    $package = $item['package'];
+                                    $remaining = (int) ($item['remaining_capacity'] ?? 0);
+                                    $capacity = max(1, (int) ($availability->capacity ?? 1));
+                                    $used = max(0, $capacity - $remaining);
+                                    $occupancy = (int) ($item['capacity_snapshot']['occupancy_percent'] ?? round(($used / $capacity) * 100));
+                                    $barWidth = max(0, min(100, $occupancy));
+                                @endphp
+                                <div class="agency-panel-muted rounded-xl border p-4">
+                                    <div class="flex items-center justify-between gap-3">
+                                        <div>
+                                            <p class="agency-text-primary text-sm font-bold">{{ $package->title }}</p>
+                                            <p class="agency-text-subtle mt-1 text-xs">{{ $availability->departure_date ? $availability->departure_date->translatedFormat('d M Y') : __('messages.next_departure') }}</p>
+                                        </div>
+                                        <span class="agency-pill agency-pill-neutral rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.15em]">{{ __('messages.seats_left', ['count' => $remaining]) }}</span>
+                                    </div>
+                                    <div class="agency-progress-track mt-3 h-2.5 overflow-hidden rounded-full">
+                                        <div class="agency-progress-bar h-full rounded-full" style="width: {{ $barWidth }}%"></div>
+                                    </div>
+                                    <div class="agency-text-subtle mt-3 flex flex-wrap justify-between gap-2 text-xs">
+                                        <span>{{ __('messages.reserved_seats_of_capacity', ['reserved' => $used, 'capacity' => $capacity]) }}</span>
+                                        <span>{{ __('messages.occupancy') }} {{ $occupancy }}% · {{ __('messages.active_bookings') }} {{ $item['capacity_snapshot']['booking_count'] ?? 0 }}</span>
+                                    </div>
+                                </div>
+                            @empty
+                                <div class="agency-empty-state rounded-xl border border-dashed p-6 text-center text-sm agency-text-subtle">{{ __('messages.no_upcoming_departures') }}</div>
+                            @endforelse
+                        </div>
+                    </section>
+                </div>
+
+                <div class="mt-10 grid gap-8 xl:grid-cols-[1.15fr_.85fr]">
+                    <section class="agency-panel rounded-2xl border p-6 shadow-sm">
+                        <div class="flex items-center justify-between gap-4">
+                            <div>
+                                <p class="agency-accent-text text-xs font-bold uppercase tracking-[.18em]">{{ __('messages.recent_bookings') }}</p>
+                                <h3 class="mt-2 text-2xl font-bold">{{ __('messages.recent_reservations') }}</h3>
+                            </div>
+                            <a href="{{ route('agency.bookings.index', ['lang' => app()->getLocale()]) }}" class="agency-accent-text text-sm font-bold">{{ __('messages.view_all') }}</a>
                         </div>
 
                         <div class="mt-6 space-y-3">
-                            @forelse ($recentPackages as $package)
-                                <a href="{{ route('agency.packages.edit', ['package' => $package->id, 'lang' => app()->getLocale()]) }}" class="flex items-center justify-between gap-4 rounded-xl border border-[#e7eceb] p-4 transition hover:border-[#e76f51]">
+                            @forelse ($recentBookings as $booking)
+                                <div class="agency-panel-muted flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
                                     <div>
-                                        <p class="text-sm font-bold">{{ $package->title }}</p>
-                                        <p class="mt-1 text-xs text-[#607985]">{{ $package->destination }} · {{ $package->duration_days }} days</p>
+                                        <p class="agency-text-primary text-sm font-bold">{{ $booking->booking_reference }}</p>
+                                        <p class="agency-text-subtle mt-1 text-xs">{{ $booking->traveler?->name ?? __('messages.traveler') }} · {{ $booking->package?->title ?? __('messages.package') }}</p>
                                     </div>
-                                    <span class="rounded-full bg-[#f1f6f4] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.15em] text-[#173042]">{{ $package->status }}</span>
-                                </a>
-                            @empty
-                                <div class="rounded-xl border border-dashed border-[#cbd9d8] bg-[#f8faf9] p-6 text-center text-sm text-[#607985]">
-                                    {{ __('messages.no_packages_yet') }}
+                                    <div class="flex items-center gap-3">
+                                        @php $bookingStatus = $booking->status->value ?? $booking->status; @endphp
+                                        <span class="agency-pill agency-pill-neutral rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.15em]">{{ __('messages.booking_status_'.$bookingStatus) }}</span>
+                                        <a href="{{ route('agency.bookings.show', ['booking' => $booking->id, 'lang' => app()->getLocale()]) }}" class="agency-button-secondary rounded-lg border px-3 py-2 text-xs font-bold">{{ __('messages.open') }}</a>
+                                    </div>
                                 </div>
+                            @empty
+                                <div class="agency-empty-state rounded-xl border border-dashed p-6 text-center text-sm agency-text-subtle">{{ __('messages.no_confirmed_bookings') }}</div>
                             @endforelse
+                        </div>
+                        <div class="mt-7 border-t agency-divider pt-5">
+                            <h4 class="text-sm font-bold">{{ __('messages.booking_status_breakdown') }}</h4>
+                            <div class="mt-3 grid grid-cols-2 gap-x-5 gap-y-3">
+                                @foreach (['pending', 'confirmed', 'completed', 'cancelled'] as $statusKey)
+                                    <div class="flex items-center justify-between gap-2 text-xs">
+                                        <span class="agency-text-subtle">{{ __('messages.booking_status_'.$statusKey) }}</span>
+                                        <span class="agency-text-primary font-bold tabular-nums">{{ (int) ($bookingStatusCounts[$statusKey] ?? 0) }}</span>
+                                    </div>
+                                @endforeach
+                            </div>
                         </div>
                     </section>
 
-                    <section class="rounded-2xl border border-[#e7eceb] bg-white p-6">
-                        <p class="text-xs font-bold uppercase tracking-[.18em] text-[#e76f51]">{{ __('messages.open_inquiries') }}</p>
-                        <div class="mt-5 space-y-3">
-                            @forelse ($recentInquiries as $inquiry)
-                                <div class="rounded-xl bg-[#f7f8f6] p-3">
-                                    <p class="text-sm font-bold">{{ $inquiry->subject }}</p>
-                                    <p class="mt-1 text-xs text-[#607985]">{{ $inquiry->user->name }}</p>
-                                </div>
+                    <section class="agency-panel rounded-2xl border p-6 shadow-sm">
+                        <div class="flex items-center justify-between gap-4">
+                            <div>
+                                <p class="agency-accent-text text-xs font-bold uppercase tracking-[.18em]">{{ __('messages.packages') }}</p>
+                                <h3 class="mt-2 text-2xl font-bold">{{ __('messages.recent_inventory') }}</h3>
+                            </div>
+                            <a href="{{ route('agency.packages.index', ['lang' => app()->getLocale()]) }}" class="agency-accent-text text-sm font-bold">{{ __('messages.manage') }}</a>
+                        </div>
+                        <div class="mt-6 space-y-3">
+                            @forelse ($recentPackages as $package)
+                                @php $packageStatus = $package->status->value ?? $package->status; @endphp
+                                <a href="{{ route('agency.packages.edit', ['package' => $package->id, 'lang' => app()->getLocale()]) }}" class="agency-panel-muted flex items-center justify-between gap-4 rounded-xl border p-4">
+                                    <div>
+                                        <p class="agency-text-primary text-sm font-bold">{{ $package->title }}</p>
+                                        <p class="agency-text-subtle mt-1 text-xs">{{ $package->destination }} · {{ __('messages.duration_days_label', ['count' => $package->duration_days]) }}</p>
+                                    </div>
+                                    <span class="agency-pill agency-pill-neutral rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.15em]">{{ __('messages.'.$packageStatus) }}</span>
+                                </a>
                             @empty
-                                <p class="text-sm text-[#607985]">{{ __('messages.no_inquiries') }}</p>
+                                <div class="agency-empty-state rounded-xl border border-dashed p-6 text-center text-sm agency-text-subtle">{{ __('messages.no_packages') }}</div>
                             @endforelse
                         </div>
                     </section>
                 </div>
-            </main>
-        </div>
-    </div>
 
-    <script>
-        const agencyShell = document.querySelector('[data-agency-shell]');
-        const agencySidebar = document.querySelector('[data-agency-sidebar]');
-        const agencyBackdrop = document.querySelector('[data-agency-backdrop]');
-        const setAgencyMenu = (open) => {
-            agencySidebar?.classList.toggle('-translate-x-full', !open);
-            agencySidebar?.classList.toggle('translate-x-0', open);
-            agencyBackdrop?.classList.toggle('hidden', !open);
-            agencyBackdrop?.classList.toggle('opacity-0', !open);
-            agencyBackdrop?.classList.toggle('opacity-100', open);
-            document.body.classList.toggle('overflow-hidden', open);
-        };
-        document.querySelector('[data-agency-open]')?.addEventListener('click', () => setAgencyMenu(true));
-        document.querySelector('[data-agency-close]')?.addEventListener('click', () => setAgencyMenu(false));
-        agencyBackdrop?.addEventListener('click', () => setAgencyMenu(false));
-        agencySidebar?.querySelectorAll('a').forEach((link) => link.addEventListener('click', () => setAgencyMenu(false)));
-    </script>
-</x-auth-layout>
+                <section class="agency-panel mt-10 rounded-2xl border p-6 shadow-sm">
+                    <div class="flex flex-wrap items-end justify-between gap-3">
+                        <div><p class="agency-accent-text text-xs font-bold uppercase tracking-[.18em]">{{ __('messages.package_health') }}</p><h3 class="mt-2 text-xl font-bold">{{ __('messages.packages_need_completion') }}</h3></div>
+                        <span class="agency-pill agency-pill-warning rounded-full px-2.5 py-1 text-xs font-bold">{{ $incompletePackageCount }}</span>
+                    </div>
+                    <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        @php
+                            $packagesNeedingWork = $recentPackages->filter(fn ($package) => $package->images_count === 0 || $package->itinerary_days_count < $package->duration_days)->take(3);
+                        @endphp
+                        @forelse ($packagesNeedingWork as $package)
+                            <a href="{{ route('agency.packages.edit', ['package' => $package->id, 'lang' => app()->getLocale()]) }}" class="agency-panel-muted flex items-center justify-between gap-4 rounded-xl border p-4">
+                                <span class="min-w-0"><span class="agency-text-primary block truncate text-sm font-semibold">{{ $package->title }}</span><span class="agency-text-subtle mt-1 block text-xs">{{ $package->images_count }} {{ __('messages.images') }} · {{ $package->itinerary_days_count }}/{{ $package->duration_days }} {{ __('messages.itinerary_days') }}</span></span>
+                                <span class="agency-accent-text text-xs font-bold">{{ __('messages.edit') }}</span>
+                            </a>
+                        @empty
+                            <p class="agency-text-subtle text-sm">{{ __('messages.packages_all_ready') }}</p>
+                        @endforelse
+                    </div>
+                </section>
+
+                <section class="agency-panel mt-10 rounded-2xl border p-6 shadow-sm">
+                    <div class="flex items-center justify-between gap-4">
+                        <div>
+                            <p class="agency-accent-text text-xs font-bold uppercase tracking-[.18em]">{{ __('messages.inquiry') }}</p>
+                            <h3 class="mt-2 text-2xl font-bold">{{ __('messages.recent_inquiries') }}</h3>
+                        </div>
+                        <span class="agency-pill agency-pill-neutral rounded-full px-2.5 py-1 text-xs font-bold">{{ count($recentInquiries ?? []) }}</span>
+                    </div>
+                    <div class="mt-6 divide-y agency-divider">
+                        @forelse ($recentInquiries as $inquiry)
+                            @php $inquiryStatus = $inquiry->getRawOriginal('status'); @endphp
+                            <article class="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+                                <div class="min-w-0">
+                                    <p class="agency-text-primary truncate text-sm font-bold">{{ $inquiry->subject }}</p>
+                                    <p class="agency-text-subtle mt-1 text-xs">{{ $inquiry->user?->name ?? __('messages.traveler') }} · {{ $inquiry->created_at->translatedFormat('d M Y') }}</p>
+                                </div>
+                                <span class="agency-pill agency-pill-neutral w-fit rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.12em]">{{ __('messages.inquiry_status_'.$inquiryStatus) }}</span>
+                            </article>
+                        @empty
+                            <p class="agency-text-subtle py-4 text-sm">{{ __('messages.no_recent_inquiries') }}</p>
+                        @endforelse
+                    </div>
+                </section>
+</x-agency-shell>

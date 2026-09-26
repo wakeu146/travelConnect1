@@ -1,0 +1,280 @@
+@props(['title' => null])
+
+@php
+    $routeName = request()->route()?->getName();
+    $pageTitle = $title ?? match (true) {
+        $routeName === 'agency.dashboard' => __('messages.agency_dashboard'),
+        $routeName === 'agency.packages.create' => __('messages.create_package'),
+        $routeName === 'agency.packages.edit' => __('messages.edit_package'),
+        $routeName === 'agency.packages.index' => __('messages.manage_travel_packages'),
+        $routeName === 'agency.availability.create' => __('messages.create_departure'),
+        $routeName === 'agency.availability.edit' => __('messages.edit_departure'),
+        $routeName === 'agency.availability.index' => __('messages.manage_departures'),
+        $routeName === 'agency.bookings.show' => __('messages.booking_details'),
+        $routeName === 'agency.bookings.index' => __('messages.booking_management'),
+        $routeName === 'agency.customers.index' => __('messages.customers'),
+        $routeName === 'agency.reviews.index' => __('messages.review_management'),
+        $routeName === 'agency.payments.index' => __('messages.booking_payments'),
+        $routeName === 'agency.analytics.index' => __('messages.business_analytics'),
+        $routeName === 'agency.profile' || $routeName === 'agency.settings.update' => __('messages.agency_profile'),
+        default => __('messages.agency_dashboard'),
+    };
+    $agency = $agency ?? auth()->user()?->agency;
+    $brandName = $agency?->company_name ?? 'TravelConnect';
+    $verificationStatus = $agency?->verification_status?->value ?? $agency?->verification_status;
+    $verificationTone = match ($verificationStatus) {
+        'verified' => 'success',
+        'rejected' => 'danger',
+        'pending' => 'warning',
+        default => 'neutral',
+    };
+    $navItems = [
+        ['route' => 'agency.dashboard', 'label' => __('messages.overview'), 'icon' => '<rect x="4" y="4" width="6" height="6" rx="1"></rect><rect x="14" y="4" width="6" height="6" rx="1"></rect><rect x="4" y="14" width="6" height="6" rx="1"></rect><rect x="14" y="14" width="6" height="6" rx="1"></rect>'],
+        ['route' => 'agency.packages.index', 'active' => 'agency.packages.*', 'label' => __('messages.travel_packages'), 'icon' => '<path d="M4 7.5 12 3l8 4.5-8 4.5-8-4.5Zm0 9 8 4.5 8-4.5M4 7.5V16l8 4.5V12"></path>'],
+        ['route' => 'agency.availability.index', 'active' => 'agency.availability.*', 'label' => __('messages.availability'), 'icon' => '<rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path>'],
+        ['route' => 'agency.bookings.index', 'active' => 'agency.bookings.*', 'label' => __('messages.bookings'), 'icon' => '<path d="M7 7h10M7 12h10M7 17h6"></path><rect x="3" y="4" width="18" height="16" rx="2"></rect>'],
+        ['route' => 'agency.customers.index', 'label' => __('messages.customers'), 'icon' => '<circle cx="9" cy="8" r="3"></circle><path d="M3 20v-1a6 6 0 0 1 12 0v1M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 5v1"></path>'],
+        ['route' => 'agency.reviews.index', 'label' => __('messages.reviews'), 'icon' => '<path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"></path>'],
+        ['route' => 'agency.payments.index', 'label' => __('messages.payments'), 'icon' => '<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 10h18M7 15h4"></path>'],
+        ['route' => 'agency.analytics.index', 'label' => __('messages.analytics'), 'icon' => '<path d="M4 19V5M4 19h17M8 15l3-4 3 2 5-7"></path>'],
+        ['route' => 'agency.profile', 'active' => 'agency.profile', 'label' => __('messages.profile'), 'icon' => '<path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 8a7 7 0 0 1 14 0"></path><path d="M17.5 5.5A2.5 2.5 0 0 1 20 8v8"></path>'],
+    ];
+@endphp
+
+<x-auth-layout :title="$pageTitle . ' | TravelConnect'">
+    <div data-agency-shell class="dashboard-shell min-h-screen bg-[#f7f8f6] text-[#173042] transition-colors duration-300">
+        <aside data-agency-sidebar class="fixed inset-y-0 left-0 z-50 flex w-72 -translate-x-full flex-col overflow-y-auto overscroll-contain border-r border-[#e4e9e7] bg-white px-5 py-6 shadow-xl transition-transform duration-300 lg:translate-x-0 lg:shadow-none">
+        <div class="flex items-center justify-between gap-2 px-2">
+            <a data-agency-brand href="{{ route('home', ['lang' => app()->getLocale()]) }}" class="flex min-w-0 items-center gap-3 text-lg font-semibold">
+                <span class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#f1f6f4]">
+                    <img src="{{ asset('images/logo.png') }}" alt="TravelConnect logo" class="h-full w-full object-contain">
+                </span>
+                <span>Travel<span class="font-normal text-[#e76f51]">Connect</span></span>
+            </a>
+            <button type="button" data-agency-expand class="hidden h-9 w-9 items-center justify-center rounded-lg text-[#607985] hover:bg-[#f1f6f4]" aria-label="{{ __('messages.expand_navigation') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5" aria-hidden="true"><path d="m9 5 6 7-6 7"/></svg></button>
+            <button type="button" data-agency-collapse class="hidden h-9 w-9 items-center justify-center rounded-lg text-[#607985] hover:bg-[#f1f6f4] lg:flex" aria-label="{{ __('messages.collapse_navigation') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5" aria-hidden="true"><path d="m15 5-6 7 6 7"/></svg></button>
+            <button type="button" data-agency-close class="flex h-9 w-9 items-center justify-center rounded-lg text-[#607985] hover:bg-[#f1f6f4] lg:hidden" aria-label="{{ __('messages.close_navigation') }}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-5 w-5" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+            </button>
+        </div>
+
+        <div class="mt-10">
+            <p data-agency-label class="px-3 text-[10px] font-bold uppercase tracking-[.2em] text-[#9aadb2]">{{ __('messages.agency_workspace') }}</p>
+            <nav class="mt-3 grid gap-1" aria-label="{{ __('messages.dashboard_navigation') }}">
+                @foreach ($navItems as $item)
+                    @php
+                        $isActive = request()->routeIs($item['active'] ?? $item['route']);
+                    @endphp
+                          <a href="{{ route($item['route'], ['lang' => app()->getLocale()]) }}"
+                              class="agency-nav-link flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition {{ $isActive ? 'is-active' : '' }}"
+                              @if ($isActive) aria-current="page" @endif
+                       data-agency-nav-link
+                               data-agency-nav-path="{{ parse_url(route($item['route'], ['lang' => app()->getLocale()]), PHP_URL_PATH) }}"
+                    >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5" aria-hidden="true">{!! $item['icon'] !!}</svg>
+                        {{ $item['label'] }}
+                    </a>
+                @endforeach
+            </nav>
+        </div>
+
+        <div class="mt-auto border-t border-[#e4e9e7] pt-5">
+            <div class="flex items-center gap-3 px-2">
+                <span class="flex h-10 w-10 items-center justify-center rounded-full bg-[#173042] text-sm font-bold text-white">{{ strtoupper(substr((auth()->user()?->name ?? 'A'), 0, 1)) }}</span>
+                <div class="min-w-0">
+                    <p class="truncate text-sm font-bold">{{ auth()->user()?->name ?? 'Agency owner' }}</p>
+                    <p class="truncate text-xs text-[#607985]">{{ $brandName }}</p>
+                </div>
+            </div>
+            <div class="mt-4 flex items-center justify-between gap-2 rounded-xl border border-[#e4e9e7] bg-[#f8faf9] px-3 py-2.5 text-sm text-[#607985]">
+                <span>{{ __('messages.theme') }}</span>
+                <button type="button" data-agency-theme class="flex h-8 w-8 items-center justify-center rounded-lg border border-[#dbe3e5] text-[#173042] hover:border-[#e76f51] hover:text-[#e76f51]" aria-label="{{ __('messages.toggle_theme') }}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true"><path d="M20.5 15.2A8.5 8.5 0 0 1 8.8 3.5 8.5 8.5 0 1 0 20.5 15.2Z"></path></svg>
+                </button>
+            </div>
+            <form action="{{ route('logout') }}" method="POST" class="mt-4">@csrf<button type="submit" class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-[#607985] hover:bg-[#fff1ed] hover:text-[#e76f51]"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5" aria-hidden="true"><path d="M10 5H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h5M13 8l4 4-4 4M8 12h9"/></svg>{{ __('messages.logout') }}</button></form>
+        </div>
+    </aside>
+
+    <div data-agency-backdrop class="fixed inset-0 z-40 hidden bg-[#102936]/40 opacity-0 transition-opacity duration-300 lg:hidden"></div>
+
+    <div data-agency-main class="lg:pl-72">
+        <header data-agency-topbar class="sticky top-0 z-30 border-b border-[#e4e9e7] bg-white/95 px-5 py-4 backdrop-blur sm:px-8">
+            <div class="flex items-center gap-4">
+                <button type="button" data-agency-open class="flex h-10 w-10 items-center justify-center rounded-xl border border-[#dbe3e5] text-[#173042] lg:hidden" aria-label="{{ __('messages.open_navigation') }}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-5 w-5" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+                </button>
+                <div class="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+                    <span class="agency-panel-muted flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border text-sm font-bold sm:h-10 sm:w-10">
+                        @if ($agency?->logoUrl())
+                            <img src="{{ $agency->logoUrl() }}" alt="{{ __('messages.agency_logo_alt', ['name' => $brandName]) }}" class="h-full w-full object-cover">
+                        @else
+                            {{ str($brandName)->substr(0, 1)->upper() }}
+                        @endif
+                    </span>
+                    <div class="min-w-0">
+                        <p class="agency-text-subtle hidden text-[10px] font-bold uppercase tracking-[.16em] sm:block">{{ __('messages.agency_workspace') }} · {{ auth()->user()?->name }}</p>
+                        <div class="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                            <h1 class="truncate text-sm font-bold text-[#173042] sm:text-lg">{{ $brandName }}</h1>
+                            @if ($verificationStatus)
+                                <span class="agency-pill agency-pill-{{ $verificationTone }} rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[.1em]">{{ __('messages.agency_verification_status_'.$verificationStatus) }}</span>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+                <form action="{{ route('agency.packages.index', ['lang' => app()->getLocale()]) }}" method="GET" class="relative hidden max-w-xs flex-1 lg:block">
+                    <label for="agency-global-search" class="sr-only">{{ __('messages.search_packages') }}</label>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="agency-text-subtle pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m16.5 16.5 4 4"></path></svg>
+                    <input id="agency-global-search" type="search" name="search" placeholder="{{ __('messages.search_packages') }}" class="agency-input w-full rounded-lg border py-2 pl-9 pr-3 text-sm">
+                </form>
+                <button type="button" data-agency-theme-top class="hidden h-10 w-10 items-center justify-center rounded-xl border border-[#dbe3e5] text-[#607985] hover:border-[#e76f51] hover:text-[#e76f51] sm:flex" aria-label="{{ __('messages.toggle_theme') }}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5" aria-hidden="true"><path d="M20.5 15.2A8.5 8.5 0 0 1 8.8 3.5 8.5 8.5 0 1 0 20.5 15.2Z"></path></svg>
+                </button>
+                <div class="hidden items-center rounded-lg border border-[#dbe3e5] p-1 sm:flex" aria-label="{{ __('messages.language') }}">
+                    <a data-lang-button href="{{ request()->fullUrlWithQuery(['lang' => 'en']) }}" class="rounded-md px-2 py-1 text-[10px] font-bold {{ app()->getLocale() === 'en' ? 'bg-[#173042] text-white' : 'agency-text-subtle' }}">EN</a>
+                    <a data-lang-button href="{{ request()->fullUrlWithQuery(['lang' => 'fr']) }}" class="rounded-md px-2 py-1 text-[10px] font-bold {{ app()->getLocale() === 'fr' ? 'bg-[#173042] text-white' : 'agency-text-subtle' }}">FR</a>
+                </div>
+                <a href="{{ route('agency.profile', ['lang' => app()->getLocale()]) }}" class="agency-button-secondary shrink-0 rounded-lg border px-2.5 py-2 text-sm font-semibold sm:px-3" aria-label="{{ __('messages.agency_profile_link') }}" title="{{ __('messages.agency_profile_link') }}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4 sm:hidden" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>
+                    <span class="hidden sm:inline">{{ __('messages.agency_profile_link') }}</span>
+                    <span class="sr-only sm:hidden">{{ __('messages.agency_profile_link') }}</span>
+                </a>
+            </div>
+        </header>
+
+            <main id="agency-main-content" class="mx-auto max-w-7xl px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
+                {{ $slot }}
+            </main>
+        </div>
+    </div>
+
+    <script>
+    (() => {
+        const shell = document.querySelector('[data-agency-shell]');
+        const sidebar = document.querySelector('[data-agency-sidebar]');
+        const backdrop = document.querySelector('[data-agency-backdrop]');
+        const themeKey = 'travelconnect-dashboard-theme';
+        const collapseKey = 'travelconnect-agency-collapsed';
+        const setCollapsed = (collapsed) => {
+            shell?.classList.toggle('agency-collapsed', collapsed);
+            localStorage.setItem(collapseKey, collapsed ? 'true' : 'false');
+        };
+        setCollapsed(localStorage.getItem(collapseKey) === 'true');
+        document.querySelector('[data-agency-collapse]')?.addEventListener('click', () => setCollapsed(true));
+        document.querySelector('[data-agency-expand]')?.addEventListener('click', () => setCollapsed(false));
+
+        const applyAgencyTheme = (dark) => {
+            shell?.classList.toggle('dashboard-dark', dark);
+            document.body.classList.toggle('dashboard-dark', dark);
+            document.querySelectorAll('[data-agency-theme], [data-agency-theme-top]').forEach((button) => {
+                const icon = button.querySelector('svg');
+                if (!icon) return;
+                icon.innerHTML = dark
+                    ? '<path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"></path><circle cx="12" cy="12" r="3"></circle>'
+                    : '<path d="M20.5 15.2A8.5 8.5 0 0 1 8.8 3.5 8.5 8.5 0 1 0 20.5 15.2Z"></path>';
+            });
+        };
+
+        const savedTheme = localStorage.getItem(themeKey) === 'dark';
+        applyAgencyTheme(savedTheme);
+
+        document.querySelectorAll('[data-agency-theme], [data-agency-theme-top]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const dark = !shell.classList.contains('dashboard-dark');
+                localStorage.setItem(themeKey, dark ? 'dark' : 'light');
+                applyAgencyTheme(dark);
+            });
+        });
+
+        const setSidebar = (open) => {
+            sidebar?.classList.toggle('-translate-x-full', !open);
+            sidebar?.classList.toggle('translate-x-0', open);
+            backdrop?.classList.toggle('hidden', !open);
+            backdrop?.classList.toggle('opacity-0', !open);
+            backdrop?.classList.toggle('opacity-100', open);
+            document.body.classList.toggle('overflow-hidden', open);
+        };
+
+        document.querySelector('[data-agency-open]')?.addEventListener('click', () => setSidebar(true));
+        document.querySelector('[data-agency-close]')?.addEventListener('click', () => setSidebar(false));
+        backdrop?.addEventListener('click', () => setSidebar(false));
+        sidebar?.querySelectorAll('[data-agency-nav-link]').forEach((link) => {
+            link.addEventListener('click', () => setSidebar(false));
+        });
+
+        const replaceAgencyMainContent = (htmlText, nextUrl) => {
+            const main = document.getElementById('agency-main-content');
+            if (!main) return false;
+            const parser = new DOMParser();
+            const nextDocument = parser.parseFromString(htmlText, 'text/html');
+            const nextMain = nextDocument.getElementById('agency-main-content');
+            if (!nextMain) return false;
+            main.innerHTML = nextMain.innerHTML;
+            const nextTitle = nextDocument.title || 'TravelConnect';
+            if (nextTitle) document.title = nextTitle;
+            if (nextUrl) history.pushState({}, '', nextUrl);
+            return true;
+        };
+
+        const updateAgencyLinks = () => {
+            document.querySelectorAll('[data-agency-nav-link]').forEach((link) => {
+                const itemPath = link.dataset.agencyNavPath || new URL(link.href, window.location.href).pathname;
+                const currentPath = window.location.pathname.replace(/\/$/, '');
+                const normalizedItemPath = itemPath.replace(/\/$/, '');
+                const isActive = currentPath === normalizedItemPath || currentPath.startsWith(`${normalizedItemPath}/`);
+                link.classList.toggle('is-active', isActive);
+                if (isActive) link.setAttribute('aria-current', 'page');
+                else link.removeAttribute('aria-current');
+            });
+        };
+
+        const handleAgencyFetch = (event) => {
+            const link = event.currentTarget;
+            if (!link || link.target === '_blank') return;
+            const href = link.getAttribute('href');
+            if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+            const absoluteHref = new URL(href, window.location.href);
+            if (absoluteHref.origin !== window.location.origin) return;
+            const isAgencyPath = absoluteHref.pathname.startsWith('/agency');
+            if (!isAgencyPath) return;
+            event.preventDefault();
+            fetch(absoluteHref, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then((response) => {
+                    if (!response.ok) {
+                        window.location.href = absoluteHref.toString();
+                        return null;
+                    }
+                    return response.text();
+                })
+                .then((html) => {
+                    if (!html) return;
+                    const ok = replaceAgencyMainContent(html, absoluteHref.toString());
+                    if (!ok) {
+                        window.location.href = absoluteHref.toString();
+                        return;
+                    }
+                    updateAgencyLinks();
+                })
+                .catch(() => {
+                    window.location.href = absoluteHref.toString();
+                });
+        };
+
+        document.querySelectorAll('[data-agency-nav-link]').forEach((link) => {
+            link.addEventListener('click', handleAgencyFetch);
+        });
+
+        window.addEventListener('popstate', () => {
+            const href = new URL(window.location.href);
+            if (href.pathname.startsWith('/agency')) {
+                fetch(window.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then((response) => response.text())
+                    .then((html) => replaceAgencyMainContent(html, window.location.href))
+                    .catch(() => window.location.reload());
+            }
+        });
+
+        updateAgencyLinks();
+    })();
+    </script>
+</x-auth-layout>

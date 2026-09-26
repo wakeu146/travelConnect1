@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\UserRole;
 use App\Models\Agency;
 use App\Models\Inquiry;
 use App\Models\Review;
@@ -14,6 +15,51 @@ use Tests\TestCase;
 class AgencyDashboardTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_a_traveler_login_redirects_to_the_traveler_dashboard(): void
+    {
+        $traveler = User::factory()->create([
+            'email' => 'traveler-login@example.com',
+            'role' => UserRole::TRAVELER,
+        ]);
+
+        $response = $this->post(route('login.store'), [
+            'email' => $traveler->email,
+            'password' => 'password',
+        ]);
+
+        $response->assertRedirect(route('auth.success'));
+        $response->assertSessionHas('success_redirect', route('dashboard'));
+    }
+
+    public function test_an_agency_owner_login_redirects_to_the_agency_dashboard(): void
+    {
+        $agency = Agency::factory()->create();
+
+        $response = $this->post(route('login.store'), [
+            'email' => $agency->owner->email,
+            'password' => 'password',
+        ]);
+
+        $response->assertRedirect(route('auth.success'));
+        $response->assertSessionHas('success_redirect', route('agency.dashboard'));
+    }
+
+    public function test_an_admin_login_keeps_the_default_dashboard_behavior(): void
+    {
+        $admin = User::factory()->create([
+            'email' => 'admin-login@example.com',
+            'role' => UserRole::ADMIN,
+        ]);
+
+        $response = $this->post(route('login.store'), [
+            'email' => $admin->email,
+            'password' => 'password',
+        ]);
+
+        $response->assertRedirect(route('auth.success'));
+        $response->assertSessionHas('success_redirect', route('dashboard'));
+    }
 
     public function test_an_agency_owner_can_view_their_dashboard(): void
     {
@@ -29,6 +75,38 @@ class AgencyDashboardTest extends TestCase
         $response->assertSee(__('messages.agency_dashboard_intro'));
         $response->assertSee('Open inquiries');
         $response->assertSee('1');
+    }
+
+    public function test_agency_dashboard_uses_a_persistent_workspace_shell(): void
+    {
+        $agency = Agency::factory()->create(['company_name' => 'North Star Travel']);
+
+        $response = $this->actingAs($agency->owner)->get(route('agency.dashboard'));
+
+        $response->assertOk();
+        $response->assertSee('data-agency-shell', false);
+        $response->assertSee('id="agency-main-content"', false);
+        $response->assertSee('data-agency-sidebar', false);
+        $response->assertSee('data-agency-topbar', false);
+    }
+
+    public function test_agency_shell_shows_the_real_logo_name_and_verification_state(): void
+    {
+        Storage::fake('public');
+        Storage::disk('public')->put('agency-logos/atlas.png', UploadedFile::fake()->image('atlas.png')->get());
+        $agency = Agency::factory()->create([
+            'company_name' => 'Atlas Horizon Voyages',
+            'logo_path' => 'agency-logos/atlas.png',
+            'verification_status' => 'verified',
+        ]);
+
+        $response = $this->actingAs($agency->owner)->get(route('agency.dashboard'));
+
+        $response->assertOk();
+        $response->assertSee('storage/agency-logos/atlas.png');
+        $response->assertSee('Atlas Horizon Voyages');
+        $response->assertSee(__('messages.agency_verification_status_verified'));
+        $response->assertDontSee(__('messages.public_profile'));
     }
 
     public function test_a_traveler_is_redirected_away_from_the_agency_dashboard(): void
@@ -88,6 +166,8 @@ class AgencyDashboardTest extends TestCase
         $this->assertNotNull($agency->cover_image_path);
         $this->assertTrue(Storage::disk('public')->exists($agency->logo_path));
         $this->assertTrue(Storage::disk('public')->exists($agency->cover_image_path));
+        $this->assertSame(Storage::disk('public')->url($agency->logo_path), $agency->logoUrl());
+        $this->assertSame(Storage::disk('public')->url($agency->cover_image_path), $agency->coverImageUrl());
 
         $public = $this->actingAs($agency->owner)->get(route('agency.show', ['slug' => 'summit-sea-travel']));
         $public->assertOk()->assertSee('Journeys planned around thoughtful local knowledge.');
@@ -117,5 +197,31 @@ class AgencyDashboardTest extends TestCase
 
         $this->assertDatabaseHas('agency_documents', ['agency_id' => $agency->id, 'type' => 'license', 'status' => 'pending']);
         $this->assertDatabaseHas('agency_experiences', ['agency_id' => $agency->id, 'destination' => 'Tokyo']);
+    }
+
+    public function test_agency_owner_can_replace_logo_and_remove_cover_without_orphaning_files(): void
+    {
+        Storage::fake('public');
+        $oldLogo = UploadedFile::fake()->image('old-logo.jpg')->store('agency-logos/old', 'public');
+        $oldCover = UploadedFile::fake()->image('old-cover.jpg')->store('agency-covers/old', 'public');
+        $agency = Agency::factory()->create(['logo_path' => $oldLogo, 'cover_image_path' => $oldCover]);
+
+        $response = $this->actingAs($agency->owner)->put(route('agency.settings.update'), [
+            'name' => $agency->owner->name,
+            'email' => $agency->owner->email,
+            'company_name' => $agency->company_name,
+            'logo' => UploadedFile::fake()->image('new-logo.webp'),
+            'remove_cover_image' => '1',
+        ]);
+
+        $response->assertRedirect();
+        $agency->refresh();
+        $this->assertNotSame($oldLogo, $agency->logo_path);
+        $this->assertTrue(Storage::disk('public')->exists($agency->logo_path));
+        $this->assertFalse(Storage::disk('public')->exists($oldLogo));
+        $this->assertNull($agency->cover_image_path);
+        $this->assertFalse(Storage::disk('public')->exists($oldCover));
+        $this->assertSame(Storage::disk('public')->url($agency->logo_path), $agency->logoUrl());
+        $this->assertNull($agency->coverImageUrl());
     }
 }

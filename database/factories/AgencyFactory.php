@@ -16,7 +16,7 @@ class AgencyFactory extends Factory
         return [
             'user_id' => User::factory()->state(['role' => 'agency_owner']),
             'company_name' => fake()->company().' Travel',
-            'description' => fake()->realTextBetween(180, 280),
+            'description' => fake()->sentence(18),
             'license_number' => fake()->unique()->bothify('TA-####-????'),
             'verification_status' => 'pending',
             'trust_score' => 0,

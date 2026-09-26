@@ -13,6 +13,7 @@ use App\Models\Package;
 use App\Models\PackageImage;
 use App\Models\PackageItineraryDay;
 use App\Models\Service;
+use App\Services\BookingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -36,16 +37,52 @@ class AgencyController extends Controller
         abort_unless($package->agency_id === $this->currentAgency()->id, 403);
     }
 
-    public function dashboard(): View
+    public function dashboard(BookingService $bookingService): View
     {
         $agency = $this->currentAgency();
+        $departureItems = $agency->packages()
+            ->with(['availabilities' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>=', now()->toDateString())->orderBy('departure_date')->limit(5)])
+            ->get()
+            ->flatMap(fn ($package) => $package->availabilities->map(fn ($availability) => [
+                'package' => $package,
+                'availability' => $availability,
+            ]))->sortBy('availability.departure_date')->take(5)->values();
+        $capacitySnapshots = $bookingService->capacitySnapshots($departureItems->pluck('availability'));
+        $upcomingDepartures = $departureItems->map(function (array $item) use ($capacitySnapshots): array {
+            $snapshot = $capacitySnapshots->get($item['availability']->id);
+
+            return $item + [
+                'remaining_capacity' => $snapshot['remaining_capacity'],
+                'capacity_snapshot' => $snapshot,
+            ];
+        });
+        $recentPackages = $agency->packages()
+            ->withCount(['images', 'itineraryDays', 'bookings', 'availabilities as upcoming_departures_count' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>=', now()->toDateString())])
+            ->withSum('bookings as travelers_booked', 'traveler_count')
+            ->latest()
+            ->take(5)
+            ->get();
+        $incompletePackageCount = $agency->packages()
+            ->where(fn ($query) => $query->whereDoesntHave('images')->orWhereDoesntHave('itineraryDays'))
+            ->count();
+        $bookingStatusCounts = $agency->bookings()
+            ->selectRaw('status, COUNT(*) as aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status');
 
         return view('agencies.dashboard', [
             'agency' => $agency,
             'packageCount' => $agency->packages()->count(),
             'publishedPackageCount' => $agency->packages()->where('status', PackageStatus::PUBLISHED->value)->count(),
             'draftPackageCount' => $agency->packages()->where('status', PackageStatus::DRAFT->value)->count(),
-            'recentPackages' => $agency->packages()->latest()->take(5)->get(),
+            'upcomingDepartures' => $upcomingDepartures,
+            'pendingBookingCount' => $agency->bookings()->where('status', 'pending')->count(),
+            'confirmedBookingCount' => $agency->bookings()->where('status', 'confirmed')->count(),
+            'bookingStatusCounts' => $bookingStatusCounts,
+            'incompletePackageCount' => $incompletePackageCount,
+            'openInquiryCount' => $agency->inquiries()->where('status', 'open')->count(),
+            'recentBookings' => $agency->bookings()->with(['package', 'availability', 'traveler'])->latest()->limit(5)->get(),
+            'recentPackages' => $recentPackages,
             'recentInquiries' => $agency->inquiries()->with('user')->latest()->take(5)->get(),
         ]);
     }
@@ -55,7 +92,7 @@ class AgencyController extends Controller
         $agency = $this->currentAgency();
 
         return view('agencies.profile', [
-            'agency' => $agency,
+            'agency' => $agency->load(['owner', 'countries', 'services', 'documents']),
             'countries' => Country::orderBy('name')->get(),
             'services' => Service::orderBy('name')->get(),
         ]);
@@ -82,26 +119,14 @@ class AgencyController extends Controller
             'services.*' => ['exists:services,id'],
             'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:2048'],
             'cover_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:4096'],
+            'remove_logo' => ['nullable', 'boolean'],
+            'remove_cover_image' => ['nullable', 'boolean'],
         ]);
 
-        $owner = $agency->owner;
-        $owner->update([
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'phone' => $data['phone'] ?? $owner->phone,
-        ]);
-
-        if ($request->hasFile('logo')) {
-            $logoPath = $request->file('logo')->store('agency-logos', 'public');
-            $agency->update(['logo_path' => $logoPath]);
-        }
-
-        if ($request->hasFile('cover_image')) {
-            $coverPath = $request->file('cover_image')->store('agency-covers', 'public');
-            $agency->update(['cover_image_path' => $coverPath]);
-        }
-
-        $agency->update([
+        $disk = Storage::disk('public');
+        $oldPaths = [];
+        $newPaths = [];
+        $agencyUpdates = [
             'company_name' => $data['company_name'],
             'description' => $data['description'] ?? '',
             'license_number' => $data['license_number'] ?? '',
@@ -109,10 +134,46 @@ class AgencyController extends Controller
             'phone' => $data['agency_phone'] ?? $agency->phone,
             'email' => $data['agency_email'] ?? $agency->email,
             'website' => $data['website'] ?? $agency->website,
-        ]);
+        ];
 
-        $agency->countries()->sync($data['countries'] ?? []);
-        $agency->services()->sync($data['services'] ?? []);
+        foreach ([
+            'logo' => ['directory' => 'agency-logos', 'column' => 'logo_path', 'remove' => 'remove_logo'],
+            'cover_image' => ['directory' => 'agency-covers', 'column' => 'cover_image_path', 'remove' => 'remove_cover_image'],
+        ] as $input => $options) {
+            if ($request->hasFile($input)) {
+                $path = $request->file($input)->store($options['directory'].'/'.$agency->id, 'public');
+                if (! $path) {
+                    $disk->delete($newPaths);
+                    return back()->withErrors([$input => __('messages.upload_failed')])->withInput();
+                }
+                $newPaths[] = $path;
+                $agencyUpdates[$options['column']] = $path;
+                if ($agency->{$options['column']}) $oldPaths[] = $agency->{$options['column']};
+            } elseif ($request->boolean($options['remove'])) {
+                if ($agency->{$options['column']}) $oldPaths[] = $agency->{$options['column']};
+                $agencyUpdates[$options['column']] = null;
+            }
+        }
+
+        try {
+            $owner = $agency->owner;
+            DB::transaction(function () use ($owner, $agency, $data, $agencyUpdates): void {
+                $owner->update([
+                    'name' => $data['name'],
+                    'email' => $data['email'],
+                    'phone' => $data['phone'] ?? $owner->phone,
+                ]);
+                $agency->update($agencyUpdates);
+                $agency->countries()->sync($data['countries'] ?? []);
+                $agency->services()->sync($data['services'] ?? []);
+            });
+        } catch (\Throwable $exception) {
+            $disk->delete($newPaths);
+            throw $exception;
+        }
+
+        $currentPaths = array_filter([$agency->logo_path, $agency->cover_image_path]);
+        $disk->delete(array_diff($oldPaths, $currentPaths));
 
         return redirect()->route('agency.profile')->with('status', __('messages.agency_profile_updated'));
     }
@@ -214,7 +275,9 @@ class AgencyController extends Controller
 
         return view('agencies.packages.form', [
             'agency' => $this->currentAgency(),
-            'package' => $package->load(['images', 'itineraryDays']),
+            'package' => $package->load(['images', 'itineraryDays'])
+                ->loadCount(['bookings', 'availabilities as upcoming_departures_count' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>=', now()->toDateString())])
+                ->loadSum('bookings as travelers_booked', 'traveler_count'),
         ]);
     }
 
@@ -290,6 +353,82 @@ class AgencyController extends Controller
         return redirect()->route('agency.packages.index')->with('status', __('messages.package_deleted', ['title' => $package->title]));
     }
 
+    public function duplicatePackage(Package $package): RedirectResponse
+    {
+        $this->authorize('update', $package);
+        $this->ensurePackageOwnership($package);
+        $package->load(['images', 'itineraryDays']);
+        $copiedImagePaths = [];
+
+        try {
+            $duplicate = DB::transaction(function () use ($package, &$copiedImagePaths): Package {
+                $agency = $package->agency;
+                $title = __('messages.duplicate_package_title', ['title' => $package->title]);
+                $slugBase = Str::slug($title) ?: 'package-copy';
+                $slug = $slugBase;
+                $suffix = 2;
+
+                while ($agency->packages()->where('slug', $slug)->exists()) {
+                    $slug = $slugBase.'-'.$suffix;
+                    $suffix++;
+                }
+
+                $duplicate = $agency->packages()->create([
+                    'slug' => $slug,
+                    'title' => $title,
+                    'summary' => $package->summary,
+                    'description' => $package->description,
+                    'destination' => $package->destination,
+                    'price_from' => $package->price_from,
+                    'duration_days' => $package->duration_days,
+                    'status' => PackageStatus::DRAFT,
+                    'published_at' => null,
+                    'is_featured' => false,
+                ]);
+
+                foreach ($package->itineraryDays as $day) {
+                    $duplicate->itineraryDays()->create([
+                        'day_number' => $day->day_number,
+                        'title' => $day->title,
+                        'description' => $day->description,
+                        'location' => $day->location,
+                        'meals' => $day->meals,
+                        'overnight' => $day->overnight,
+                    ]);
+                }
+
+                foreach ($package->images as $image) {
+                    $extension = pathinfo($image->path, PATHINFO_EXTENSION);
+                    $copyPath = 'package-images/'.$agency->id.'/'.Str::uuid().($extension !== '' ? '.'.$extension : '');
+
+                    if (! Storage::disk('public')->copy($image->path, $copyPath)) {
+                        throw new \RuntimeException(__('messages.package_image_duplicate_failed'));
+                    }
+
+                    $copiedImagePaths[] = $copyPath;
+                    $duplicate->images()->create([
+                        'path' => $copyPath,
+                        'caption' => $image->caption,
+                        'is_primary' => $image->is_primary,
+                        'sort_order' => $image->sort_order,
+                    ]);
+                }
+
+                return $duplicate;
+            });
+        } catch (\RuntimeException $exception) {
+            Storage::disk('public')->delete($copiedImagePaths);
+
+            return back()->withErrors(['duplicate' => $exception->getMessage()]);
+        } catch (\Throwable $exception) {
+            Storage::disk('public')->delete($copiedImagePaths);
+            throw $exception;
+        }
+
+        return redirect()->route('agency.packages.edit', ['package' => $duplicate->id])
+            ->with('status', __('messages.package_duplicated', ['title' => $duplicate->title]));
+    }
+
     public function indexPackages(Request $request): View
     {
         $agency = $this->currentAgency();
@@ -305,6 +444,9 @@ class AgencyController extends Controller
                         ->orWhere('destination', 'like', "%{$search}%");
                 });
             })
+            ->with('images')
+            ->withCount(['images', 'itineraryDays', 'bookings', 'availabilities as upcoming_departures_count' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>=', now()->toDateString())])
+            ->withSum('bookings as travelers_booked', 'traveler_count')
             ->orderByDesc('updated_at')
             ->paginate(10)
             ->appends($request->query());
@@ -314,6 +456,7 @@ class AgencyController extends Controller
             'packages' => $packages,
             'search' => $search,
             'status' => $status,
+            'statusCounts' => $agency->packages()->selectRaw('status, COUNT(*) as aggregate')->groupBy('status')->pluck('aggregate', 'status'),
         ]);
     }
 
@@ -356,7 +499,7 @@ class AgencyController extends Controller
         if ($wasPrimary) {
             $replacement = $package->images()->whereKeyNot($image->id)->orderBy('sort_order')->orderBy('id')->first();
             if ($replacement) {
-                $replacement->update(['is_primary' => true]);
+                PackageImage::query()->whereKey($replacement->id)->update(['is_primary' => true]);
             }
         }
 

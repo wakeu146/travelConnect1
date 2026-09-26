@@ -52,4 +52,14 @@ class Package extends Model
     {
         return $this->hasMany(PackageItineraryDay::class)->orderBy('day_number')->orderBy('id');
     }
+
+    public function availabilities(): HasMany
+    {
+        return $this->hasMany(PackageAvailability::class)->orderBy('departure_date');
+    }
+
+    public function bookings(): HasMany
+    {
+        return $this->hasMany(Booking::class);
+    }
 }

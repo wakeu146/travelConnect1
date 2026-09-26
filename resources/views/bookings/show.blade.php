@@ -1,0 +1,68 @@
+<x-auth-layout title="Booking details | TravelConnect">
+    <div class="min-h-screen bg-[#f7f8f6] px-4 py-10 text-[#173042] sm:px-6 lg:px-8">
+        <div class="mx-auto max-w-4xl">
+            <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-[.2em] text-[#e76f51]">Booking</p>
+                    <h1 class="mt-3 font-serif text-4xl tracking-tight">Booking details</h1>
+                </div>
+                <a href="{{ route('dashboard', ['lang' => app()->getLocale()]) }}" class="inline-flex items-center justify-center rounded-xl border border-[#dbe3e5] px-4 py-2.5 text-sm font-semibold text-[#173042] hover:border-[#e76f51] hover:text-[#e76f51]">Dashboard</a>
+            </div>
+
+            <div class="rounded-2xl border border-[#e7eceb] bg-white p-6 shadow-sm">
+                <div class="flex flex-col gap-4 border-b border-[#e7eceb] pb-5 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <p class="text-xs font-bold uppercase tracking-[.18em] text-[#607985]">Reference</p>
+                        <h2 class="mt-2 text-3xl font-bold">{{ $booking->booking_reference }}</h2>
+                    </div>
+                    <span class="rounded-full bg-[#f1f6f4] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.15em] text-[#173042]">{{ $booking->status->value ?? $booking->status }}</span>
+                </div>
+
+                <div class="mt-6 grid gap-6 md:grid-cols-2">
+                    <div>
+                        <p class="text-xs font-bold uppercase tracking-[.18em] text-[#607985]">Package</p>
+                        <p class="mt-2 text-xl font-bold">{{ $booking->package?->title ?? 'Package' }}</p>
+                        <p class="mt-2 text-sm text-[#607985]">Departure: {{ $booking->availability?->departure_date?->format('F j, Y') ?? 'TBD' }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold uppercase tracking-[.18em] text-[#607985]">Agency</p>
+                        <p class="mt-2 text-xl font-bold">{{ $booking->agency?->company_name ?? 'Agency' }}</p>
+                        <p class="mt-2 text-sm text-[#607985]">Travelers: {{ $booking->traveler_count }}</p>
+                    </div>
+                </div>
+
+                <dl class="mt-8 grid gap-5 md:grid-cols-3">
+                    <div class="rounded-xl bg-[#f7f8f6] p-4">
+                        <dt class="text-xs font-bold uppercase tracking-[.18em] text-[#607985]">Total</dt>
+                        <dd class="mt-2 text-xl font-bold">${{ number_format((float) $booking->total_amount, 2) }}</dd>
+                    </div>
+                    <div class="rounded-xl bg-[#f7f8f6] p-4">
+                        <dt class="text-xs font-bold uppercase tracking-[.18em] text-[#607985]">Payment</dt>
+                        <dd class="mt-2 text-xl font-bold">{{ $booking->payment_status->value ?? $booking->payment_status }}</dd>
+                    </div>
+                    <div class="rounded-xl bg-[#f7f8f6] p-4">
+                        <dt class="text-xs font-bold uppercase tracking-[.18em] text-[#607985]">Expires</dt>
+                        <dd class="mt-2 text-xl font-bold">{{ $booking->expires_at ? $booking->expires_at->format('M d, Y H:i') : 'N/A' }}</dd>
+                    </div>
+                </dl>
+
+                @if ($booking->notes)
+                    <div class="mt-8 rounded-xl bg-[#f7f8f6] p-4">
+                        <p class="text-xs font-bold uppercase tracking-[.18em] text-[#607985]">Notes</p>
+                        <p class="mt-2 text-sm text-[#173042]">{{ $booking->notes }}</p>
+                    </div>
+                @endif
+
+                @php $statusValue = $booking->status->value ?? $booking->status; @endphp
+                @if (in_array($statusValue, ['pending', 'confirmed'], true))
+                    <div class="mt-8">
+                        <form method="POST" action="{{ route('bookings.cancel', ['booking' => $booking->id, 'lang' => app()->getLocale()]) }}">
+                            @csrf
+                            <button type="submit" class="inline-flex items-center justify-center rounded-xl border border-[#dbe3e5] px-4 py-2.5 text-sm font-semibold text-[#173042] hover:border-[#e76f51] hover:text-[#e76f51]">Cancel booking</button>
+                        </form>
+                    </div>
+                @endif
+            </div>
+        </div>
+    </div>
+</x-auth-layout>
