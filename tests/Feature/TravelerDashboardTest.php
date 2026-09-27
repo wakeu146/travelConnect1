@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Agency;
+use App\Models\AgencyDocument;
 use App\Models\Inquiry;
 use App\Models\Review;
 use App\Models\User;
@@ -51,6 +52,8 @@ class TravelerDashboardTest extends TestCase
         $matchingAgency = Agency::factory()->create(['company_name' => 'Japan Journey Co', 'verification_status' => 'verified']);
         $otherAgency = Agency::factory()->create(['company_name' => 'Alpine Routes', 'verification_status' => 'verified']);
         $matchingAgency->countries()->attach($country);
+        AgencyDocument::factory()->create(['agency_id' => $matchingAgency->id, 'status' => 'approved']);
+        AgencyDocument::factory()->create(['agency_id' => $otherAgency->id, 'status' => 'approved']);
 
         $response = $this->actingAs($traveler)->get(route('account.discover', ['search' => 'Japan']));
 
@@ -67,6 +70,7 @@ class TravelerDashboardTest extends TestCase
         foreach (['Japan Journey One', 'Japan Journey Two', 'Japan Journey Three', 'Japan Journey Four'] as $companyName) {
             $agency = Agency::factory()->create(['company_name' => $companyName, 'verification_status' => 'verified']);
             $agency->countries()->attach($country);
+            AgencyDocument::factory()->create(['agency_id' => $agency->id, 'status' => 'approved']);
         }
 
         $response = $this->actingAs($traveler)->get(route('account.discover', ['search' => 'Japan']));
@@ -225,5 +229,93 @@ class TravelerDashboardTest extends TestCase
         $remove = $this->actingAs($traveler)->postJson(route('favorites.toggle', ['slug' => 'atlas-horizon-voyages']));
         $remove->assertOk()->assertJson(['saved' => false]);
         $this->assertDatabaseMissing('favorites', ['user_id' => $traveler->id, 'agency_id' => $agency->id]);
+    }
+
+    public function test_a_traveler_can_submit_an_inquiry_to_an_agency(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        $agency = Agency::factory()->create(['company_name' => 'Atlas Horizon Voyages', 'verification_status' => 'verified']);
+        AgencyDocument::factory()->create(['agency_id' => $agency->id, 'status' => 'approved']);
+
+        $response = $this->actingAs($traveler)->post(route('inquiries.store', ['slug' => 'atlas-horizon-voyages']), [
+            'subject' => 'Family trip to Japan',
+            'message' => 'I would like a suggestion for a family trip to Japan with a comfortable budget and local guidance.',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('inquiries', [
+            'agency_id' => $agency->id,
+            'user_id' => $traveler->id,
+            'subject' => 'Family trip to Japan',
+            'status' => 'open',
+        ]);
+
+        $agencyDashboard = $this->actingAs($agency->owner)->get(route('agency.dashboard'));
+        $agencyDashboard->assertOk();
+        $agencyDashboard->assertSee('Family trip to Japan');
+    }
+
+    public function test_discover_search_by_partial_agency_name_shows_the_real_agency_profile(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        $agency = Agency::factory()->create(['company_name' => 'Wakue Emmanuel Travel', 'verification_status' => 'verified']);
+        AgencyDocument::factory()->create(['agency_id' => $agency->id, 'status' => 'approved']);
+
+        $response = $this->actingAs($traveler)->get(route('account.discover', ['search' => 'wakeu']));
+
+        $response->assertOk();
+        $response->assertSee('Wakue Emmanuel Travel');
+    }
+
+    public function test_a_traveler_can_only_submit_one_review_per_agency(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        $agency = Agency::factory()->create(['company_name' => 'Atlas Horizon Voyages']);
+
+        $first = $this->actingAs($traveler)->post(route('reviews.store', ['slug' => 'atlas-horizon-voyages']), [
+            'rating' => 5,
+            'comment' => 'The planning was thoughtful and the trip felt wonderfully easy.',
+        ]);
+        $first->assertRedirect();
+
+        $second = $this->actingAs($traveler)->post(route('reviews.store', ['slug' => 'atlas-horizon-voyages']), [
+            'rating' => 4,
+            'comment' => 'A second review from the same traveler should be blocked.',
+        ]);
+
+        $second->assertSessionHasErrors('review');
+        $this->assertSame(1, $agency->fresh()->reviews()->where('user_id', $traveler->id)->count());
+    }
+
+    public function test_agency_owner_sees_the_unread_notification_count_for_new_activity(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        $agency = Agency::factory()->create(['company_name' => 'Atlas Horizon Voyages', 'verification_status' => 'verified']);
+        AgencyDocument::factory()->create(['agency_id' => $agency->id, 'status' => 'approved']);
+
+        $this->actingAs($traveler)->post(route('inquiries.store', ['slug' => 'atlas-horizon-voyages']), [
+            'subject' => 'Travel planning question',
+            'message' => 'Could you share a suitable 7-day trip for my family?',
+        ]);
+
+        $this->assertSame(1, $agency->owner->fresh()->unreadNotifications()->count());
+    }
+
+    public function test_saved_agency_cards_show_the_uploaded_cover_image(): void
+    {
+        Storage::fake('public');
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        $agency = Agency::factory()->create([
+            'company_name' => 'Lumiere Routes',
+            'cover_image_path' => 'agency-covers/lumiere-cover.jpg',
+        ]);
+        Storage::disk('public')->put($agency->cover_image_path, 'cover-content');
+
+        $traveler->favoriteAgencies()->attach($agency);
+
+        $response = $this->actingAs($traveler)->get(route('account.saved'));
+
+        $response->assertOk();
+        $response->assertSee('storage/agency-covers/lumiere-cover.jpg');
     }
 }

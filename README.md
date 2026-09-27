@@ -9,18 +9,20 @@ This README is also the continuation handoff for future AI agents. Read the curr
 - Traveler registration, login, logout, and profile photo upload
 - Traveler dashboard with live saved-agency, inquiry, and review data
 - Verified agency directory with popular-agency ranking
-- Search by agency name, description, destination, or service
+- Search by agency name, description, destination, or service with case-insensitive partial matching
 - Default directory shows the three most popular verified agencies
 - Country searches return every matching verified agency
 - Save and unsave agencies with persistent database state
-- Saved Agencies page with agency images, ratings, and all destinations
+- Saved Agencies page with real agency images, ratings, and all destinations
 - Agency detail pages with multiple destinations, trust signals, ratings, and reviews
+- Real inquiry submission to agency owners and unread-activity notification counts
+- Duplicate review prevention for a traveler on the same agency
 - Agency-owned travel experience galleries backed by the database
 - Agency package, departure, booking, customer, review, payment-status, and analytics workspace
 - Local traveler-experience images stored under `public/images/traveler_experience`
 - Traveler review submission with 1-5 rating, comment validation, and pending moderation
 - English/French locale switching using the `?lang=en` or `?lang=fr` query parameter
-- Responsive account shell with mobile navigation and persistent light/dark theme
+- Responsive account shell with mobile navigation, notification bell, and persistent light/dark theme
 
 ## Technology
 
@@ -41,11 +43,13 @@ The traveler-facing marketplace and the agency workspace are active product surf
 - Agency owners use the protected `GET /agency/dashboard` route and the dedicated `x-agency-shell`. Packages, availability, bookings, customers, reviews, payment status, analytics, and profile settings are active.
 - Agency profile editing supports company/contact details, destinations, services, logo and cover uploads, verification documents, and travel experiences. Logo and cover URLs include an update version so browsers refresh changed uploads; public agency covers use `Agency::coverImageUrl()`.
 - Booking and payment screens use responsive filters and spaced currency totals. Booking payment status is tracked, but there is no payment-provider integration or payout ledger.
-- Agency inquiries appear on the dashboard, but agency reply/status management and notifications remain inactive.
+- Traveler discovery now performs partial case-insensitive matching, so names such as `wakeu` can resolve to the correct agency without falling back to a generic profile.
+- Travelers can submit real inquiries to agencies, and agency owners receive database notifications with unread counts in the header bell.
+- Duplicate reviews are blocked once a traveler has already reviewed an agency.
 - Public agency profiles show the five highest-rated published reviews; aggregate rating and review count use the complete published review set.
-- The agency shell preserves `?lang=en` / `?lang=fr` on profile navigation and shows a loading overlay during AJAX navigation.
+- The agency shell preserves `?lang=en` / `?lang=fr` on profile navigation and keeps the sidebar state stable when the locale changes.
 - MySQL/MariaDB connections default new tables to InnoDB. The local development database has package, availability, and booking migrations applied; empty conflicting package tables were preserved under backup names during repair.
-- Recent validation: full suite passed with 58 tests and 289 assertions; Blade compilation and `npm run build` succeeded. Vite may note that optional `fontaine` font-fallback optimization is not installed.
+- Recent validation: the traveler workflow suite covering the dashboard, discovering agencies, inquiry flow, review limits, and notifications was re-run for the completed fix pass. The final pass should be treated as the project baseline before any remaining feature polish.
 
 The data foundation was intentionally preserved for future work:
 
@@ -220,12 +224,15 @@ This seeder replaces only the experience rows for each agency. It does not remov
 
 Factory-created user passwords default to `password` for local testing. Never use seeded credentials in production.
 
-## Next recommended work
+## Remaining work before final polish
 
-1. Select a payment provider and define payout/reconciliation requirements before adding payout features to the payment screen.
-2. Implement the agency inquiry inbox with reply/status actions and notifications while preserving agency ownership boundaries.
-3. Add browser-level coverage for locale switching, profile-media replacement, and mobile agency navigation if a browser test tool is introduced.
-4. Keep booking state transitions, payment filtering, and currency summaries covered by feature tests.
+1. Complete the agency inbox workflow so owners can reply to traveler inquiries and update inquiry status from the dashboard.
+2. Finish the notification action layer so review, inquiry, and admin events can route to dedicated inbox and unread-state screens rather than only the header bell count.
+3. Tighten the traveler dashboard and agency dashboard UX for non-technical users by simplifying some labels, help text, and empty states.
+4. Finish the package and listing image workflow so every package card supports a clear cover image upload and preview experience with consistent validation.
+5. Select a payment provider and define payout/reconciliation requirements before adding payout features to the payment screen.
+6. Add browser-level coverage for locale switching, profile-media replacement, and mobile agency navigation if a browser test tool is introduced.
+7. Keep booking state transitions, payment filtering, and currency summaries covered by feature tests.
 
 ## Continuing-project rules
 

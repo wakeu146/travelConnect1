@@ -17,38 +17,60 @@ Route::get('/discover', function () {
     /** @var User $user */
     $user = Auth::user();
     $search = trim((string) request('search'));
-    $agencies = Agency::verified()->with(['countries', 'services'])
+    $normalizedSearch = strtolower($search);
+    $agencies = Agency::verified()->with(['countries', 'services', 'reviews'])
         ->withCount(['reviews as published_reviews_count' => fn ($query) => $query->where('status', 'published')])
         ->withAvg(['reviews as published_rating' => fn ($query) => $query->where('status', 'published')], 'rating')
-        ->when($search !== '', function ($query) use ($search): void {
-            $query->where(function ($query) use ($search): void {
-                $query->where('company_name', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%")
-                    ->orWhereHas('countries', fn ($countryQuery) => $countryQuery->where('name', 'like', "%{$search}%"))
-                    ->orWhereHas('services', fn ($serviceQuery) => $serviceQuery->where('name', 'like', "%{$search}%"));
-            });
-        })->when($search === '', function ($query): void {
-            $query->whereIn('company_name', ['Atlas Horizon Voyages', 'Lumiere Routes', 'Northstar Escapes']);
-        })->orderByDesc('published_reviews_count')->orderByDesc('trust_score')->when($search === '', fn ($query) => $query->take(3))->get();
+        ->orderByDesc('trust_score')
+        ->get();
+
+    if ($normalizedSearch !== '') {
+        $agencies = $agencies->filter(function (Agency $agency) use ($normalizedSearch): bool {
+            $searchableValues = [
+                strtolower($agency->company_name),
+                strtolower($agency->description ?? ''),
+                strtolower($agency->email ?? ''),
+                strtolower(Str::slug($agency->company_name)),
+                ...$agency->countries->pluck('name')->map(fn ($country) => strtolower((string) $country))->all(),
+                ...$agency->services->pluck('name')->map(fn ($service) => strtolower((string) $service))->all(),
+            ];
+
+            return collect($searchableValues)->some(fn (string $value) => str_contains($value, $normalizedSearch));
+        });
+    } else {
+        $agencies = $agencies->filter(fn (Agency $agency) => in_array($agency->company_name, ['Atlas Horizon Voyages', 'Lumiere Routes', 'Northstar Escapes'], true))->take(3);
+    }
+
     return view('discover', ['agencies' => $agencies, 'savedAgencyNames' => $user->favoriteAgencies()->pluck('company_name')->all()]);
 })->middleware('auth')->name('discover');
 Route::get('/account/discover', function () {
     /** @var User $user */
     $user = Auth::user();
     $search = trim((string) request('search'));
-    $agencies = Agency::verified()->with(['countries', 'services'])
+    $normalizedSearch = strtolower($search);
+    $agencies = Agency::verified()->with(['countries', 'services', 'reviews'])
         ->withCount(['reviews as published_reviews_count' => fn ($query) => $query->where('status', 'published')])
         ->withAvg(['reviews as published_rating' => fn ($query) => $query->where('status', 'published')], 'rating')
-        ->when($search !== '', function ($query) use ($search): void {
-            $query->where(function ($query) use ($search): void {
-                $query->where('company_name', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%")
-                    ->orWhereHas('countries', fn ($countryQuery) => $countryQuery->where('name', 'like', "%{$search}%"))
-                    ->orWhereHas('services', fn ($serviceQuery) => $serviceQuery->where('name', 'like', "%{$search}%"));
-            });
-        })->when($search === '', function ($query): void {
-            $query->whereIn('company_name', ['Atlas Horizon Voyages', 'Lumiere Routes', 'Northstar Escapes']);
-        })->orderByDesc('published_reviews_count')->orderByDesc('trust_score')->when($search === '', fn ($query) => $query->take(3))->get();
+        ->orderByDesc('trust_score')
+        ->get();
+
+    if ($normalizedSearch !== '') {
+        $agencies = $agencies->filter(function (Agency $agency) use ($normalizedSearch): bool {
+            $searchableValues = [
+                strtolower($agency->company_name),
+                strtolower($agency->description ?? ''),
+                strtolower($agency->email ?? ''),
+                strtolower(Str::slug($agency->company_name)),
+                ...$agency->countries->pluck('name')->map(fn ($country) => strtolower((string) $country))->all(),
+                ...$agency->services->pluck('name')->map(fn ($service) => strtolower((string) $service))->all(),
+            ];
+
+            return collect($searchableValues)->some(fn (string $value) => str_contains($value, $normalizedSearch));
+        });
+    } else {
+        $agencies = $agencies->filter(fn (Agency $agency) => in_array($agency->company_name, ['Atlas Horizon Voyages', 'Lumiere Routes', 'Northstar Escapes'], true))->take(3);
+    }
+
     return view('discover', ['agencies' => $agencies, 'savedAgencyNames' => $user->favoriteAgencies()->pluck('company_name')->all()]);
 })->middleware('auth')->name('account.discover');
 Route::get('/agencies/{slug}', function (string $slug) {
@@ -103,6 +125,7 @@ Route::get('/agencies/{slug}', function (string $slug) {
 
     return view('agency-show', ['agency' => $agencyData, 'agencyModel' => $agencyModel, 'isSaved' => $agencyModel && $user->favoriteAgencies()->whereKey($agencyModel->id)->exists(), 'publishedReviews' => $publishedReviews, 'publishedReviewCount' => $publishedReviewCount, 'visibleReviewCount' => $visibleReviewCount, 'visibleRating' => $visibleRating, 'ratingCounts' => $ratingCounts, 'pendingReview' => $pendingReview]);
 })->middleware('auth')->name('agency.show');
+Route::post('/agencies/{slug}/inquiries', [\App\Http\Controllers\InquiryController::class, 'store'])->middleware('auth')->name('inquiries.store');
 Route::post('/agencies/{slug}/reviews', [ReviewController::class, 'store'])->middleware('auth')->name('reviews.store');
 Route::post('/agencies/{slug}/favorite', [FavoriteController::class, 'toggle'])->middleware('auth')->name('favorites.toggle');
 Route::view('/how-it-works', 'how-it-works')->name('how-it-works');
@@ -129,6 +152,8 @@ Route::middleware(['auth', 'agency-owner'])->prefix('agency')->name('agency.')->
     Route::get('/profile', [\App\Http\Controllers\AgencyController::class, 'profile'])->name('profile');
     Route::put('/profile', [\App\Http\Controllers\AgencyController::class, 'updateProfile'])->name('settings.update');
     Route::post('/documents', [\App\Http\Controllers\AgencyController::class, 'storeDocument'])->name('documents.store');
+    Route::put('/documents/{document}', [\App\Http\Controllers\AgencyController::class, 'updateDocument'])->name('documents.update');
+    Route::delete('/documents/{document}', [\App\Http\Controllers\AgencyController::class, 'destroyDocument'])->name('documents.destroy');
     Route::post('/experiences', [\App\Http\Controllers\AgencyController::class, 'storeExperience'])->name('experiences.store');
     Route::get('/packages', [\App\Http\Controllers\AgencyController::class, 'indexPackages'])->name('packages.index');
     Route::get('/packages/create', [\App\Http\Controllers\AgencyController::class, 'createPackage'])->name('packages.create');
@@ -140,10 +165,6 @@ Route::middleware(['auth', 'agency-owner'])->prefix('agency')->name('agency.')->
     Route::post('/packages/{package}/images', [\App\Http\Controllers\AgencyController::class, 'uploadPackageImage'])->name('packages.images.store');
     Route::delete('/packages/{package}/images/{image}', [\App\Http\Controllers\AgencyController::class, 'deletePackageImage'])->name('packages.images.destroy');
     Route::post('/packages/{package}/images/{image}/primary', [\App\Http\Controllers\AgencyController::class, 'setPrimaryPackageImage'])->name('packages.images.primary');
-    Route::post('/packages/{package}/days', [\App\Http\Controllers\AgencyController::class, 'storePackageDay'])->name('packages.days.store');
-    Route::post('/packages/{package}/days/{day}/move', [\App\Http\Controllers\AgencyController::class, 'movePackageDay'])->name('packages.days.move');
-    Route::put('/packages/{package}/days/{day}', [\App\Http\Controllers\AgencyController::class, 'updatePackageDay'])->name('packages.days.update');
-    Route::delete('/packages/{package}/days/{day}', [\App\Http\Controllers\AgencyController::class, 'deletePackageDay'])->name('packages.days.destroy');
 
     Route::get('/availability', [\App\Http\Controllers\AgencyAvailabilityController::class, 'index'])->name('availability.index');
     Route::get('/availability/create', [\App\Http\Controllers\AgencyAvailabilityController::class, 'create'])->name('availability.create');
