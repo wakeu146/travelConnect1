@@ -88,6 +88,31 @@ class AgencyDashboardTest extends TestCase
         $response->assertSee('id="agency-main-content"', false);
         $response->assertSee('data-agency-sidebar', false);
         $response->assertSee('data-agency-topbar', false);
+        $response->assertSee('data-agency-search', false);
+        $response->assertSee('data-agency-search-submit', false);
+        $response->assertSee('data-agency-language-switcher class="flex shrink-0', false);
+        $response->assertSee('>EN</a>', false);
+        $response->assertSee('>FR</a>', false);
+        $response->assertSee('title="'.__('messages.overview').'"', false);
+        $response->assertDontSee('data-agency-theme class=', false);
+    }
+
+    public function test_agency_profile_icon_keeps_the_selected_french_locale(): void
+    {
+        $agency = Agency::factory()->create(['company_name' => 'North Star Travel']);
+        $profileUrl = route('agency.profile', ['lang' => 'fr']);
+
+        $dashboard = $this->actingAs($agency->owner)->get(route('agency.dashboard', ['lang' => 'fr']));
+
+        $dashboard->assertOk();
+        $dashboard->assertSee('data-agency-header-profile data-agency-nav-link', false);
+        $dashboard->assertSee('href="'.$profileUrl.'"', false);
+
+        $this->withHeader('X-Requested-With', 'XMLHttpRequest')->get($profileUrl)
+            ->assertOk()
+            ->assertSee('id="agency-main-content"', false)
+            ->assertSee('href="'.$profileUrl.'"', false)
+            ->assertSee(__('messages.agency_profile', [], 'fr'));
     }
 
     public function test_agency_shell_shows_the_real_logo_name_and_verification_state(): void
@@ -166,11 +191,17 @@ class AgencyDashboardTest extends TestCase
         $this->assertNotNull($agency->cover_image_path);
         $this->assertTrue(Storage::disk('public')->exists($agency->logo_path));
         $this->assertTrue(Storage::disk('public')->exists($agency->cover_image_path));
-        $this->assertSame(Storage::disk('public')->url($agency->logo_path), $agency->logoUrl());
-        $this->assertSame(Storage::disk('public')->url($agency->cover_image_path), $agency->coverImageUrl());
+        $logoUrl = $agency->logoUrl();
+        $coverUrl = $agency->coverImageUrl();
+        $this->assertStringStartsWith(Storage::disk('public')->url($agency->logo_path).'?v=', $logoUrl);
+        $this->assertStringStartsWith(Storage::disk('public')->url($agency->cover_image_path).'?v=', $coverUrl);
+
+        $profile = $this->actingAs($agency->owner)->get(route('agency.profile'));
+        $profile->assertOk()->assertSee('src="'.$logoUrl.'"', false)->assertSee('src="'.$coverUrl.'"', false);
 
         $public = $this->actingAs($agency->owner)->get(route('agency.show', ['slug' => 'summit-sea-travel']));
         $public->assertOk()->assertSee('Journeys planned around thoughtful local knowledge.');
+        $public->assertSee('src="'.$coverUrl.'"', false);
         $public->assertSee('Japan');
         $public->assertSee('Rail journeys');
     }
@@ -221,7 +252,7 @@ class AgencyDashboardTest extends TestCase
         $this->assertFalse(Storage::disk('public')->exists($oldLogo));
         $this->assertNull($agency->cover_image_path);
         $this->assertFalse(Storage::disk('public')->exists($oldCover));
-        $this->assertSame(Storage::disk('public')->url($agency->logo_path), $agency->logoUrl());
+        $this->assertStringStartsWith(Storage::disk('public')->url($agency->logo_path).'?v=', $agency->logoUrl());
         $this->assertNull($agency->coverImageUrl());
     }
 }

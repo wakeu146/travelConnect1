@@ -31,22 +31,26 @@ class Agency extends Model
     public function trustScoreLogs(): HasMany { return $this->hasMany(TrustScoreLog::class); }
     public function logoUrl(): ?string
     {
-        /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
-        $disk = Storage::disk('public');
-
-        return $this->logo_path && $disk->exists($this->logo_path)
-            ? $disk->url($this->logo_path)
-            : null;
+        return $this->mediaUrl($this->logo_path);
     }
 
     public function coverImageUrl(): ?string
     {
-        /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
+        return $this->mediaUrl($this->cover_image_path);
+    }
+
+    private function mediaUrl(?string $path): ?string
+    {
         $disk = Storage::disk('public');
 
-        return $this->cover_image_path && $disk->exists($this->cover_image_path)
-            ? $disk->url($this->cover_image_path)
-            : null;
+        if (! $path || ! $disk->exists($path)) {
+            return null;
+        }
+
+        $url = $disk->url($path);
+        $version = $this->updated_at?->format('U.u') ?? crc32($path);
+
+        return $url.(str_contains($url, '?') ? '&' : '?').http_build_query(['v' => $version]);
     }
 
     public function scopeVerified($query) { return $query->where('verification_status', VerificationStatus::VERIFIED); }

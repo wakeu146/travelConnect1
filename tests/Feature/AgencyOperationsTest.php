@@ -80,12 +80,19 @@ class AgencyOperationsTest extends TestCase
             ->assertSee('Excellent local planning')
             ->assertDontSee('Other agency private review');
 
-        $this->actingAs($agency->owner)
-            ->get(route('agency.payments.index'))
-            ->assertOk()
+        $payments = $this->actingAs($agency->owner)->get(route('agency.payments.index'));
+        $payments->assertOk()
             ->assertSee('TC-OPS-000001')
             ->assertDontSee('TC-OPS-000002')
-            ->assertSee('Coastal Passage');
+            ->assertSee('Coastal Passage')
+            ->assertSee('scope="col" class="px-4 py-3 text-right"', false);
+
+        $bookingList = $this->actingAs($agency->owner)->get(route('agency.bookings.index'));
+        $bookingList->assertOk()
+            ->assertSee('grid gap-4 sm:grid-cols-2 xl:grid-cols-12 xl:items-end', false)
+            ->assertSee('Coastal Passage')
+            ->assertSee('Agency Customer')
+            ->assertSee(__('messages.travelers_count', ['count' => 2]));
 
         $this->actingAs($agency->owner)
             ->get(route('agency.analytics.index'))

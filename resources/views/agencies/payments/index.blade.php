@@ -2,24 +2,48 @@
     <x-agency.page-header :eyebrow="__('messages.payments')" :title="__('messages.booking_payments')" :description="__('messages.booking_payments_intro')" />
 
     <x-agency.panel class="mb-6">
-        <div class="flex flex-wrap items-end justify-between gap-3"><div><h2 class="text-base font-bold">{{ __('messages.booking_amounts_by_currency') }}</h2><p class="agency-text-subtle mt-1 text-xs">{{ __('messages.payment_status_summary_note') }}</p></div><x-agency.metric :label="__('messages.paid_bookings')" :value="$paidBookingCount" class="min-w-36 p-3" /></div>
+        <div class="flex flex-wrap items-end justify-between gap-5">
+            <div class="min-w-0">
+                <h2 class="text-base font-bold">{{ __('messages.booking_amounts_by_currency') }}</h2>
+                <p class="agency-text-subtle mt-2 max-w-2xl text-sm leading-6">{{ __('messages.payment_status_summary_note') }}</p>
+            </div>
+            <x-agency.metric :label="__('messages.paid_bookings')" :value="$paidBookingCount" class="min-w-40 p-4" />
+        </div>
         <div class="mt-5 overflow-x-auto">
-            <table class="w-full min-w-[560px] text-left text-sm"><thead class="agency-text-subtle text-xs uppercase tracking-[.12em]"><tr><th class="pb-3">{{ __('messages.currency') }}</th><th class="pb-3">{{ __('messages.booked_value') }}</th><th class="pb-3">{{ __('messages.paid_booking_value') }}</th><th class="pb-3">{{ __('messages.unpaid_booking_value') }}</th></tr></thead><tbody class="divide-y agency-divider">
-                @forelse ($currencyTotals as $currencyTotal)
-                    <tr><td class="py-3 font-semibold">{{ $currencyTotal->currency }}</td><td class="py-3 tabular-nums">{{ number_format((float) $currencyTotal->booked_value, 2) }}</td><td class="py-3 tabular-nums">{{ number_format((float) $currencyTotal->paid_value, 2) }}</td><td class="py-3 tabular-nums">{{ number_format((float) $currencyTotal->unpaid_value, 2) }}</td></tr>
-                @empty
-                    <tr><td colspan="4" class="agency-text-subtle py-3">{{ __('messages.no_payment_records') }}</td></tr>
-                @endforelse
-            </tbody></table>
+            <table class="w-full min-w-[720px] border-collapse text-left text-sm">
+                <caption class="sr-only">{{ __('messages.booking_amounts_by_currency') }}</caption>
+                <thead class="agency-panel-muted agency-text-subtle text-xs font-semibold uppercase tracking-[.1em]">
+                    <tr>
+                        <th scope="col" class="w-28 px-4 py-3">{{ __('messages.currency') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ __('messages.booked_value') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ __('messages.paid_booking_value') }}</th>
+                        <th scope="col" class="px-4 py-3 text-right">{{ __('messages.unpaid_booking_value') }}</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y agency-divider">
+                    @forelse ($currencyTotals as $currencyTotal)
+                        <tr>
+                            <td class="px-4 py-3 font-semibold">{{ $currencyTotal->currency }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums">{{ number_format((float) $currencyTotal->booked_value, 2) }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums">{{ number_format((float) $currencyTotal->paid_value, 2) }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums">{{ number_format((float) $currencyTotal->unpaid_value, 2) }}</td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="4" class="agency-text-subtle px-4 py-5">{{ __('messages.no_bookings') }}</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
         </div>
     </x-agency.panel>
 
-    <x-agency.panel class="mb-6 p-4">
-        <form method="GET" action="{{ route('agency.payments.index', ['lang' => app()->getLocale()]) }}" class="grid gap-3 sm:grid-cols-[1fr_220px_auto] sm:items-end">
-            <label class="text-xs font-bold uppercase tracking-[.16em] agency-text-subtle" for="payment-search">{{ __('messages.search') }}
+    <x-agency.panel class="mb-6">
+        <form method="GET" action="{{ route('agency.payments.index', ['lang' => app()->getLocale()]) }}" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-12 xl:items-end">
+            <label class="min-w-0 text-xs font-bold uppercase tracking-[.16em] agency-text-subtle sm:col-span-2 xl:col-span-5" for="payment-search">{{ __('messages.search') }}
                 <input id="payment-search" name="search" value="{{ $search }}" placeholder="{{ __('messages.reference_traveler_package') }}" class="agency-input mt-2 w-full rounded-xl border px-4 py-3 text-sm font-normal normal-case tracking-normal">
             </label>
-            <label class="text-xs font-bold uppercase tracking-[.16em] agency-text-subtle" for="payment-status">{{ __('messages.payment_status') }}
+            <label class="min-w-0 text-xs font-bold uppercase tracking-[.16em] agency-text-subtle sm:col-span-1 xl:col-span-4" for="payment-status">{{ __('messages.payment_status') }}
                 <select id="payment-status" name="payment_status" class="agency-input mt-2 w-full rounded-xl border px-4 py-3 text-sm font-normal normal-case tracking-normal">
                     <option value="">{{ __('messages.all_statuses') }}</option>
                     @foreach (['paid', 'unpaid', 'partial', 'refunded'] as $paymentState)
@@ -27,7 +51,7 @@
                     @endforeach
                 </select>
             </label>
-            <button type="submit" class="agency-button-primary rounded-xl px-4 py-3 text-sm font-bold">{{ __('messages.apply_filters') }}</button>
+            <button type="submit" class="agency-button-primary rounded-xl px-4 py-3 text-sm font-bold sm:col-span-1 xl:col-span-3">{{ __('messages.apply_filters') }}</button>
         </form>
     </x-agency.panel>
 

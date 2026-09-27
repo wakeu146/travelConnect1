@@ -87,7 +87,7 @@ Route::get('/agencies/{slug}', function (string $slug) {
             'rating' => (string) number_format((float) ($agencyModel->reviews()->where('status', 'published')->avg('rating') ?? 0), 1),
             'reviews' => (string) ($agencyModel->reviews()->where('status', 'published')->count() ?? 0),
             'description' => $agencyModel->description ?: 'Travel planning with local expertise.',
-            'cover' => $agencyModel->cover_image_path ? asset('storage/'.$agencyModel->cover_image_path) : asset('images/agencies/default-agency.jpg'),
+            'cover' => $agencyModel->coverImageUrl() ?? asset('images/agencies/default-agency.jpg'),
             'countries' => $agencyModel->countries->pluck('name')->all() ?: ['Worldwide'],
         ]
         : $fallbackAgencies[$slug];

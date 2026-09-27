@@ -65,14 +65,15 @@
                     @php
                         $isActive = request()->routeIs($item['active'] ?? $item['route']);
                     @endphp
-                          <a href="{{ route($item['route'], ['lang' => app()->getLocale()]) }}"
+                    <a href="{{ route($item['route'], ['lang' => app()->getLocale()]) }}"
+                       title="{{ $item['label'] }}"
                               class="agency-nav-link flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition {{ $isActive ? 'is-active' : '' }}"
                               @if ($isActive) aria-current="page" @endif
                        data-agency-nav-link
-                               data-agency-nav-path="{{ parse_url(route($item['route'], ['lang' => app()->getLocale()]), PHP_URL_PATH) }}"
+                       data-agency-nav-path="{{ parse_url(route($item['route'], ['lang' => app()->getLocale()]), PHP_URL_PATH) }}"
                     >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5" aria-hidden="true">{!! $item['icon'] !!}</svg>
-                        {{ $item['label'] }}
+                        <span data-agency-label>{{ $item['label'] }}</span>
                     </a>
                 @endforeach
             </nav>
@@ -86,12 +87,6 @@
                     <p class="truncate text-xs text-[#607985]">{{ $brandName }}</p>
                 </div>
             </div>
-            <div class="mt-4 flex items-center justify-between gap-2 rounded-xl border border-[#e4e9e7] bg-[#f8faf9] px-3 py-2.5 text-sm text-[#607985]">
-                <span>{{ __('messages.theme') }}</span>
-                <button type="button" data-agency-theme class="flex h-8 w-8 items-center justify-center rounded-lg border border-[#dbe3e5] text-[#173042] hover:border-[#e76f51] hover:text-[#e76f51]" aria-label="{{ __('messages.toggle_theme') }}">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true"><path d="M20.5 15.2A8.5 8.5 0 0 1 8.8 3.5 8.5 8.5 0 1 0 20.5 15.2Z"></path></svg>
-                </button>
-            </div>
             <form action="{{ route('logout') }}" method="POST" class="mt-4">@csrf<button type="submit" class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-[#607985] hover:bg-[#fff1ed] hover:text-[#e76f51]"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5" aria-hidden="true"><path d="M10 5H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h5M13 8l4 4-4 4M8 12h9"/></svg>{{ __('messages.logout') }}</button></form>
         </div>
     </aside>
@@ -100,7 +95,7 @@
 
     <div data-agency-main class="lg:pl-72">
         <header data-agency-topbar class="sticky top-0 z-30 border-b border-[#e4e9e7] bg-white/95 px-5 py-4 backdrop-blur sm:px-8">
-            <div class="flex items-center gap-4">
+            <div class="flex flex-wrap items-center gap-3 lg:flex-nowrap lg:gap-4">
                 <button type="button" data-agency-open class="flex h-10 w-10 items-center justify-center rounded-xl border border-[#dbe3e5] text-[#173042] lg:hidden" aria-label="{{ __('messages.open_navigation') }}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-5 w-5" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
                 </button>
@@ -122,23 +117,28 @@
                         </div>
                     </div>
                 </div>
-                <form action="{{ route('agency.packages.index', ['lang' => app()->getLocale()]) }}" method="GET" class="relative hidden max-w-xs flex-1 lg:block">
+                <form data-agency-search action="{{ route('agency.packages.index', ['lang' => app()->getLocale()]) }}" method="GET" class="relative order-last flex w-full min-w-0 lg:order-none lg:max-w-xl lg:flex-1">
                     <label for="agency-global-search" class="sr-only">{{ __('messages.search_packages') }}</label>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="agency-text-subtle pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m16.5 16.5 4 4"></path></svg>
-                    <input id="agency-global-search" type="search" name="search" placeholder="{{ __('messages.search_packages') }}" class="agency-input w-full rounded-lg border py-2 pl-9 pr-3 text-sm">
+                    <input id="agency-global-search" type="search" name="search" value="{{ request('search') }}" placeholder="{{ __('messages.search_packages') }}" class="agency-input w-full rounded-xl border py-2.5 pl-10 pr-12 text-sm outline-none transition focus:ring-2 focus:ring-[#e76f51]/15">
+                    <button data-agency-search-submit type="submit" class="agency-button-primary absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg" aria-label="{{ __('messages.search_packages') }}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m16.5 16.5 4 4"></path></svg>
+                    </button>
                 </form>
-                <button type="button" data-agency-theme-top class="hidden h-10 w-10 items-center justify-center rounded-xl border border-[#dbe3e5] text-[#607985] hover:border-[#e76f51] hover:text-[#e76f51] sm:flex" aria-label="{{ __('messages.toggle_theme') }}">
+                <div class="ml-auto flex shrink-0 items-center gap-2">
+                <button type="button" data-agency-theme-top class="flex h-10 w-10 items-center justify-center rounded-xl border border-[#dbe3e5] text-[#607985] hover:border-[#e76f51] hover:text-[#e76f51]" aria-label="{{ __('messages.toggle_theme') }}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5" aria-hidden="true"><path d="M20.5 15.2A8.5 8.5 0 0 1 8.8 3.5 8.5 8.5 0 1 0 20.5 15.2Z"></path></svg>
                 </button>
-                <div class="hidden items-center rounded-lg border border-[#dbe3e5] p-1 sm:flex" aria-label="{{ __('messages.language') }}">
+                <div data-agency-language-switcher class="flex shrink-0 items-center rounded-lg border border-[#dbe3e5] p-1" aria-label="{{ __('messages.language') }}">
                     <a data-lang-button href="{{ request()->fullUrlWithQuery(['lang' => 'en']) }}" class="rounded-md px-2 py-1 text-[10px] font-bold {{ app()->getLocale() === 'en' ? 'bg-[#173042] text-white' : 'agency-text-subtle' }}">EN</a>
                     <a data-lang-button href="{{ request()->fullUrlWithQuery(['lang' => 'fr']) }}" class="rounded-md px-2 py-1 text-[10px] font-bold {{ app()->getLocale() === 'fr' ? 'bg-[#173042] text-white' : 'agency-text-subtle' }}">FR</a>
                 </div>
-                <a href="{{ route('agency.profile', ['lang' => app()->getLocale()]) }}" class="agency-button-secondary shrink-0 rounded-lg border px-2.5 py-2 text-sm font-semibold sm:px-3" aria-label="{{ __('messages.agency_profile_link') }}" title="{{ __('messages.agency_profile_link') }}">
+                <a data-agency-header-profile data-agency-nav-link data-agency-nav-path="{{ parse_url(route('agency.profile', ['lang' => app()->getLocale()]), PHP_URL_PATH) }}" href="{{ route('agency.profile', ['lang' => app()->getLocale()]) }}" class="agency-button-secondary shrink-0 rounded-lg border px-2.5 py-2 text-sm font-semibold sm:px-3" aria-label="{{ __('messages.agency_profile_link') }}" title="{{ __('messages.agency_profile_link') }}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4 sm:hidden" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>
                     <span class="hidden sm:inline">{{ __('messages.agency_profile_link') }}</span>
                     <span class="sr-only sm:hidden">{{ __('messages.agency_profile_link') }}</span>
                 </a>
+                </div>
             </div>
         </header>
 
@@ -153,8 +153,33 @@
         const shell = document.querySelector('[data-agency-shell]');
         const sidebar = document.querySelector('[data-agency-sidebar]');
         const backdrop = document.querySelector('[data-agency-backdrop]');
+        const pageLoader = document.getElementById('page-loader');
         const themeKey = 'travelconnect-dashboard-theme';
         const collapseKey = 'travelconnect-agency-collapsed';
+        const setPageLoading = (loading) => {
+            pageLoader?.classList.toggle('pointer-events-none', !loading);
+            pageLoader?.classList.toggle('opacity-0', !loading);
+            document.getElementById('agency-main-content')?.setAttribute('aria-busy', String(loading));
+        };
+        const getAgencyLocale = () => {
+            const locale = new URL(window.location.href).searchParams.get('lang') || document.documentElement.lang.split('-')[0];
+            return ['en', 'fr'].includes(locale) ? locale : 'en';
+        };
+        const syncAgencyLinkLocale = (locale = getAgencyLocale()) => {
+            document.querySelectorAll('[data-agency-nav-link]').forEach((link) => {
+                const linkUrl = new URL(link.href, window.location.href);
+                if (linkUrl.origin !== window.location.origin) return;
+                linkUrl.searchParams.set('lang', locale);
+                link.href = linkUrl.toString();
+            });
+        };
+        syncAgencyLinkLocale();
+        document.querySelectorAll('[data-lang-button]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const nextLocale = new URL(button.href, window.location.href).searchParams.get('lang');
+                if (['en', 'fr'].includes(nextLocale)) syncAgencyLinkLocale(nextLocale);
+            });
+        });
         const setCollapsed = (collapsed) => {
             shell?.classList.toggle('agency-collapsed', collapsed);
             localStorage.setItem(collapseKey, collapsed ? 'true' : 'false');
@@ -166,7 +191,7 @@
         const applyAgencyTheme = (dark) => {
             shell?.classList.toggle('dashboard-dark', dark);
             document.body.classList.toggle('dashboard-dark', dark);
-            document.querySelectorAll('[data-agency-theme], [data-agency-theme-top]').forEach((button) => {
+            document.querySelectorAll('[data-agency-theme-top]').forEach((button) => {
                 const icon = button.querySelector('svg');
                 if (!icon) return;
                 icon.innerHTML = dark
@@ -178,7 +203,7 @@
         const savedTheme = localStorage.getItem(themeKey) === 'dark';
         applyAgencyTheme(savedTheme);
 
-        document.querySelectorAll('[data-agency-theme], [data-agency-theme-top]').forEach((button) => {
+        document.querySelectorAll('[data-agency-theme-top]').forEach((button) => {
             button.addEventListener('click', () => {
                 const dark = !shell.classList.contains('dashboard-dark');
                 localStorage.setItem(themeKey, dark ? 'dark' : 'light');
@@ -201,6 +226,7 @@
         sidebar?.querySelectorAll('[data-agency-nav-link]').forEach((link) => {
             link.addEventListener('click', () => setSidebar(false));
         });
+        document.querySelector('[data-agency-search]')?.addEventListener('submit', () => setPageLoading(true));
 
         const replaceAgencyMainContent = (htmlText, nextUrl) => {
             const main = document.getElementById('agency-main-content');
@@ -233,14 +259,19 @@
             if (!link || link.target === '_blank') return;
             const href = link.getAttribute('href');
             if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+            syncAgencyLinkLocale();
             const absoluteHref = new URL(href, window.location.href);
             if (absoluteHref.origin !== window.location.origin) return;
             const isAgencyPath = absoluteHref.pathname.startsWith('/agency');
             if (!isAgencyPath) return;
+            absoluteHref.searchParams.set('lang', getAgencyLocale());
             event.preventDefault();
+            let navigatingAway = false;
+            setPageLoading(true);
             fetch(absoluteHref, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                 .then((response) => {
                     if (!response.ok) {
+                        navigatingAway = true;
                         window.location.href = absoluteHref.toString();
                         return null;
                     }
@@ -250,13 +281,18 @@
                     if (!html) return;
                     const ok = replaceAgencyMainContent(html, absoluteHref.toString());
                     if (!ok) {
+                        navigatingAway = true;
                         window.location.href = absoluteHref.toString();
                         return;
                     }
                     updateAgencyLinks();
                 })
                 .catch(() => {
+                    navigatingAway = true;
                     window.location.href = absoluteHref.toString();
+                })
+                .finally(() => {
+                    if (!navigatingAway) setPageLoading(false);
                 });
         };
 
@@ -267,10 +303,21 @@
         window.addEventListener('popstate', () => {
             const href = new URL(window.location.href);
             if (href.pathname.startsWith('/agency')) {
+                let navigatingAway = false;
+                setPageLoading(true);
                 fetch(window.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-                    .then((response) => response.text())
+                    .then((response) => {
+                        if (!response.ok) throw new Error('Agency navigation failed');
+                        return response.text();
+                    })
                     .then((html) => replaceAgencyMainContent(html, window.location.href))
-                    .catch(() => window.location.reload());
+                    .catch(() => {
+                        navigatingAway = true;
+                        window.location.reload();
+                    })
+                    .finally(() => {
+                        if (!navigatingAway) setPageLoading(false);
+                    });
             }
         });
 

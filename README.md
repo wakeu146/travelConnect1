@@ -16,6 +16,7 @@ This README is also the continuation handoff for future AI agents. Read the curr
 - Saved Agencies page with agency images, ratings, and all destinations
 - Agency detail pages with multiple destinations, trust signals, ratings, and reviews
 - Agency-owned travel experience galleries backed by the database
+- Agency package, departure, booking, customer, review, payment-status, and analytics workspace
 - Local traveler-experience images stored under `public/images/traveler_experience`
 - Traveler review submission with 1-5 rating, comment validation, and pending moderation
 - English/French locale switching using the `?lang=en` or `?lang=fr` query parameter
@@ -37,24 +38,14 @@ The traveler-facing marketplace and the agency workspace are active product surf
 
 ### Latest session handoff
 
-- Agency profile reviews now use a Play Store-inspired summary and flat review rows with thin dividers, quieter verified-review footers, and light/dark theme variables.
-- Agency profiles display the five highest-rated published reviews; the aggregate rating and review count still use the complete published review set.
-- Agency cover images are stored locally in `public/images/agencies` for Atlas Horizon Voyages, Lumiere Routes, Northstar Escapes, Sirocco Travel House, and Blue Fern Expeditions.
-- Agency profile routes use local cover assets instead of remote Unsplash URLs. The reusable agency card also maps these agency names to the same local files.
-- The review Blade view was validated with `php artisan view:cache`; the focused feature suite passed with 14 tests and 61 assertions.
-- Frontend assets were rebuilt successfully with `npm run build`.
-- The protected agency dashboard overview is available at `GET /agency/dashboard` as `agency.dashboard` and reuses `x-account-shell`.
-- Agency owners can edit their company/contact details, destinations, services, logo, cover image, upload verification documents, and publish travel experiences from `agency.settings`.
-- Agency owners are redirected from the shared `/dashboard` entry point to the agency workspace; travelers retain the existing dashboard.
-
-The following agency-dashboard work was intentionally removed from the runtime after an unstable implementation and remains deferred:
-
-- Agency profile CRUD is active for the current profile/media fields
-- Agency experience publishing is active
-- Agency document upload is active; review/approval management remains an admin workflow
-- Agency inquiry response/status actions are not active
-- No traveler-request posting route is active
-- Agency owners now use the protected dashboard overview at `agency.dashboard`
+- Agency owners use the protected `GET /agency/dashboard` route and the dedicated `x-agency-shell`. Packages, availability, bookings, customers, reviews, payment status, analytics, and profile settings are active.
+- Agency profile editing supports company/contact details, destinations, services, logo and cover uploads, verification documents, and travel experiences. Logo and cover URLs include an update version so browsers refresh changed uploads; public agency covers use `Agency::coverImageUrl()`.
+- Booking and payment screens use responsive filters and spaced currency totals. Booking payment status is tracked, but there is no payment-provider integration or payout ledger.
+- Agency inquiries appear on the dashboard, but agency reply/status management and notifications remain inactive.
+- Public agency profiles show the five highest-rated published reviews; aggregate rating and review count use the complete published review set.
+- The agency shell preserves `?lang=en` / `?lang=fr` on profile navigation and shows a loading overlay during AJAX navigation.
+- MySQL/MariaDB connections default new tables to InnoDB. The local development database has package, availability, and booking migrations applied; empty conflicting package tables were preserved under backup names during repair.
+- Recent validation: full suite passed with 58 tests and 289 assertions; Blade compilation and `npm run build` succeeded. Vite may note that optional `fontaine` font-fallback optimization is not installed.
 
 The data foundation was intentionally preserved for future work:
 
@@ -152,9 +143,10 @@ npm run build
 - `app/Policies/AgencyPolicy.php`: authorizes agency dashboard ownership
 - `routes/web.php`: web routes and current agency directory data
 - `resources/views/components/account-shell.blade.php`: authenticated navigation shell, theme toggle, and header search
+- `resources/views/components/agency-shell.blade.php`: agency navigation, locale-aware links, theme, and loading behavior
 - `resources/views/components/agency-card.blade.php`: reusable agency card
 - `resources/views/auth`: traveler dashboard, saved agencies, activity, and settings pages
-- `resources/views/agencies`: agency dashboard views and future agency-only workspace views
+- `resources/views/agencies`: active dashboard, package, availability, booking, payment, profile, review, and analytics views
 - `resources/views/agency-show.blade.php`: agency profile and review experience
 - `resources/css/app.css`: theme, responsive, and account UI rules
 - `resources/js/app.js`: locale-preserving navigation, favorites, carousels, and UI interactions
@@ -176,7 +168,7 @@ Authenticated traveler routes include `/dashboard`, `/account/discover`, `/accou
 
 Authentication routes include login, registration, password recovery, verification-code reset, and logout.
 
-The active agency-dashboard route is `GET /agency/dashboard` (`agency.dashboard`). It is protected by `auth` and `agency-owner`. Add profile, experience, document, and inquiry mutations only with policies, requests, and feature tests together.
+The active agency dashboard is `GET /agency/dashboard` (`agency.dashboard`), protected by `auth` and `agency-owner`. Keep agency mutations and booking transitions scoped to the authenticated owner, with validation and feature tests.
 
 ## Important behavior
 
@@ -204,7 +196,7 @@ The gallery is agency-specific. Do not place a generic experience feed on the tr
 
 ### Agency dashboard overview
 
-The agency dashboard loads only the authenticated owner’s agency and displays profile completion, verification status, trust score, inquiry activity, published review summaries, recent reviews, recent inquiries, pending documents, and recent travel experiences. Agency settings persist public company information, contact details, destinations, services, logo, and cover image; the public agency profile reads these saved values.
+Agency dashboard and operations queries are scoped to the authenticated owner's agency. The dashboard summarizes packages, departures, bookings, and inquiries. Currency totals are grouped by each booking's original currency; do not present them as payouts because no payout ledger or payment-provider integration exists. Render uploaded agency media through `Agency::logoUrl()` and `Agency::coverImageUrl()` so changed images get a fresh URL.
 
 ### Localization
 
@@ -230,16 +222,10 @@ Factory-created user passwords default to `password` for local testing. Never us
 
 ## Next recommended work
 
-Continue the agency workspace step by step without changing the stable traveler output:
-
-1. Add agency profile CRUD for company data, logo, cover image, countries, and services.
-2. Add agency experience CRUD requiring image, destination, caption, and alt text.
-3. Add agency document upload and verification status management.
-4. Add inquiry inbox and response/status workflow.
-5. Add database notifications for traveler inquiries and admin actions.
-6. Add feature tests for each role authorization and ownership boundary before expanding the UI.
-
-Do not begin by adding a large dashboard Blade file. Establish controller, Form Request, policy, route, model relationship, and feature-test boundaries first.
+1. Select a payment provider and define payout/reconciliation requirements before adding payout features to the payment screen.
+2. Implement the agency inquiry inbox with reply/status actions and notifications while preserving agency ownership boundaries.
+3. Add browser-level coverage for locale switching, profile-media replacement, and mobile agency navigation if a browser test tool is introduced.
+4. Keep booking state transitions, payment filtering, and currency summaries covered by feature tests.
 
 ## Continuing-project rules
 

@@ -16,17 +16,7 @@
 
             <form action="{{ route('password.code.verify') }}" method="POST" class="mt-8 grid gap-5">
                 @csrf
-                <label class="grid gap-2 text-sm font-semibold" for="email">{{ __('messages.email_address') }}
-                    <span class="relative"><svg
-                            class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#e76f51]"
-                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-                            aria-hidden="true">
-                            <rect x="3" y="5" width="18" height="14" rx="2" />
-                            <path d="m3 7 9 6 9-6" />
-                        </svg><input id="email" type="email" name="email" value="{{ old('email', $email) }}"
-                            required autocomplete="email"
-                            class="w-full rounded-xl border border-[#d7e0e1] bg-white py-3 pl-12 pr-4 font-normal text-[#173042] outline-none focus:border-[#e76f51] focus:ring-2 focus:ring-[#e76f51]/15"></span>
-                </label>
+                <input type="hidden" name="email" value="{{ old('email', $email) }}">
                 <label class="grid gap-2 text-sm font-semibold" for="code">{{ __('messages.six_digit_code') }}
                     <span class="relative"><svg
                             class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#e76f51]"
