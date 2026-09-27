@@ -8,6 +8,8 @@ This README is also the continuation handoff for future AI agents. Read the curr
 
 - Traveler registration, login, logout, and profile photo upload
 - Traveler dashboard with live saved-agency, inquiry, and review data
+- Traveler "My bookings" section with owner-scoped reservations, status/payment summaries, and in-page booking details
+- In-profile booking dialog for published agency packages, with capacity-checked checkout and localized validation/success dialogs
 - Verified agency directory with popular-agency ranking
 - Search by agency name, description, destination, or service with case-insensitive partial matching
 - Default directory shows the three most popular verified agencies
@@ -19,6 +21,9 @@ This README is also the continuation handoff for future AI agents. Read the curr
 - Duplicate review prevention for a traveler on the same agency
 - Agency-owned travel experience galleries backed by the database
 - Agency package, departure, booking, customer, review, payment-status, and analytics workspace
+- Agency profiles list all published packages, with booking actions only for packages with upcoming active departures
+- Package destinations are selected from the owning agency's configured countries and validated server-side
+- Owner-scoped icon deletion for saved agencies, packages and package images, eligible verification documents, closed inquiries, notifications, and agency travel experiences
 - Local traveler-experience images stored under `public/images/traveler_experience`
 - Traveler review submission with 1-5 rating, comment validation, and pending moderation
 - English/French locale switching using the `?lang=en` or `?lang=fr` query parameter
@@ -36,20 +41,34 @@ This README is also the continuation handoff for future AI agents. Read the curr
 
 ## Current implementation state
 
-The traveler-facing marketplace and the agency workspace are active product surfaces. Agency owners can manage their public profile, media, verification documents, and travel experiences; inquiry response/status actions and notifications remain deferred.
+TravelConnect is an active Laravel marketplace with separate traveler and agency workspaces. The main discovery, booking, inquiry, verification, and review flows use database-backed records and role-scoped routes. Treat the current dashboard and booking behavior below as the continuation baseline.
 
-### Latest session handoff
+### Recent implementation baseline
 
-- Agency owners use the protected `GET /agency/dashboard` route and the dedicated `x-agency-shell`. Packages, availability, bookings, customers, reviews, payment status, analytics, and profile settings are active.
-- Agency profile editing supports company/contact details, destinations, services, logo and cover uploads, verification documents, and travel experiences. Logo and cover URLs include an update version so browsers refresh changed uploads; public agency covers use `Agency::coverImageUrl()`.
-- Booking and payment screens use responsive filters and spaced currency totals. Booking payment status is tracked, but there is no payment-provider integration or payout ledger.
-- Traveler discovery now performs partial case-insensitive matching, so names such as `wakeu` can resolve to the correct agency without falling back to a generic profile.
-- Travelers can submit real inquiries to agencies, and agency owners receive database notifications with unread counts in the header bell.
-- Duplicate reviews are blocked once a traveler has already reviewed an agency.
-- Public agency profiles show the five highest-rated published reviews; aggregate rating and review count use the complete published review set.
-- The agency shell preserves `?lang=en` / `?lang=fr` on profile navigation and keeps the sidebar state stable when the locale changes.
-- MySQL/MariaDB connections default new tables to InnoDB. The local development database has package, availability, and booking migrations applied; empty conflicting package tables were preserved under backup names during repair.
-- Recent validation: the traveler workflow suite covering the dashboard, discovering agencies, inquiry flow, review limits, and notifications was re-run for the completed fix pass. The final pass should be treated as the project baseline before any remaining feature polish.
+The following focused checks passed during the latest dashboard and delete-control pass:
+
+```powershell
+php artisan test --compact tests/Feature/AgencyDashboardTest.php
+php artisan test --compact tests/Feature/AgencyPackageManagementTest.php
+php artisan test --compact tests/Feature/TravelerDashboardTest.php --filter='a_traveler_sees_their_dashboard_data|a_traveler_can_view_only_their_own_bookings|a_traveler_can_delete_their_own_activity_notification|a_traveler_cannot_delete_another_users_activity_notification|traveler_sees_the_agency_reply_in_their_activity_feed|saved_agency_cards_show_the_uploaded_cover_image'
+php artisan view:cache
+npm run build
+```
+
+All listed commands passed. The full suite has a known unrelated failure in `test_a_traveler_can_submit_an_inquiry_to_an_agency`: it expects the inquiry subject on the agency overview, whose intended design is a compact, subject-free latest-inquiry preview.
+
+### Active session handoff
+
+- **Agency workspace:** `GET /agency/dashboard` uses the `x-agency-shell` and links to package, availability, booking, customer, review, payment, analytics, profile, and inquiry management. The overview keeps compact summaries; detailed work belongs in each dedicated section.
+- **Agency packages:** agencies can create, edit, publish, archive, and soft-delete packages. Package destinations are a required selection from the countries linked to that agency; server-side validation rejects destinations outside that list. Public agency profiles show all published packages and images. A booking button appears when a package has a future active departure.
+- **Traveler bookings:** `GET /account/bookings` is the traveler-only “My bookings” page. It scopes records to the signed-in user and shows reference, package, agency, departure, status, travelers, total, and payment state. “View booking” opens a details dialog; pending and confirmed records retain the existing cancel action.
+- **Booking from an agency profile:** package booking opens in a centered, square-cornered dialog on the profile and posts to the existing capacity-checked booking endpoint. Validation errors return to the same profile, preserve locale and entered values, and reopen the dialog. Successful submissions return to the profile and show a confirmation dialog with the booking reference. The database schema was not changed for this modal flow.
+- **Agency profile media and verification:** owners can edit company/contact details, destinations, services, logo, cover, and verification documents. Render uploaded agency media through `Agency::logoUrl()` and `Agency::coverImageUrl()` so updated assets refresh correctly.
+- **Inquiries:** the lifecycle is open -> responded -> closed. Agency owners can reply, close, and delete only their own already-closed inquiries. Travelers receive database notifications for agency replies and closure events.
+- **Notifications and safe deletion:** both dashboards show unread notification counts; the traveler activity page shows the latest 20 notifications and includes an icon-only delete action scoped to the authenticated user's notifications. Other safe deletion controls exist for saved agencies, packages, package images, editable verification documents, closed inquiries, and an agency's own published travel experiences. Transactional bookings and traveler reviews are not hard-deleted.
+- **Search, reviews, and localization:** agency discovery performs case-insensitive partial matching by agency, description, service, and destination. Duplicate reviews by the same traveler for the same agency are blocked. Review moderation remains pending until approval. `?lang=en` and `?lang=fr` are preserved on dashboard navigation and form actions.
+- **Theme and layout:** traveler and agency shells share the same professional palette and navigation behavior. The traveler theme toggle updates both the shell and body so surfaces, text, borders, fields, and dialogs switch together. Mobile traveler search sits below the top utility row.
+- **Preserved data foundation:** `AgencyExperience`, `TravelRequest`, notification storage, and agency logo/cover columns remain in use. Do not remove these models or migrations during dashboard work.
 
 The data foundation was intentionally preserved for future work:
 
@@ -168,11 +187,11 @@ Role-specific view convention:
 
 Public routes include `/`, `/how-it-works`, `/for-agencies`, `/terms`, `/privacy`, and `/accessibility`.
 
-Authenticated traveler routes include `/dashboard`, `/account/discover`, `/account/saved`, `/account/activity`, `/agencies/{slug}`, `POST /agencies/{slug}/favorite`, and `POST /agencies/{slug}/reviews`.
+Authenticated traveler routes include `/dashboard`, `/account/discover`, `/account/saved`, `/account/activity`, `/account/bookings`, `/agencies/{slug}`, `POST /agencies/{slug}/favorite`, `POST /agencies/{slug}/reviews`, and `DELETE /account/notifications/{notification}`. Package booking uses `GET /packages/{package}/book`, `POST /packages/{package}/book`, `GET /bookings/{booking}`, and `GET /bookings/{booking}/confirmation`.
 
 Authentication routes include login, registration, password recovery, verification-code reset, and logout.
 
-The active agency dashboard is `GET /agency/dashboard` (`agency.dashboard`), protected by `auth` and `agency-owner`. Keep agency mutations and booking transitions scoped to the authenticated owner, with validation and feature tests.
+The active agency dashboard is `GET /agency/dashboard` (`agency.dashboard`), protected by `auth` and `agency-owner`. Agency mutations, experience deletion, and booking transitions must remain scoped to the authenticated owner, with validation and feature tests.
 
 ## Important behavior
 
@@ -184,11 +203,23 @@ The account header search submits to the agency directory. It searches agency na
 
 The heart button calls `POST /agencies/{slug}/favorite`. It requires an authenticated traveler, uses the unique `favorites` relationship, and returns JSON with the new `saved` state. The UI is initialized from the database on every page load.
 
+Saved-agency cards also use the same favorite endpoint for their icon-only remove action. On a successful unsave, the list refreshes so the collection and empty state reflect database state.
+
 ### Reviews
 
 Travelers submit reviews through `POST /agencies/{slug}/reviews`. New reviews are stored as `pending`; only published reviews affect the public rating summary. The submitting traveler sees a pending-approval notice. Published reviews on the agency profile come from the database and display the reviewer, rating, comment, and relative timestamp such as `2 weeks ago`.
 
 Agency profile review rows are intentionally limited to five published reviews, ordered by rating and then creation date. The summary distribution is calculated from all published reviews, not only the visible five.
+
+### Package booking
+
+Agency profile package cards only include published packages. The profile's booking dialog submits to `POST /packages/{package}/book`; `BookingService` rechecks package publication, active departure, and remaining capacity before creating a pending booking. Submissions originating from the profile return to that profile with a confirmation dialog. The standalone booking form and confirmation route remain available for callers that do not originate from the profile modal.
+
+The package destination field is a dropdown of countries assigned to that agency. Both package creation and updates validate against the owner's current country relationship; do not accept arbitrary destination text.
+
+### Safe deletion
+
+Delete icons appear only where an existing, ownership-safe delete action is available. Saved agencies reuse the favorite toggle. Agency-owned packages and images use their existing authorization rules. Verification documents can only be deleted during the existing edit window. Inquiries can only be deleted after closure. Notifications are resolved through the signed-in user's notification relation. Travel experiences can only be deleted by their owning agency, and deletion also removes the stored image. Do not add hard-delete actions for bookings or reviews, which are transactional/moderated history.
 
 ### Agency travel experiences
 
@@ -197,6 +228,8 @@ Agency profiles load their gallery through the `Agency::experiences()` relations
 Gallery images use local paths such as `images/traveler_experience/p1.jpeg`; do not replace them with Unsplash URLs. Existing demo agencies use different rotating image sets from `p1.jpeg` through `p7.jpeg`, and each image displays its destination/country.
 
 The gallery is agency-specific. Do not place a generic experience feed on the traveler dashboard. Future agency posting forms must save the selected agency, uploaded image, destination, caption, and alt text to `agency_experiences`.
+
+An agency owner can remove an experience only from their own public profile. The delete action removes both the `agency_experiences` row and its uploaded public-disk image. Cross-agency deletion must remain forbidden.
 
 ### Agency dashboard overview
 
@@ -226,13 +259,11 @@ Factory-created user passwords default to `password` for local testing. Never us
 
 ## Remaining work before final polish
 
-1. Complete the agency inbox workflow so owners can reply to traveler inquiries and update inquiry status from the dashboard.
-2. Finish the notification action layer so review, inquiry, and admin events can route to dedicated inbox and unread-state screens rather than only the header bell count.
-3. Tighten the traveler dashboard and agency dashboard UX for non-technical users by simplifying some labels, help text, and empty states.
-4. Finish the package and listing image workflow so every package card supports a clear cover image upload and preview experience with consistent validation.
-5. Select a payment provider and define payout/reconciliation requirements before adding payout features to the payment screen.
-6. Add browser-level coverage for locale switching, profile-media replacement, and mobile agency navigation if a browser test tool is introduced.
-7. Keep booking state transitions, payment filtering, and currency summaries covered by feature tests.
+1. Add pagination to the activity notification feed, which currently shows the latest 20 notifications, and ensure review moderation/admin events produce notifications.
+2. Continue simplifying labels, help text, and empty states for users with limited computer experience.
+3. Select a payment provider and define reconciliation/payout rules before adding payout functionality; current booking payments are status tracking only.
+4. Add browser-level coverage for locale switching, profile-media replacement, booking dialogs, delete actions, and mobile navigation if a browser test tool is introduced.
+5. Keep booking transitions, cancellation, payment filters, and currency totals covered by focused feature tests.
 
 ## Continuing-project rules
 
@@ -243,7 +274,8 @@ Factory-created user passwords default to `password` for local testing. Never us
 5. Use local or approved image assets instead of unreliable remote image URLs.
 6. Keep each actor’s data scoped to the authenticated owner.
 7. Never use `firstOrFail()` for an agency dashboard profile without handling an agency-owner account that has no linked agency row.
-8. Run `php artisan test`, `php artisan view:cache`, and `npm run build` before pushing changes.
+8. Treat the inquiry lifecycle as a product requirement: open -> respond -> close -> delete-closed is the accepted flow for the current agency dashboard.
+9. Run `php artisan test`, `php artisan view:cache`, and `npm run build` before pushing changes.
 
 ## Handoff checklist for a new AI
 
