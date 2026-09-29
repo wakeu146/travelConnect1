@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Enums\UserRole;
-use App\Notifications\PasswordResetCode;
 use App\Models\User;
+use App\Notifications\PasswordResetCode;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -38,8 +38,15 @@ class AuthController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:191', 'unique:users,email,'.$user->id],
-            'phone' => ['nullable', 'string', 'max:30'],
+            'phone' => ['nullable', 'string', 'max:30', 'regex:/^\+237\s?[0-9\s-]{9,15}$/'],
         ]);
+
+        if (! empty($data['phone'])) {
+            $digits = preg_replace('/\D+/', '', $data['phone']);
+            if (preg_match('/^237\d{9,10}$/', $digits)) {
+                $data['phone'] = '+237 '.trim(chunk_split(substr($digits, 3), 3, ' '));
+            }
+        }
 
         $user->update($data);
 

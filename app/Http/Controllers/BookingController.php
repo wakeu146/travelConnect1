@@ -2,16 +2,38 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\BookingStatus;
 use App\Models\Booking;
 use App\Models\Package;
 use App\Models\PackageAvailability;
+use App\Models\User;
 use App\Services\BookingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class BookingController extends Controller
 {
+    public function index(Request $request): View
+    {
+        $this->authorize('viewAny', Booking::class);
+
+        /** @var User $traveler */
+        $traveler = $request->user();
+        $bookings = $traveler->bookings()
+            ->with([
+                'agency:id,company_name',
+                'package:id,title,destination,duration_days',
+                'availability:id,departure_date',
+            ])
+            ->latest()
+            ->paginate(10);
+        $bookings->withQueryString();
+
+        return view('bookings.index', ['bookings' => $bookings]);
+    }
+
     public function packageShow(Package $package): View
     {
         $package->load(['agency', 'images', 'availabilities' => fn ($query) => $query->where('status', 'active')->orderBy('departure_date')]);
@@ -43,6 +65,7 @@ class BookingController extends Controller
             'package_availability_id' => ['required', 'exists:package_availability,id'],
             'traveler_count' => ['required', 'integer', 'min:1'],
             'notes' => ['nullable', 'string', 'max:1000'],
+            'booking_modal_package' => ['nullable', 'integer', 'in:'.$package->id],
         ]);
 
         $availability = PackageAvailability::with('package')->findOrFail($data['package_availability_id']);
@@ -52,8 +75,21 @@ class BookingController extends Controller
         }
 
         try {
-            $booking = $bookingService->createBooking(auth()->user(), $package, $availability, $data['traveler_count']);
+            $booking = $bookingService->createBooking($request->user(), $package, $availability, $data['traveler_count']);
             $booking->update(['notes' => $data['notes'] ?? null]);
+
+            if (isset($data['booking_modal_package'])) {
+                $package->loadMissing('agency');
+
+                return redirect()->route('agency.show', [
+                    'slug' => Str::slug($package->agency->company_name),
+                    'lang' => app()->getLocale(),
+                ])->with('booking_success', [
+                    'package_id' => $package->id,
+                    'package_title' => $package->title,
+                    'booking_reference' => $booking->booking_reference,
+                ]);
+            }
 
             return redirect()->route('bookings.confirmation', ['booking' => $booking->id])->with('status', 'Booking created. Your reference is '.$booking->booking_reference);
         } catch (\RuntimeException|\InvalidArgumentException $e) {
@@ -78,12 +114,12 @@ class BookingController extends Controller
             'reason' => ['nullable', 'string', 'max:255'],
         ]);
 
-        if (! in_array($booking->status, [\App\Enums\BookingStatus::PENDING, \App\Enums\BookingStatus::CONFIRMED], true)) {
+        if (! in_array($booking->status, [BookingStatus::PENDING, BookingStatus::CONFIRMED], true)) {
             return back()->withErrors(['status' => 'This booking cannot be cancelled.']);
         }
 
         $bookingService = app(BookingService::class);
-        $bookingService->transitionStatus($booking, \App\Enums\BookingStatus::CANCELLED);
+        $bookingService->transitionStatus($booking, BookingStatus::CANCELLED);
         $booking->update(['cancellation_reason' => $request->input('reason', 'Cancelled by traveler')]);
 
         return redirect()->route('bookings.show', ['booking' => $booking->id])->with('status', 'Booking cancelled.');

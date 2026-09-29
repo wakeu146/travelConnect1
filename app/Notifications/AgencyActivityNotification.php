@@ -3,10 +3,9 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
-class AgencyActivityNotification extends Notification implements ShouldQueue
+class AgencyActivityNotification extends Notification
 {
     use Queueable;
 
@@ -15,8 +14,7 @@ class AgencyActivityNotification extends Notification implements ShouldQueue
         public readonly string $message,
         public readonly string $type,
         public readonly ?string $url = null,
-    ) {
-    }
+    ) {}
 
     public function via(object $notifiable): array
     {

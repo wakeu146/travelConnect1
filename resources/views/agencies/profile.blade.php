@@ -24,6 +24,7 @@
                 <div class="space-y-6">
                     <div class="agency-panel rounded-2xl border p-6 shadow-sm">
                         <h2 class="text-lg font-bold">{{ __('messages.agency_profile') }}</h2>
+                        <p class="mt-2 text-xs leading-5 text-[#607985]">{{ __('messages.profile_help_text') }}</p>
                         <div class="mt-5 grid gap-5 sm:grid-cols-2">
                             <div class="sm:col-span-2">
                                 <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.company_name') }}</label>
@@ -39,11 +40,11 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.phone') }}</label>
-                                <input name="phone" value="{{ old('phone', $agency->owner->phone) }}" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm outline-none focus:border-[#e76f51]">
+                                <input name="phone" value="{{ old('phone', $agency->owner->phone ?: '+237 ') }}" placeholder="+237 6xx xxx xxx" pattern="^\+237\s?[0-9\s-]{9,15}$" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm outline-none focus:border-[#e76f51]">
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.agency_phone') }}</label>
-                                <input name="agency_phone" value="{{ old('agency_phone', $agency->phone) }}" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm outline-none focus:border-[#e76f51]">
+                                <input name="agency_phone" value="{{ old('agency_phone', $agency->phone ?: '+237 ') }}" placeholder="+237 6xx xxx xxx" pattern="^\+237\s?[0-9\s-]{9,15}$" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm outline-none focus:border-[#e76f51]">
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.agency_email') }}</label>
@@ -70,9 +71,17 @@
 
                     <div class="agency-panel rounded-2xl border p-6 shadow-sm">
                         <h2 class="text-lg font-bold">{{ __('messages.destinations') }}</h2>
-                        <div class="mt-4 grid gap-3 sm:grid-cols-2">
-                            @foreach ($countries as $country)
-                                <label class="agency-panel-muted flex items-center gap-3 rounded-xl border border-[#dbe3e5] px-3 py-2 text-sm">
+                        <div class="mt-4">
+                            <input type="search" list="destination-country-list" data-destination-filter placeholder="{{ __('messages.search_destination_or_agency') }}" class="mb-3 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-2.5 text-sm outline-none focus:border-[#e76f51]">
+                            <datalist id="destination-country-list">
+                                @foreach ($countries->sortBy('name') as $country)
+                                    <option value="{{ $country->name }}"></option>
+                                @endforeach
+                            </datalist>
+                        </div>
+                        <div class="mt-2 grid gap-3 sm:grid-cols-2" data-destination-list>
+                            @foreach ($countries->sortBy('name') as $country)
+                                <label class="agency-panel-muted destination-option flex items-center gap-3 rounded-xl border border-[#dbe3e5] px-3 py-2 text-sm" data-destination-name="{{ strtolower($country->name) }}">
                                     <input type="checkbox" name="countries[]" value="{{ $country->id }}" {{ $agency->countries->contains($country->id) ? 'checked' : '' }}>
                                     <span>{{ $country->name }}</span>
                                 </label>
@@ -124,31 +133,80 @@
 
                     <div class="agency-panel rounded-2xl border p-6 shadow-sm">
                         <h2 class="text-lg font-bold">{{ __('messages.verification_documents') }}</h2>
-                        <div class="mt-4 space-y-4">
-                            <div>
-                                <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.document_type') }}</label>
-                                <select form="agency-document-upload" name="type" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm outline-none focus:border-[#e76f51]">
-                                    <option value="license">{{ __('messages.license') }}</option>
-                                    <option value="id_proof">{{ __('messages.id_proof') }}</option>
-                                    <option value="business_registration">{{ __('messages.business_registration') }}</option>
-                                </select>
+                        <p class="mt-2 text-xs leading-5 text-[#607985]">{{ __('messages.verification_help_text') }}</p>
+
+                        @php $latestVerificationDocument = $agency->documents->sortByDesc('uploaded_at')->first(); @endphp
+
+                        @if ($latestVerificationDocument)
+                            <div class="mt-4 rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] p-4">
+                                <div class="flex items-center justify-between gap-3">
+                                    <div>
+                                        <p class="text-sm font-semibold text-[#173042]">{{ __('messages.document_review_status') }}</p>
+                                        <p class="mt-1 text-xs text-[#607985]">{{ $latestVerificationDocument->uploaded_at?->translatedFormat('d M Y') }}</p>
+                                    </div>
+                                    <x-agency.status-badge :label="__('messages.document_status_'.($latestVerificationDocument->status->value ?? $latestVerificationDocument->status))" :tone="($latestVerificationDocument->status->value ?? $latestVerificationDocument->status) === 'approved' ? 'success' : (($latestVerificationDocument->status->value ?? $latestVerificationDocument->status) === 'rejected' ? 'danger' : 'warning')" />
+                                </div>
+
+                                @if ($latestVerificationDocument->canBeModified())
+                                    <div class="mt-4 space-y-3">
+                                        <div>
+                                            <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.document_type') }}</label>
+                                            <select form="agency-document-update" name="type" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-white px-4 py-3 text-sm outline-none focus:border-[#e76f51]">
+                                                <option value="license" {{ $latestVerificationDocument->type->value === 'license' ? 'selected' : '' }}>{{ __('messages.license') }}</option>
+                                                <option value="id_proof" {{ $latestVerificationDocument->type->value === 'id_proof' ? 'selected' : '' }}>{{ __('messages.id_proof') }}</option>
+                                                <option value="business_registration" {{ $latestVerificationDocument->type->value === 'business_registration' ? 'selected' : '' }}>{{ __('messages.business_registration') }}</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.choose_document') }}</label>
+                                            <input form="agency-document-update" type="file" name="document" class="mt-2 block w-full text-sm text-[#607985] file:mr-4 file:rounded-xl file:border-0 file:bg-[#f1f6f4] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[#173042]" required>
+                                        </div>
+                                        <div class="flex flex-wrap gap-3">
+                                            <button type="submit" form="agency-document-update" class="inline-flex items-center justify-center rounded-xl bg-[#173042] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0f2431]">{{ __('messages.update_profile') }}</button>
+                                            <button type="submit" form="agency-document-delete-{{ $latestVerificationDocument->id }}" data-document-delete-icon class="delete-icon-button" aria-label="{{ __('messages.delete_verification_document') }}" title="{{ __('messages.delete_verification_document') }}">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 14h12l1-14M9 7V4h6v3"/></svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                @else
+                                    <p class="mt-3 text-xs leading-5 text-[#607985]">{{ __('messages.document_update_locked') }}</p>
+                                @endif
                             </div>
-                            <div>
-                                <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.choose_document') }}</label>
-                                <input form="agency-document-upload" type="file" name="document" class="mt-2 block w-full text-sm text-[#607985] file:mr-4 file:rounded-xl file:border-0 file:bg-[#f1f6f4] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[#173042]" required>
+                        @else
+                            <div class="mt-4 space-y-4">
+                                <div>
+                                    <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.document_type') }}</label>
+                                    <select form="agency-document-upload" name="type" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm outline-none focus:border-[#e76f51]">
+                                        <option value="license">{{ __('messages.license') }}</option>
+                                        <option value="id_proof">{{ __('messages.id_proof') }}</option>
+                                        <option value="business_registration">{{ __('messages.business_registration') }}</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.choose_document') }}</label>
+                                    <input form="agency-document-upload" type="file" name="document" class="mt-2 block w-full text-sm text-[#607985] file:mr-4 file:rounded-xl file:border-0 file:bg-[#f1f6f4] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[#173042]" required>
+                                </div>
+                                <button type="submit" form="agency-document-upload" class="inline-flex items-center justify-center rounded-xl bg-[#173042] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0f2431]">
+                                    {{ __('messages.upload_document') }}
+                                </button>
                             </div>
-                            <button type="submit" form="agency-document-upload" class="inline-flex items-center justify-center rounded-xl bg-[#173042] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0f2431]">
-                                {{ __('messages.upload_document') }}
-                            </button>
-                        </div>
+                        @endif
+
                         <div class="mt-6 border-t agency-divider pt-4">
                             <h3 class="text-sm font-bold">{{ __('messages.document_review_status') }}</h3>
                             <div class="mt-3 space-y-2">
-                                @forelse ($agency->documents as $document)
+                                @forelse ($agency->documents->sortByDesc('uploaded_at') as $document)
                                     @php $documentStatus = $document->status->value ?? $document->status; @endphp
                                     <div class="agency-panel-muted flex items-center justify-between gap-3 rounded-xl border p-3">
                                         <span class="min-w-0"><span class="agency-text-primary block truncate text-sm font-semibold">{{ __('messages.'.$document->type->value) }}</span><span class="agency-text-subtle mt-1 block text-xs">{{ $document->uploaded_at?->translatedFormat('d M Y') }}</span></span>
-                                        <x-agency.status-badge :label="__('messages.document_status_'.$documentStatus)" :tone="$documentStatus === 'approved' ? 'success' : ($documentStatus === 'rejected' ? 'danger' : 'warning')" />
+                                        <div class="flex shrink-0 items-center gap-2">
+                                            <x-agency.status-badge :label="__('messages.document_status_'.$documentStatus)" :tone="$documentStatus === 'approved' ? 'success' : ($documentStatus === 'rejected' ? 'danger' : 'warning')" />
+                                            @if ($document->canBeModified() && $document->id !== $latestVerificationDocument?->id)
+                                                <button type="submit" form="agency-document-delete-{{ $document->id }}" data-document-delete-icon class="delete-icon-button delete-icon-button-small" aria-label="{{ __('messages.delete_verification_document') }}" title="{{ __('messages.delete_verification_document') }}">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-3.5 w-3.5" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 14h12l1-14M9 7V4h6v3"/></svg>
+                                                </button>
+                                            @endif
+                                        </div>
                                     </div>
                                 @empty
                                     <p class="agency-text-subtle text-sm">{{ __('messages.no_documents') }}</p>
@@ -165,6 +223,49 @@
                 </div>
             </form>
             <form id="agency-document-upload" method="POST" action="{{ route('agency.documents.store', ['lang' => app()->getLocale()]) }}" enctype="multipart/form-data" class="hidden">@csrf</form>
+            @if ($latestVerificationDocument ?? false)
+                <form id="agency-document-update" method="POST" action="{{ route('agency.documents.update', ['document' => $latestVerificationDocument->id, 'lang' => app()->getLocale()]) }}" enctype="multipart/form-data" class="hidden">@csrf @method('PUT')</form>
+            @endif
+            @foreach ($agency->documents as $document)
+                @if ($document->canBeModified())
+                    <form id="agency-document-delete-{{ $document->id }}" method="POST" action="{{ route('agency.documents.destroy', ['document' => $document->id, 'lang' => app()->getLocale()]) }}" onsubmit='return confirm(@json(__('messages.delete_document_confirm')))' class="hidden">@csrf @method('DELETE')</form>
+                @endif
+            @endforeach
         </div>
     </div>
+    <script>
+        (() => {
+            const filterInput = document.querySelector('[data-destination-filter]');
+            const list = document.querySelector('[data-destination-list]');
+            if (!filterInput || !list) return;
+
+            const normalizeText = (value = '') => value
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .trim();
+
+            const applyDestinationFilter = () => {
+                const query = normalizeText(filterInput.value);
+                list.querySelectorAll('.destination-option').forEach((option) => {
+                    const name = normalizeText(option.dataset.destinationName || option.textContent);
+                    const match = !query || name.includes(query);
+                    option.style.display = match ? '' : 'none';
+                });
+            };
+
+            filterInput.addEventListener('input', applyDestinationFilter);
+            filterInput.addEventListener('keyup', applyDestinationFilter);
+            filterInput.addEventListener('search', applyDestinationFilter);
+            filterInput.addEventListener('focus', () => {
+                const listItems = [...list.querySelectorAll('.destination-option')].sort((a, b) => {
+                    const left = (a.dataset.destinationName || a.textContent).toLowerCase();
+                    const right = (b.dataset.destinationName || b.textContent).toLowerCase();
+                    return left.localeCompare(right);
+                });
+                listItems.forEach((option) => list.appendChild(option));
+                applyDestinationFilter();
+            });
+        })();
+    </script>
 </x-agency-shell>

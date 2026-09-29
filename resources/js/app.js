@@ -221,6 +221,10 @@ document.querySelectorAll('[data-favorite-toggle]').forEach((toggle) => {
 			if (!response.ok) throw new Error('Favorite request failed');
 			const { saved } = await response.json();
 			toggle.setAttribute('aria-pressed', String(saved));
+			if (toggle.dataset.removeSavedAgency === 'true' && !saved) {
+				window.location.reload();
+				return;
+			}
 			toggle.classList.toggle('text-[#e76f51]', saved);
 			const icon = toggle.querySelector('[data-favorite-icon]') || toggle;
 			const label = toggle.querySelector('[data-favorite-label]');

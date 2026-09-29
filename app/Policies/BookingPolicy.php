@@ -7,6 +7,11 @@ use App\Models\User;
 
 class BookingPolicy
 {
+    public function viewAny(User $user): bool
+    {
+        return $user->isTraveler();
+    }
+
     public function viewAgency(User $user, Booking $booking): bool
     {
         return $user->isAgencyOwner() && $booking->agency_id === $user->agency?->id;

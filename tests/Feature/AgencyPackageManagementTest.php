@@ -4,10 +4,9 @@ namespace Tests\Feature;
 
 use App\Enums\PackageStatus;
 use App\Models\Agency;
+use App\Models\Country;
 use App\Models\Package;
 use App\Models\PackageAvailability;
-use App\Models\PackageImage;
-use App\Models\PackageItineraryDay;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -30,6 +29,7 @@ class AgencyPackageManagementTest extends TestCase
         $response->assertOk();
         $response->assertSee('Owned package');
         $response->assertDontSee('Other package');
+        $response->assertSee('data-package-delete-icon', false);
     }
 
     public function test_traveler_cannot_access_agency_package_routes(): void
@@ -40,6 +40,40 @@ class AgencyPackageManagementTest extends TestCase
 
         $this->actingAs($traveler)->get(route('agency.packages.index'))->assertRedirect(route('dashboard', ['lang' => 'en']));
         $this->actingAs($traveler)->get(route('agency.packages.edit', ['package' => $package->id]))->assertRedirect(route('dashboard', ['lang' => 'en']));
+    }
+
+    public function test_package_form_lists_only_destinations_assigned_to_the_agency(): void
+    {
+        $agency = Agency::factory()->create();
+        $france = Country::factory()->create(['name' => 'France']);
+        Country::factory()->create(['name' => 'Japan']);
+        $agency->countries()->attach($france);
+
+        $response = $this->actingAs($agency->owner)->get(route('agency.packages.create', ['lang' => 'en']));
+
+        $response->assertOk()
+            ->assertSee('<select name="destination"', false)
+            ->assertSee('<option value="France"', false)
+            ->assertSee('>France</option>', false)
+            ->assertDontSee('<option value="Japan"', false);
+    }
+
+    public function test_agency_cannot_create_package_for_a_destination_it_does_not_serve(): void
+    {
+        $agency = Agency::factory()->create();
+        Country::factory()->create(['name' => 'Japan']);
+
+        $response = $this->actingAs($agency->owner)->post(route('agency.packages.store'), [
+            'title' => 'Japan Discovery',
+            'summary' => 'A thoughtful journey through Japan',
+            'destination' => 'Japan',
+            'price_from' => 900,
+            'duration_days' => 8,
+            'status' => PackageStatus::DRAFT->value,
+        ]);
+
+        $response->assertSessionHasErrors('destination');
+        $this->assertDatabaseMissing('packages', ['agency_id' => $agency->id, 'title' => 'Japan Discovery']);
     }
 
     public function test_agency_owner_cannot_view_or_edit_another_agencys_package(): void
@@ -68,6 +102,8 @@ class AgencyPackageManagementTest extends TestCase
     public function test_package_can_be_created_updated_and_soft_deleted(): void
     {
         $agency = Agency::factory()->create();
+        $destination = Country::factory()->create(['name' => 'Switzerland']);
+        $agency->countries()->attach($destination);
 
         $create = $this->actingAs($agency->owner)->post(route('agency.packages.store'), [
             'title' => 'Alpine Escape',
@@ -114,7 +150,6 @@ class AgencyPackageManagementTest extends TestCase
         $package = Package::factory()->create(['agency_id' => $agency->id, 'title' => 'Coastal Passage', 'status' => PackageStatus::PUBLISHED]);
         $imagePath = UploadedFile::fake()->image('coast.jpg')->store('package-images', 'public');
         $package->images()->create(['path' => $imagePath, 'caption' => 'Coast', 'is_primary' => true, 'sort_order' => 1]);
-        $package->itineraryDays()->create(['day_number' => 1, 'title' => 'Arrival', 'description' => 'Check in']);
         PackageAvailability::create(['package_id' => $package->id, 'departure_date' => '2026-12-10', 'capacity' => 8, 'status' => 'active']);
 
         $response = $this->actingAs($agency->owner)->post(route('agency.packages.duplicate', ['package' => $package->id]));
@@ -125,7 +160,6 @@ class AgencyPackageManagementTest extends TestCase
         $this->assertSame('draft', $duplicate->status->value);
         $this->assertSame('Coastal Passage', $package->title);
         $this->assertSame('Copy of Coastal Passage', $duplicate->title);
-        $this->assertCount(1, $duplicate->itineraryDays);
         $this->assertCount(1, $duplicate->images);
         $this->assertNotSame($imagePath, $duplicate->images->first()->path);
         $this->assertTrue(Storage::disk('public')->exists($imagePath));
@@ -174,6 +208,7 @@ class AgencyPackageManagementTest extends TestCase
         $this->actingAs($agency->owner)
             ->get(route('agency.packages.edit', ['package' => $package->id]))
             ->assertOk()
+            ->assertSee('data-package-image-delete-icon', false)
             ->assertSee(Storage::disk('public')->url($package->fresh()->images()->where('caption', 'Second image')->firstOrFail()->path));
 
         $this->assertDatabaseHas('package_images', ['package_id' => $package->id, 'caption' => 'First image', 'is_primary' => false]);
@@ -189,132 +224,35 @@ class AgencyPackageManagementTest extends TestCase
         $this->assertDatabaseMissing('package_images', ['id' => $image->id]);
     }
 
-    public function test_package_itinerary_days_are_owned_and_ordered(): void
+    public function test_verification_document_upload_redirects_to_profile_and_counts_toward_completion(): void
     {
+        Storage::fake('public');
         $agency = Agency::factory()->create();
-        $otherAgency = Agency::factory()->create();
-        $package = Package::factory()->create(['agency_id' => $agency->id]);
-        $otherPackage = Package::factory()->create(['agency_id' => $otherAgency->id]);
-
-        $this->actingAs($agency->owner)->post(route('agency.packages.days.store', ['package' => $package->id]), [
-            'title' => 'Day one',
-            'description' => 'Arrival morning',
-            'location' => 'Paris',
-            'meals' => 'Breakfast',
-            'overnight' => 'Hotel Stay',
-        ])->assertRedirect();
-
-        $day = $package->fresh()->itineraryDays()->first();
-        $this->assertNotNull($day);
-
-        $this->actingAs($agency->owner)->put(route('agency.packages.days.update', ['package' => $package->id, 'day' => $day->id]), [
-            'title' => 'Day one updated',
-            'description' => 'Arrival noon',
-            'location' => 'Paris',
-            'meals' => 'Brunch',
-            'overnight' => 'Boutique stay',
-        ])->assertRedirect();
-
-        $this->actingAs($agency->owner)->delete(route('agency.packages.days.destroy', ['package' => $package->id, 'day' => $day->id]))->assertRedirect();
-
-        $this->actingAs($agency->owner)
-            ->post(route('agency.packages.days.store', ['package' => $package->id]), [
-                'title' => 'Foreign day',
-                'description' => 'Bad',
-            ])
-            ->assertRedirect();
-
-        $this->actingAs($agency->owner)
-            ->put(route('agency.packages.days.update', ['package' => $otherPackage->id, 'day' => $day->id]), [
-                'title' => 'Hacked',
-                'description' => 'Bad',
-            ])
-            ->assertNotFound();
-    }
-
-    public function test_agency_owner_can_reorder_itinerary_days_and_the_new_order_persists(): void
-    {
-        $owner = User::factory()->create(['role' => 'agency_owner']);
-        $agency = Agency::create([
-            'user_id' => $owner->id,
-            'company_name' => 'Oceanic Journeys',
-            'description' => 'Short description.',
-            'license_number' => 'LIC-100',
-            'verification_status' => 'pending',
-            'trust_score' => 0,
+        $agency->update([
+            'company_name' => 'Emma Travel',
+            'description' => 'Travel company',
+            'email' => 'hello@emmatravel.test',
+            'phone' => '+33100000000',
             'address' => 'Paris',
-            'phone' => '+33123456789',
-            'email' => 'hello@oceanic.test',
-            'website' => 'https://oceanic.test',
+            'website' => 'https://emmatravel.test',
+            'logo_path' => 'agency-logos/logo.png',
+            'cover_image_path' => 'agency-covers/cover.png',
         ]);
-        $package = Package::create([
-            'agency_id' => $agency->id,
-            'slug' => 'oceanic-package',
-            'title' => 'Oceanic package',
-            'summary' => 'A nice trip',
-            'description' => 'Travel details',
-            'destination' => 'Maldives',
-            'price_from' => 1200,
-            'duration_days' => 4,
-            'status' => PackageStatus::DRAFT->value,
-            'published_at' => null,
-            'is_featured' => false,
-        ]);
+        $agency->countries()->sync([]);
+        $agency->services()->sync([]);
 
-        $arrival = $package->itineraryDays()->create(['day_number' => 1, 'title' => 'Arrival', 'description' => 'Arrive']);
-        $cityTour = $package->itineraryDays()->create(['day_number' => 2, 'title' => 'City Tour', 'description' => 'Explore']);
-        $beach = $package->itineraryDays()->create(['day_number' => 3, 'title' => 'Beach', 'description' => 'Relax']);
-        $departure = $package->itineraryDays()->create(['day_number' => 4, 'title' => 'Departure', 'description' => 'Leave']);
+        $response = $this->actingAs($agency->owner)
+            ->post(route('agency.documents.store', ['lang' => 'en']), [
+                'type' => 'license',
+                'document' => UploadedFile::fake()->create('license.pdf', 100, 'application/pdf'),
+            ]);
 
-        $this->actingAs($owner)
-            ->post(route('agency.packages.days.move', ['package' => $package->id, 'day' => $beach->id]), ['direction' => 'up'])
-            ->assertRedirect();
+        $response->assertRedirect(route('agency.profile', ['lang' => 'en']));
+        $this->assertDatabaseHas('agency_documents', ['agency_id' => $agency->id, 'type' => 'license']);
 
-        $package->refresh();
-        $orderedTitles = $package->itineraryDays()->orderBy('day_number')->pluck('title')->all();
-        $this->assertSame(['Arrival', 'Beach', 'City Tour', 'Departure'], $orderedTitles);
-        $this->assertSame([1, 2, 3, 4], $package->itineraryDays()->orderBy('day_number')->pluck('day_number')->all());
-    }
-
-    public function test_agency_cannot_reorder_another_agencys_package_days_and_invalid_days_are_rejected(): void
-    {
-        $ownerA = User::factory()->create(['role' => 'agency_owner']);
-        $ownerB = User::factory()->create(['role' => 'agency_owner']);
-        $agencyA = Agency::create(['user_id' => $ownerA->id, 'company_name' => 'Agency A', 'description' => 'Short', 'license_number' => 'LIC-A', 'verification_status' => 'pending', 'trust_score' => 0, 'address' => 'Paris', 'phone' => '+331', 'email' => 'a@example.com', 'website' => 'https://a.test']);
-        $agencyB = Agency::create(['user_id' => $ownerB->id, 'company_name' => 'Agency B', 'description' => 'Short', 'license_number' => 'LIC-B', 'verification_status' => 'pending', 'trust_score' => 0, 'address' => 'Rome', 'phone' => '+332', 'email' => 'b@example.com', 'website' => 'https://b.test']);
-        $packageA = Package::create(['agency_id' => $agencyA->id, 'slug' => 'agency-a-package', 'title' => 'A package', 'summary' => 'A', 'description' => 'A', 'destination' => 'A', 'price_from' => 100, 'duration_days' => 2, 'status' => PackageStatus::DRAFT->value, 'published_at' => null, 'is_featured' => false]);
-        $packageB = Package::create(['agency_id' => $agencyB->id, 'slug' => 'agency-b-package', 'title' => 'B package', 'summary' => 'B', 'description' => 'B', 'destination' => 'B', 'price_from' => 200, 'duration_days' => 2, 'status' => PackageStatus::DRAFT->value, 'published_at' => null, 'is_featured' => false]);
-        $dayA = $packageA->itineraryDays()->create(['day_number' => 1, 'title' => 'Arrival', 'description' => 'A']);
-        $dayB = $packageB->itineraryDays()->create(['day_number' => 1, 'title' => 'Arrival B', 'description' => 'B']);
-
-        $this->actingAs($ownerA)
-            ->post(route('agency.packages.days.move', ['package' => $packageB->id, 'day' => $dayB->id]), ['direction' => 'up'])
-            ->assertForbidden();
-
-        $this->actingAs($ownerA)
-            ->post(route('agency.packages.days.move', ['package' => $packageA->id, 'day' => 999999]), ['direction' => 'up'])
-            ->assertNotFound();
-
-        $this->assertDatabaseHas('package_itinerary_days', ['id' => $dayA->id, 'day_number' => 1]);
-        $this->assertDatabaseHas('package_itinerary_days', ['id' => $dayB->id, 'day_number' => 1]);
-    }
-
-    public function test_itinerary_reorder_validation_fails_without_partial_updates(): void
-    {
-        $owner = User::factory()->create(['role' => 'agency_owner']);
-        $agency = Agency::create(['user_id' => $owner->id, 'company_name' => 'Acme', 'description' => 'Short', 'license_number' => 'LIC-C', 'verification_status' => 'pending', 'trust_score' => 0, 'address' => 'Berlin', 'phone' => '+333', 'email' => 'c@example.com', 'website' => 'https://c.test']);
-        $package = Package::create(['agency_id' => $agency->id, 'slug' => 'acme-package', 'title' => 'Acme travel', 'summary' => 'Trip', 'description' => 'Trip', 'destination' => 'Berlin', 'price_from' => 100, 'duration_days' => 2, 'status' => PackageStatus::DRAFT->value, 'published_at' => null, 'is_featured' => false]);
-        $dayOne = $package->itineraryDays()->create(['day_number' => 1, 'title' => 'Arrival', 'description' => 'A']);
-        $dayTwo = $package->itineraryDays()->create(['day_number' => 2, 'title' => 'City', 'description' => 'B']);
-
-        $beforeNumbers = $package->itineraryDays()->orderBy('day_number')->pluck('day_number')->all();
-
-        $this->actingAs($owner)
-            ->post(route('agency.packages.days.move', ['package' => $package->id, 'day' => $dayTwo->id]), ['direction' => 'sideways'])
-            ->assertSessionHasErrors('direction');
-
-        $afterNumbers = $package->fresh()->itineraryDays()->orderBy('day_number')->pluck('day_number')->all();
-        $this->assertSame($beforeNumbers, $afterNumbers);
+        $dashboard = $this->actingAs($agency->owner)->get(route('agency.dashboard', ['lang' => 'en']));
+        $dashboard->assertOk();
+        $dashboard->assertSee('100%');
     }
 
     public function test_profile_update_requires_auth_and_valid_agency_owner_session(): void

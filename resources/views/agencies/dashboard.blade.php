@@ -22,9 +22,10 @@
             $agency->cover_image_path,
             $agency->countries->count() > 0,
             $agency->services->count() > 0,
+            $agency->documents()->exists(),
         ])->filter(fn ($value) => filled($value) || $value === true)->count();
 
-        $completionPercent = min(100, (int) round(($profileCompletion / 10) * 100));
+        $completionPercent = min(100, (int) round(($profileCompletion / 11) * 100));
 
         $attentionItems = collect();
 
@@ -292,11 +293,11 @@
                     </div>
                     <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                         @php
-                            $packagesNeedingWork = $recentPackages->filter(fn ($package) => $package->images_count === 0 || $package->itinerary_days_count < $package->duration_days)->take(3);
+                            $packagesNeedingWork = $recentPackages->filter(fn ($package) => $package->images_count === 0)->take(3);
                         @endphp
                         @forelse ($packagesNeedingWork as $package)
                             <a href="{{ route('agency.packages.edit', ['package' => $package->id, 'lang' => app()->getLocale()]) }}" class="agency-panel-muted flex items-center justify-between gap-4 rounded-xl border p-4">
-                                <span class="min-w-0"><span class="agency-text-primary block truncate text-sm font-semibold">{{ $package->title }}</span><span class="agency-text-subtle mt-1 block text-xs">{{ $package->images_count }} {{ __('messages.images') }} · {{ $package->itinerary_days_count }}/{{ $package->duration_days }} {{ __('messages.itinerary_days') }}</span></span>
+                                <span class="min-w-0"><span class="agency-text-primary block truncate text-sm font-semibold">{{ $package->title }}</span><span class="agency-text-subtle mt-1 block text-xs">{{ $package->images_count }} {{ __('messages.images') }}</span></span>
                                 <span class="agency-accent-text text-xs font-bold">{{ __('messages.edit') }}</span>
                             </a>
                         @empty
@@ -308,24 +309,27 @@
                 <section class="agency-panel mt-10 rounded-2xl border p-6 shadow-sm">
                     <div class="flex items-center justify-between gap-4">
                         <div>
-                            <p class="agency-accent-text text-xs font-bold uppercase tracking-[.18em]">{{ __('messages.inquiry') }}</p>
-                            <h3 class="mt-2 text-2xl font-bold">{{ __('messages.recent_inquiries') }}</h3>
+                            <p class="agency-accent-text text-xs font-bold uppercase tracking-[.18em]">{{ __('messages.inquiries') }}</p>
+                            <h3 class="mt-2 text-2xl font-bold">{{ __('messages.latest_inquiry') }}</h3>
                         </div>
-                        <span class="agency-pill agency-pill-neutral rounded-full px-2.5 py-1 text-xs font-bold">{{ count($recentInquiries ?? []) }}</span>
+                        <a href="{{ route('agency.inquiries.index', ['lang' => app()->getLocale()]) }}" class="agency-accent-text text-sm font-bold">{{ __('messages.view_all_inquiries') }}</a>
                     </div>
-                    <div class="mt-6 divide-y agency-divider">
-                        @forelse ($recentInquiries as $inquiry)
-                            @php $inquiryStatus = $inquiry->getRawOriginal('status'); @endphp
-                            <article class="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
-                                <div class="min-w-0">
-                                    <p class="agency-text-primary truncate text-sm font-bold">{{ $inquiry->subject }}</p>
-                                    <p class="agency-text-subtle mt-1 text-xs">{{ $inquiry->user?->name ?? __('messages.traveler') }} · {{ $inquiry->created_at->translatedFormat('d M Y') }}</p>
+
+                    <div class="mt-6">
+                        @php $latestInquiry = $recentInquiries->first(); @endphp
+                        @if ($latestInquiry)
+                            @php $inquiryStatus = $latestInquiry->getRawOriginal('status'); @endphp
+                            <div class="agency-panel-muted rounded-2xl border p-5">
+                                <p class="agency-text-subtle text-[10px] font-bold uppercase tracking-[.15em]">{{ __('messages.latest_inquiry') }}</p>
+                                <p class="mt-3 text-xl font-bold text-[#173042]">Top {{ $latestInquiry->user?->name ?? __('messages.traveler') }} · {{ $latestInquiry->created_at->translatedFormat('d M Y') }}</p>
+                                <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                                    <span class="agency-pill agency-pill-neutral rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.12em]">{{ __('messages.inquiry_status_'.$inquiryStatus) }}</span>
+                                    <a href="{{ route('agency.inquiries.index', ['lang' => app()->getLocale()]) }}" class="agency-button-secondary rounded-lg border px-3 py-2 text-[10px] font-bold">{{ __('messages.view_all_inquiries') }}</a>
                                 </div>
-                                <span class="agency-pill agency-pill-neutral w-fit rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.12em]">{{ __('messages.inquiry_status_'.$inquiryStatus) }}</span>
-                            </article>
-                        @empty
+                            </div>
+                        @else
                             <p class="agency-text-subtle py-4 text-sm">{{ __('messages.no_recent_inquiries') }}</p>
-                        @endforelse
+                        @endif
                     </div>
                 </section>
 </x-agency-shell>

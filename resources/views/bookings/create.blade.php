@@ -6,7 +6,7 @@
                     <p class="text-xs font-bold uppercase tracking-[.2em] text-[#e76f51]">Booking</p>
                     <h1 class="mt-3 font-serif text-4xl tracking-tight">Reserve your trip</h1>
                 </div>
-                <a href="{{ route('packages.show', ['package' => $package->id, 'lang' => app()->getLocale()]) }}" class="inline-flex items-center justify-center rounded-xl border border-[#dbe3e5] px-4 py-2.5 text-sm font-semibold text-[#173042] hover:border-[#e76f51] hover:text-[#e76f51]">Back to package</a>
+                <a href="{{ route('agency.show', ['slug' => \Illuminate\Support\Str::slug($package->agency->company_name), 'lang' => app()->getLocale()]) }}" class="inline-flex items-center justify-center rounded-xl border border-[#dbe3e5] px-4 py-2.5 text-sm font-semibold text-[#173042] hover:border-[#e76f51] hover:text-[#e76f51]">{{ __('messages.back') }} · {{ $package->agency->company_name }}</a>
             </div>
 
             <div class="grid gap-6 lg:grid-cols-[1.1fr_.9fr]">

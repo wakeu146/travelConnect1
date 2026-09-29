@@ -6,7 +6,6 @@ use App\Enums\PaymentStatus;
 use App\Enums\ReviewStatus;
 use App\Models\Agency;
 use App\Models\Booking;
-use App\Models\Review;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -43,6 +42,33 @@ class AgencyOperationsController extends Controller
             ->groupBy('user_id');
 
         return view('agencies.customers.index', compact('agency', 'customers', 'customerValues', 'search'));
+    }
+
+    public function inquiries(Request $request): View
+    {
+        $agency = $this->currentAgency();
+        $search = trim((string) $request->query('search', ''));
+        $status = $request->query('status');
+        $validStatuses = ['open', 'responded', 'closed'];
+
+        $inquiries = $agency->inquiries()
+            ->with('user:id,name')
+            ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search): void {
+                $query->where('subject', 'like', "%{$search}%")
+                    ->orWhere('message', 'like', "%{$search}%")
+                    ->orWhereHas('user', fn ($userQuery) => $userQuery->where('name', 'like', "%{$search}%"));
+            }))
+            ->when($status && in_array($status, $validStatuses, true), fn ($query) => $query->where('status', $status))
+            ->latest()
+            ->paginate(20)
+            ->appends($request->query());
+
+        return view('agencies.inquiries.index', [
+            'agency' => $agency,
+            'inquiries' => $inquiries,
+            'search' => $search,
+            'status' => $status ?? '',
+        ]);
     }
 
     public function reviews(Request $request): View

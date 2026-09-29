@@ -4,21 +4,25 @@ namespace App\Http\Controllers;
 
 use App\Enums\DocumentStatus;
 use App\Enums\DocumentType;
+use App\Enums\InquiryStatus;
 use App\Enums\PackageStatus;
 use App\Models\Agency;
 use App\Models\AgencyDocument;
 use App\Models\AgencyExperience;
 use App\Models\Country;
+use App\Models\Inquiry;
 use App\Models\Package;
 use App\Models\PackageImage;
-use App\Models\PackageItineraryDay;
 use App\Models\Service;
+use App\Notifications\AgencyActivityNotification;
 use App\Services\BookingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class AgencyController extends Controller
@@ -57,18 +61,19 @@ class AgencyController extends Controller
             ];
         });
         $recentPackages = $agency->packages()
-            ->withCount(['images', 'itineraryDays', 'bookings', 'availabilities as upcoming_departures_count' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>=', now()->toDateString())])
+            ->withCount(['images', 'bookings', 'availabilities as upcoming_departures_count' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>=', now()->toDateString())])
             ->withSum('bookings as travelers_booked', 'traveler_count')
             ->latest()
             ->take(5)
             ->get();
         $incompletePackageCount = $agency->packages()
-            ->where(fn ($query) => $query->whereDoesntHave('images')->orWhereDoesntHave('itineraryDays'))
+            ->whereDoesntHave('images')
             ->count();
         $bookingStatusCounts = $agency->bookings()
             ->selectRaw('status, COUNT(*) as aggregate')
             ->groupBy('status')
             ->pluck('aggregate', 'status');
+        $recentInquiries = $agency->inquiries()->with('user')->latest()->take(5)->get();
 
         return view('agencies.dashboard', [
             'agency' => $agency,
@@ -83,7 +88,8 @@ class AgencyController extends Controller
             'openInquiryCount' => $agency->inquiries()->where('status', 'open')->count(),
             'recentBookings' => $agency->bookings()->with(['package', 'availability', 'traveler'])->latest()->limit(5)->get(),
             'recentPackages' => $recentPackages,
-            'recentInquiries' => $agency->inquiries()->with('user')->latest()->take(5)->get(),
+            'recentInquiries' => $recentInquiries,
+            'notificationCount' => $agency->owner->unreadNotifications()->count(),
         ]);
     }
 
@@ -98,19 +104,102 @@ class AgencyController extends Controller
         ]);
     }
 
+    public function replyToInquiry(Request $request, Inquiry $inquiry): RedirectResponse
+    {
+        $agency = $this->currentAgency();
+        abort_unless($inquiry->agency_id === $agency->id, 403);
+
+        $data = $request->validate([
+            'reply_message' => ['required', 'string', 'min:10', 'max:2000'],
+        ]);
+
+        $updateData = [
+            'status' => 'responded',
+        ];
+
+        if (Schema::hasColumn('inquiries', 'reply_message')) {
+            $updateData['reply_message'] = $data['reply_message'];
+        }
+
+        if (Schema::hasColumn('inquiries', 'replied_at')) {
+            $updateData['replied_at'] = now();
+        }
+
+        $inquiry->update($updateData);
+
+        $agency->owner
+            ->unreadNotifications()
+            ->where('type', AgencyActivityNotification::class)
+            ->get()
+            ->filter(function ($notification) use ($inquiry): bool {
+                $data = $notification->data ?? [];
+                $message = strtolower((string) ($data['message'] ?? ''));
+                $title = strtolower((string) ($data['title'] ?? ''));
+                $subject = strtolower($inquiry->subject);
+
+                return ($data['type'] ?? null) === 'inquiry'
+                    && ($message === '' || str_contains($message, $subject) || str_contains($title, $subject));
+            })
+            ->each(fn ($notification) => $notification->markAsRead());
+
+        $inquiry->user?->notify(new AgencyActivityNotification(
+            'Agency response',
+            'The agency replied to your inquiry: '.$inquiry->subject.'.',
+            'inquiry_reply',
+            route('account.activity', ['lang' => app()->getLocale()])
+        ));
+
+        return back()->with('inquiry_reply_status', 'Your reply was sent to the traveler.');
+    }
+
+    public function closeInquiry(Inquiry $inquiry): RedirectResponse
+    {
+        $agency = $this->currentAgency();
+        abort_unless($inquiry->agency_id === $agency->id, 403);
+
+        $updateData = ['status' => 'closed'];
+
+        if (Schema::hasColumn('inquiries', 'replied_at')) {
+            $updateData['replied_at'] = $inquiry->replied_at ?? now();
+        }
+
+        $inquiry->update($updateData);
+
+        $inquiry->user?->notify(new AgencyActivityNotification(
+            'Inquiry closed',
+            'This inquiry has been closed by the agency: '.$inquiry->subject.'.',
+            'inquiry_closed',
+            route('account.activity', ['lang' => app()->getLocale()])
+        ));
+
+        return back()->with('inquiry_close_status', 'This inquiry was marked as closed and will disappear from the list after the next refresh.');
+    }
+
+    public function destroyInquiry(Inquiry $inquiry): RedirectResponse
+    {
+        $agency = $this->currentAgency();
+        abort_unless($inquiry->agency_id === $agency->id, 403);
+        abort_unless($inquiry->status instanceof InquiryStatus ? $inquiry->status->value === 'closed' : $inquiry->status === 'closed', 403);
+
+        $inquiry->delete();
+
+        return redirect()->route('agency.inquiries.index', ['lang' => app()->getLocale()])
+            ->with('inquiry_delete_status', 'The closed inquiry was deleted.');
+    }
+
     public function updateProfile(Request $request): RedirectResponse
     {
         $agency = $this->currentAgency();
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:191', 'unique:users,email,' . $agency->owner->id],
-            'phone' => ['nullable', 'string', 'max:30'],
+            'email' => ['required', 'email', 'max:191', 'unique:users,email,'.$agency->owner->id],
+            'phone' => ['nullable', 'string', 'max:30', 'regex:/^\+237\s?[0-9\s-]{9,15}$/'],
             'company_name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'license_number' => ['nullable', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:255'],
-            'agency_phone' => ['nullable', 'string', 'max:30'],
+            'agency_phone' => ['nullable', 'string', 'max:30', 'regex:/^\+237\s?[0-9\s-]{9,15}$/'],
             'agency_email' => ['nullable', 'email', 'max:191'],
             'website' => ['nullable', 'url', 'max:255'],
             'countries' => ['nullable', 'array'],
@@ -122,6 +211,22 @@ class AgencyController extends Controller
             'remove_logo' => ['nullable', 'boolean'],
             'remove_cover_image' => ['nullable', 'boolean'],
         ]);
+
+        $normalizeCameroonPhone = static function (?string $value): ?string {
+            if ($value === null || trim($value) === '') {
+                return null;
+            }
+
+            $digits = preg_replace('/\D+/', '', $value);
+            if (! preg_match('/^237\d{9,10}$/', $digits)) {
+                return $value;
+            }
+
+            return '+237 '.trim(chunk_split(substr($digits, 3), 3, ' '));
+        };
+
+        $data['phone'] = $normalizeCameroonPhone($data['phone'] ?? null);
+        $data['agency_phone'] = $normalizeCameroonPhone($data['agency_phone'] ?? null);
 
         $disk = Storage::disk('public');
         $oldPaths = [];
@@ -144,13 +249,18 @@ class AgencyController extends Controller
                 $path = $request->file($input)->store($options['directory'].'/'.$agency->id, 'public');
                 if (! $path) {
                     $disk->delete($newPaths);
+
                     return back()->withErrors([$input => __('messages.upload_failed')])->withInput();
                 }
                 $newPaths[] = $path;
                 $agencyUpdates[$options['column']] = $path;
-                if ($agency->{$options['column']}) $oldPaths[] = $agency->{$options['column']};
+                if ($agency->{$options['column']}) {
+                    $oldPaths[] = $agency->{$options['column']};
+                }
             } elseif ($request->boolean($options['remove'])) {
-                if ($agency->{$options['column']}) $oldPaths[] = $agency->{$options['column']};
+                if ($agency->{$options['column']}) {
+                    $oldPaths[] = $agency->{$options['column']};
+                }
                 $agencyUpdates[$options['column']] = null;
             }
         }
@@ -187,6 +297,12 @@ class AgencyController extends Controller
             'document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:4096'],
         ]);
 
+        $latestDocument = $agency->documents()->latest('uploaded_at')->first();
+
+        if ($latestDocument && $latestDocument->canBeModified()) {
+            return back()->withErrors(['document' => __('messages.document_update_locked')])->withInput();
+        }
+
         $agency->documents()->create([
             'type' => $data['type'],
             'file_path' => $request->file('document')->store('agency-documents', 'public'),
@@ -194,7 +310,57 @@ class AgencyController extends Controller
             'uploaded_at' => now(),
         ]);
 
-        return redirect()->route('agency.dashboard')->with('status', __('messages.document_uploaded'));
+        return redirect()->route('agency.profile', ['lang' => app()->getLocale()])->with('status', __('messages.document_uploaded'));
+    }
+
+    public function updateDocument(Request $request, AgencyDocument $document): RedirectResponse
+    {
+        $agency = $this->currentAgency();
+
+        abort_unless($document->agency_id === $agency->id, 403);
+
+        if (! $document->canBeModified()) {
+            return back()->withErrors(['document' => __('messages.document_update_locked')]);
+        }
+
+        $data = $request->validate([
+            'document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:4096'],
+        ]);
+
+        $disk = Storage::disk('public');
+
+        if ($document->file_path && $disk->exists($document->file_path)) {
+            $disk->delete($document->file_path);
+        }
+
+        $document->update([
+            'file_path' => $request->file('document')->store('agency-documents', 'public'),
+            'status' => DocumentStatus::PENDING->value,
+            'uploaded_at' => now(),
+        ]);
+
+        return redirect()->route('agency.profile', ['lang' => app()->getLocale()])->with('status', __('messages.document_updated'));
+    }
+
+    public function destroyDocument(AgencyDocument $document): RedirectResponse
+    {
+        $agency = $this->currentAgency();
+
+        abort_unless($document->agency_id === $agency->id, 403);
+
+        if (! $document->canBeModified()) {
+            return back()->withErrors(['document' => __('messages.document_update_locked')]);
+        }
+
+        $disk = Storage::disk('public');
+
+        if ($document->file_path && $disk->exists($document->file_path)) {
+            $disk->delete($document->file_path);
+        }
+
+        $document->delete();
+
+        return redirect()->route('agency.profile', ['lang' => app()->getLocale()])->with('status', __('messages.document_deleted'));
     }
 
     public function storeExperience(Request $request): RedirectResponse
@@ -219,12 +385,31 @@ class AgencyController extends Controller
         return redirect()->route('agency.dashboard')->with('status', __('messages.experience_published'));
     }
 
+    public function destroyExperience(AgencyExperience $experience): RedirectResponse
+    {
+        $agency = $this->currentAgency();
+        abort_unless($experience->agency_id === $agency->id, 403);
+
+        $disk = Storage::disk('public');
+        if ($disk->exists($experience->image_path)) {
+            $disk->delete($experience->image_path);
+        }
+
+        $experience->delete();
+
+        return redirect()->route('agency.show', [
+            'slug' => Str::slug($agency->company_name),
+            'lang' => app()->getLocale(),
+        ])->with('experience_deleted', true);
+    }
+
     public function createPackage(): View
     {
         $agency = $this->currentAgency();
 
         return view('agencies.packages.form', [
             'agency' => $agency,
+            'destinations' => $agency->countries()->orderBy('countries.name')->pluck('countries.name'),
             'package' => null,
         ]);
     }
@@ -237,7 +422,7 @@ class AgencyController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'summary' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'destination' => ['required', 'string', 'max:255'],
+            'destination' => ['required', 'string', Rule::in($agency->countries()->pluck('countries.name')->all())],
             'price_from' => ['required', 'numeric', 'min:0'],
             'duration_days' => ['required', 'integer', 'min:1', 'max:365'],
             'status' => ['required', 'in:'.implode(',', array_map(fn ($status) => $status->value, PackageStatus::cases()))],
@@ -273,9 +458,12 @@ class AgencyController extends Controller
     {
         $this->authorize('update', $package);
 
+        $agency = $this->currentAgency();
+
         return view('agencies.packages.form', [
-            'agency' => $this->currentAgency(),
-            'package' => $package->load(['images', 'itineraryDays'])
+            'agency' => $agency,
+            'destinations' => $agency->countries()->orderBy('countries.name')->pluck('countries.name'),
+            'package' => $package->load(['images'])
                 ->loadCount(['bookings', 'availabilities as upcoming_departures_count' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>=', now()->toDateString())])
                 ->loadSum('bookings as travelers_booked', 'traveler_count'),
         ]);
@@ -290,17 +478,11 @@ class AgencyController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'summary' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'destination' => ['required', 'string', 'max:255'],
+            'destination' => ['required', 'string', Rule::in($package->agency->countries()->pluck('countries.name')->all())],
             'price_from' => ['required', 'numeric', 'min:0'],
             'duration_days' => ['required', 'integer', 'min:1', 'max:365'],
             'status' => ['required', 'in:'.implode(',', array_map(fn ($status) => $status->value, PackageStatus::cases()))],
             'is_featured' => ['nullable', 'boolean'],
-            'days' => ['nullable', 'array'],
-            'days.*.title' => ['required_with:days', 'string', 'max:255'],
-            'days.*.description' => ['nullable', 'string'],
-            'days.*.location' => ['nullable', 'string', 'max:255'],
-            'days.*.meals' => ['nullable', 'string', 'max:255'],
-            'days.*.overnight' => ['nullable', 'string', 'max:255'],
         ]);
 
         $slugBase = Str::slug($data['title']) ?: 'package';
@@ -325,22 +507,6 @@ class AgencyController extends Controller
             'published_at' => $data['status'] === PackageStatus::PUBLISHED->value ? ($package->published_at ?? now()) : null,
         ]);
 
-        if ($request->has('days')) {
-            $dayRows = $request->input('days', []);
-            $package->itineraryDays()->delete();
-
-            foreach ($dayRows as $index => $day) {
-                $package->itineraryDays()->create([
-                    'day_number' => $index + 1,
-                    'title' => $day['title'],
-                    'description' => $day['description'] ?? null,
-                    'location' => $day['location'] ?? null,
-                    'meals' => $day['meals'] ?? null,
-                    'overnight' => $day['overnight'] ?? null,
-                ]);
-            }
-        }
-
         return redirect()->route('agency.packages.edit', ['package' => $package->id])->with('status', __('messages.package_updated', ['title' => $package->title]));
     }
 
@@ -357,7 +523,7 @@ class AgencyController extends Controller
     {
         $this->authorize('update', $package);
         $this->ensurePackageOwnership($package);
-        $package->load(['images', 'itineraryDays']);
+        $package->load(['images']);
         $copiedImagePaths = [];
 
         try {
@@ -385,17 +551,6 @@ class AgencyController extends Controller
                     'published_at' => null,
                     'is_featured' => false,
                 ]);
-
-                foreach ($package->itineraryDays as $day) {
-                    $duplicate->itineraryDays()->create([
-                        'day_number' => $day->day_number,
-                        'title' => $day->title,
-                        'description' => $day->description,
-                        'location' => $day->location,
-                        'meals' => $day->meals,
-                        'overnight' => $day->overnight,
-                    ]);
-                }
 
                 foreach ($package->images as $image) {
                     $extension = pathinfo($image->path, PATHINFO_EXTENSION);
@@ -445,7 +600,7 @@ class AgencyController extends Controller
                 });
             })
             ->with('images')
-            ->withCount(['images', 'itineraryDays', 'bookings', 'availabilities as upcoming_departures_count' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>=', now()->toDateString())])
+            ->withCount(['images', 'bookings', 'availabilities as upcoming_departures_count' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>=', now()->toDateString())])
             ->withSum('bookings as travelers_booked', 'traveler_count')
             ->orderByDesc('updated_at')
             ->paginate(10)
@@ -519,101 +674,5 @@ class AgencyController extends Controller
         $image->update(['is_primary' => true]);
 
         return back()->with('status', __('messages.primary_image_updated'));
-    }
-
-    public function storePackageDay(Request $request, Package $package): RedirectResponse
-    {
-        $this->authorize('update', $package);
-        $this->ensurePackageOwnership($package);
-
-        $data = $request->validate([
-            'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string'],
-            'location' => ['nullable', 'string', 'max:255'],
-            'meals' => ['nullable', 'string', 'max:255'],
-            'overnight' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $nextDay = $package->itineraryDays()->max('day_number') + 1;
-
-        $package->itineraryDays()->create([
-            'day_number' => $nextDay,
-            'title' => $data['title'],
-            'description' => $data['description'] ?? null,
-            'location' => $data['location'] ?? null,
-            'meals' => $data['meals'] ?? null,
-            'overnight' => $data['overnight'] ?? null,
-        ]);
-
-        return back()->with('status', __('messages.itinerary_day_added'));
-    }
-
-    public function updatePackageDay(Request $request, Package $package, PackageItineraryDay $day): RedirectResponse
-    {
-        $this->authorize('update', $package);
-        $this->ensurePackageOwnership($package);
-        abort_unless($day->package_id === $package->id, 404);
-
-        $data = $request->validate([
-            'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string'],
-            'location' => ['nullable', 'string', 'max:255'],
-            'meals' => ['nullable', 'string', 'max:255'],
-            'overnight' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $day->update($data);
-
-        return back()->with('status', __('messages.itinerary_day_updated'));
-    }
-
-    public function deletePackageDay(Package $package, PackageItineraryDay $day): RedirectResponse
-    {
-        $this->authorize('update', $package);
-        $this->ensurePackageOwnership($package);
-        abort_unless($day->package_id === $package->id, 404);
-
-        $day->delete();
-
-        return back()->with('status', __('messages.itinerary_day_deleted'));
-    }
-
-    public function movePackageDay(Request $request, Package $package, PackageItineraryDay $day): RedirectResponse
-    {
-        $this->authorize('update', $package);
-        $this->ensurePackageOwnership($package);
-        abort_unless($day->package_id === $package->id, 404);
-
-        $data = $request->validate([
-            'direction' => ['required', 'in:up,down'],
-        ]);
-
-        $days = $package->itineraryDays()->orderBy('day_number')->orderBy('id')->get();
-        $currentIndex = $days->search(fn (PackageItineraryDay $itineraryDay) => (int) $itineraryDay->id === (int) $day->id);
-
-        if ($currentIndex === false) {
-            abort(404);
-        }
-
-        $targetIndex = $data['direction'] === 'up' ? $currentIndex - 1 : $currentIndex + 1;
-
-        if ($targetIndex < 0 || $targetIndex >= $days->count()) {
-            return back();
-        }
-
-        $orderedDays = $days->values()->all();
-        [$orderedDays[$currentIndex], $orderedDays[$targetIndex]] = [$orderedDays[$targetIndex], $orderedDays[$currentIndex]];
-
-        DB::transaction(function () use ($orderedDays): void {
-            foreach ($orderedDays as $index => $itineraryDay) {
-                $itineraryDay->updateQuietly(['day_number' => $index + 1000]);
-            }
-
-            foreach ($orderedDays as $index => $itineraryDay) {
-                $itineraryDay->updateQuietly(['day_number' => $index + 1]);
-            }
-        });
-
-        return back()->with('status', __('messages.itinerary_day_updated'));
     }
 }

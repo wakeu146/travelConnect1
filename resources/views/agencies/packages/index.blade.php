@@ -46,11 +46,7 @@
                     @php
                         $formattedPrice = number_format((float) $package->price_from, 2);
                         $packageStatus = $package->status->value ?? $package->status;
-                        $readinessChecks = [
-                            $package->images_count > 0,
-                            $package->itinerary_days_count >= $package->duration_days,
-                        ];
-                        $readinessPercent = (int) round((count(array_filter($readinessChecks)) / count($readinessChecks)) * 100);
+                        $readinessPercent = $package->images_count > 0 ? 100 : 0;
                     @endphp
                     <article class="agency-panel rounded-2xl border p-5 shadow-sm">
                         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -62,6 +58,13 @@
                             <div class="flex items-center gap-2">
                                 <x-agency.status-badge :label="__('messages.'.$packageStatus)" :tone="$packageStatus === 'published' ? 'success' : ($packageStatus === 'archived' ? 'neutral' : 'warning')" />
                                 <a href="{{ route('agency.packages.edit', ['package' => $package->id, 'lang' => app()->getLocale()]) }}" class="inline-flex items-center justify-center rounded-xl border border-[#dbe3e5] px-3 py-2 text-sm font-semibold text-[#173042] hover:border-[#e76f51] hover:text-[#e76f51]">{{ __('messages.edit') }}</a>
+                                <form method="POST" action="{{ route('agency.packages.destroy', ['package' => $package->id, 'lang' => app()->getLocale()]) }}" onsubmit='return confirm(@json(__('messages.delete_package_confirm')))' class="m-0">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" data-package-delete-icon class="delete-icon-button" aria-label="{{ __('messages.delete_package_action') }}" title="{{ __('messages.delete_package_action') }}">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 14h12l1-14M9 7V4h6v3"/></svg>
+                                    </button>
+                                </form>
                             </div>
                         </div>
                         <div class="mt-5 flex flex-wrap gap-3 text-sm text-[#607985]">
@@ -74,7 +77,6 @@
                                 <div><p class="agency-text-subtle">{{ __('messages.upcoming_departures') }}</p><p class="agency-text-primary mt-1 font-bold tabular-nums">{{ $package->upcoming_departures_count }}</p></div>
                                 <div><p class="agency-text-subtle">{{ __('messages.bookings') }}</p><p class="agency-text-primary mt-1 font-bold tabular-nums">{{ $package->bookings_count }}</p></div>
                                 <div><p class="agency-text-subtle">{{ __('messages.images') }}</p><p class="agency-text-primary mt-1 font-bold tabular-nums">{{ $package->images_count }}</p></div>
-                                <div><p class="agency-text-subtle">{{ __('messages.itinerary_days') }}</p><p class="agency-text-primary mt-1 font-bold tabular-nums">{{ $package->itinerary_days_count }}/{{ $package->duration_days }}</p></div>
                             </div>
                             <div>
                                 <x-agency.progress :value="$readinessPercent" :label="__('messages.package_readiness')" />

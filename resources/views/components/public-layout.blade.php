@@ -28,41 +28,12 @@
     <script>
         const loader = document.getElementById('page-loader');
 
-        const showPageLoader = () => {
-            if (!loader) return;
-            loader.classList.remove('pointer-events-none', 'opacity-0');
-        };
-
         const hidePageLoader = () => {
             if (!loader) return;
             loader.classList.add('pointer-events-none', 'opacity-0');
         };
 
-        const stopLoaderIfStuck = () => {
-            requestAnimationFrame(() => hidePageLoader());
-            setTimeout(() => hidePageLoader(), 300);
-        };
-
         hidePageLoader();
-
-        document.querySelectorAll('a[href]').forEach((link) => {
-            link.addEventListener('click', (event) => {
-                const target = link.getAttribute('target');
-                const href = link.getAttribute('href');
-                if (event.defaultPrevented || target === '_blank' || !href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
-                if (link.closest('[data-lang-button]')) return;
-
-                const absoluteHref = new URL(link.href, window.location.href);
-                if (absoluteHref.origin === window.location.origin) {
-                    showPageLoader();
-                    setTimeout(() => hidePageLoader(), 5000);
-                }
-            });
-        });
-
-        window.addEventListener('pageshow', stopLoaderIfStuck, { once: true });
-        window.addEventListener('load', stopLoaderIfStuck, { once: true });
-        document.addEventListener('DOMContentLoaded', stopLoaderIfStuck, { once: true });
     </script>
 </body>
 </html>

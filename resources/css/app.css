@@ -124,11 +124,11 @@ body.dashboard-dark [data-agency-shell] {
     --agency-input-border: #486873;
     --agency-hover: rgba(242, 154, 131, 0.12);
     --agency-selected: rgba(242, 154, 131, 0.14);
-    --agency-focus: #f29c84;
-    --agency-accent: #f29c84;
-    --agency-accent-hover: #f7b29d;
-    --agency-accent-soft: rgba(242, 156, 132, 0.14);
-    --agency-accent-contrast: #172a34;
+    --agency-focus: #e76f51;
+    --agency-accent: #e76f51;
+    --agency-accent-hover: #d95f42;
+    --agency-accent-soft: rgba(231, 111, 81, 0.18);
+    --agency-accent-contrast: #ffffff;
     --agency-action-neutral: #d7e5e7;
     --agency-action-neutral-hover: #edf3f5;
     --agency-success: #63cfaa;
@@ -143,9 +143,282 @@ body.dashboard-dark [data-agency-shell] {
     --agency-info-soft: #203c4a;
 }
 
-[data-agency-shell] {
-    background: var(--agency-bg);
-    color: var(--agency-text);
+[data-account-shell] {
+    --account-bg: #f7f8f6;
+    --account-surface: #ffffff;
+    --account-surface-elevated: #ffffff;
+    --account-surface-alt: #f8faf9;
+    --account-surface-soft: #f1f6f4;
+    --account-surface-muted: #edf4f3;
+    --account-border: #e7eceb;
+    --account-border-strong: #dbe3e5;
+    --account-divider: #e7eceb;
+    --account-shadow: 0 16px 38px rgba(23, 48, 66, 0.08);
+    --account-text: #173042;
+    --account-text-secondary: #607985;
+    --account-text-muted: #9aadb2;
+    --account-input: #f7f8f6;
+    --account-input-border: #dbe3e5;
+    --account-hover: #f1f6f4;
+    --account-selected: #f1f6f4;
+    --account-focus: #e76f51;
+    --account-accent: #e76f51;
+    --account-accent-hover: #d95f42;
+    --account-accent-soft: rgba(231, 111, 81, 0.12);
+    --account-accent-contrast: #ffffff;
+    --account-action-neutral: #173042;
+    --account-action-neutral-hover: #102936;
+    --account-success: #2f9e7a;
+    --account-success-soft: #eaf6f1;
+    --account-success-contrast: #ffffff;
+    --account-warning: #c58b27;
+    --account-warning-soft: #fff5df;
+    --account-danger: #c9483b;
+    --account-danger-soft: #fdf0ee;
+    --account-info: #3e7d9a;
+    --account-info-soft: #edf5f8;
+}
+
+body.dashboard-dark [data-account-shell] {
+    --account-bg: #0f172a;
+    --account-surface: #173042;
+    --account-surface-elevated: #1d3a4a;
+    --account-surface-alt: #1d2d3d;
+    --account-surface-soft: #122430;
+    --account-surface-muted: #1d3240;
+    --account-border: #31515d;
+    --account-border-strong: #486873;
+    --account-divider: rgba(199, 214, 220, 0.16);
+    --account-shadow: 0 18px 42px rgba(2, 6, 23, 0.48);
+    --account-text: #edf3f5;
+    --account-text-secondary: #bfd0d3;
+    --account-text-muted: #d7e5e7;
+    --account-input: #102936;
+    --account-input-border: #486873;
+    --account-hover: rgba(242, 154, 131, 0.12);
+    --account-selected: rgba(242, 154, 131, 0.14);
+    --account-focus: #e76f51;
+    --account-accent: #e76f51;
+    --account-accent-hover: #d95f42;
+    --account-accent-soft: rgba(231, 111, 81, 0.18);
+    --account-accent-contrast: #ffffff;
+    --account-action-neutral: #d7e5e7;
+    --account-action-neutral-hover: #edf3f5;
+    --account-success: #63cfaa;
+    --account-success-soft: #173b35;
+    --account-success-contrast: #ffffff;
+    --account-warning: #f2c064;
+    --account-warning-soft: #423923;
+    --account-danger: #f08a7b;
+    --account-danger-soft: #452a2b;
+    --account-info: #83c6df;
+    --account-info-soft: #203c4a;
+}
+
+[data-agency-shell], [data-account-shell] {
+    background: var(--agency-bg, var(--account-bg));
+    color: var(--agency-text, var(--account-text));
+}
+
+[data-account-shell] [data-account-sidebar],
+[data-account-shell] [data-account-main] header,
+[data-account-shell] [data-account-main] header + main,
+[data-account-shell] [data-account-main] > header,
+[data-account-shell] .dashboard-panel,
+[data-account-shell] [class~="bg-white"],
+[data-account-shell] [class~="bg-[#f7f8f6]"] {
+    background-color: var(--account-surface) !important;
+    color: var(--account-text) !important;
+    border-color: var(--account-border) !important;
+}
+
+[data-account-shell] .dashboard-panel {
+    border-color: var(--account-border) !important;
+    box-shadow: 0 1px 2px rgb(23 48 66 / 5%);
+}
+
+[data-account-shell] [class~="text-[#173042]"] {
+    color: var(--account-text) !important;
+}
+
+[data-account-shell] [class~="text-[#607985]"] {
+    color: var(--account-text-secondary) !important;
+}
+
+[data-account-shell] [class~="text-[#e76f51]"] {
+    color: var(--account-accent) !important;
+}
+
+[data-account-shell] [class~="bg-[#e76f51]"] {
+    background-color: var(--account-accent) !important;
+    color: var(--account-accent-contrast) !important;
+}
+
+[data-account-shell] [class~="bg-[#e76f51]"]:hover {
+    background-color: var(--account-accent-hover) !important;
+}
+
+[data-account-shell] [class~="border-[#e7eceb]"] ,
+[data-account-shell] [class~="border-[#dbe3e5]"] ,
+[data-account-shell] [class~="border-[#e4e9e7]"] ,
+[data-account-shell] [class~="border-[#cbd9d8]"] {
+    border-color: var(--account-border) !important;
+}
+
+[data-account-shell] [class~="bg-[#f1f6f4]"] {
+    background-color: var(--account-surface-soft) !important;
+    color: var(--account-text) !important;
+}
+
+[data-account-shell] .dashboard-shell #overview > section:last-child .dashboard-panel {
+    min-width: 0;
+    overflow: hidden;
+}
+
+[data-account-shell] .dashboard-shell #overview > section:last-child .dashboard-panel p {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow-wrap: anywhere;
+}
+
+[data-account-shell] [data-account-sidebar] .account-logout:hover,
+[data-account-shell] [data-profile-menu] a:hover,
+[data-account-shell] [data-profile-menu] button:hover,
+[data-account-shell] [data-account-main] header a[href*="settings"]:hover {
+    border-color: var(--account-accent) !important;
+    color: var(--account-accent) !important;
+}
+
+[data-account-shell] .dashboard-panel:hover {
+    border-color: var(--account-accent) !important;
+}
+
+[data-account-shell] .traveler-stat-icon {
+    background: var(--account-accent-soft);
+    color: var(--account-accent);
+    transition: background-color 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+[data-account-shell] .dashboard-kpi:hover .traveler-stat-icon {
+    background: var(--account-accent);
+    color: var(--account-accent-contrast);
+    transform: translateY(-1px);
+}
+
+[data-account-shell] dialog[data-account-dialog] {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: min(calc(100vw - 2rem), 40rem);
+    max-height: min(calc(100dvh - 2rem), 52rem);
+    margin: 0;
+    transform: translate(-50%, -50%);
+    border: 1px solid var(--account-border);
+    border-radius: 0 !important;
+    background: var(--account-surface);
+    color: var(--account-text);
+    box-shadow: var(--account-shadow);
+}
+
+[data-account-shell] dialog[data-account-dialog]::backdrop {
+    background: rgb(16 39 54 / 62%);
+    backdrop-filter: blur(2px);
+}
+
+[data-account-shell] dialog[data-account-dialog] input:not([type="checkbox"]):not([type="radio"]),
+[data-account-shell] dialog[data-account-dialog] textarea,
+[data-account-shell] dialog[data-account-dialog] select {
+    background-color: var(--account-input) !important;
+    border-color: var(--account-input-border) !important;
+    color: var(--account-text) !important;
+}
+
+[data-account-shell] dialog[data-account-dialog] [data-booking-detail-surface] {
+    background: var(--account-surface-soft);
+    border-color: var(--account-border);
+    color: var(--account-text);
+}
+
+[data-account-shell] dialog[data-account-dialog] [data-booking-status="pending"] {
+    background: color-mix(in srgb, var(--account-warning) 16%, var(--account-surface));
+    color: var(--account-warning);
+}
+
+[data-account-shell] dialog[data-account-dialog] [data-booking-status="confirmed"],
+[data-account-shell] dialog[data-account-dialog] [data-booking-status="completed"] {
+    background: color-mix(in srgb, var(--account-success) 16%, var(--account-surface));
+    color: var(--account-success);
+}
+
+[data-account-shell] dialog[data-account-dialog] [data-booking-cancel] {
+    border-color: var(--account-border-strong);
+    color: var(--account-text-secondary);
+}
+
+[data-account-shell] dialog[data-account-dialog] [data-booking-cancel]:hover {
+    border-color: var(--account-danger);
+    color: var(--account-danger);
+}
+
+[data-account-shell] [data-booking-success-icon] {
+    background: var(--account-success-soft);
+    color: var(--account-success);
+}
+
+[data-agency-shell] .delete-icon-button,
+[data-account-shell] .delete-icon-button {
+    display: inline-flex;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid color-mix(in srgb, var(--agency-danger, var(--account-danger)) 35%, var(--agency-border, var(--account-border)));
+    border-radius: 0.5rem;
+    background-color: var(--agency-danger-soft, var(--account-danger-soft));
+    color: var(--agency-danger, var(--account-danger));
+    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+[data-agency-shell] .delete-icon-button:hover,
+[data-account-shell] .delete-icon-button:hover {
+    border-color: var(--agency-danger, var(--account-danger));
+    filter: brightness(0.95);
+}
+
+[data-agency-shell] .delete-icon-button:focus-visible,
+[data-account-shell] .delete-icon-button:focus-visible {
+    outline: 2px solid var(--agency-danger, var(--account-danger));
+    outline-offset: 2px;
+}
+
+[data-agency-shell] .delete-icon-button-small,
+[data-account-shell] .delete-icon-button-small {
+    width: 1.875rem;
+    height: 1.875rem;
+}
+
+[data-account-shell] [data-account-sidebar] nav a {
+    color: var(--account-text-secondary);
+    transition: background-color 180ms ease, color 180ms ease;
+}
+
+[data-account-shell] [data-account-sidebar] nav a:hover,
+[data-account-shell] [data-account-sidebar] nav a:focus-visible {
+    background-color: var(--account-surface-alt) !important;
+    color: var(--account-text) !important;
+}
+
+[data-account-shell] [data-account-sidebar] nav a:hover svg,
+[data-account-shell] [data-account-sidebar] nav a:focus-visible svg {
+    color: var(--account-text);
+}
+
+[data-account-shell] [data-account-sidebar] nav a[class~="text-[#e76f51]"] {
+    background-color: var(--account-accent-soft) !important;
+    color: var(--account-accent) !important;
 }
 
 [data-agency-shell] [data-agency-sidebar],
@@ -464,7 +737,9 @@ body.dashboard-dark [data-agency-shell] {
     }
 
     .agency-collapsed [data-agency-label],
-    .agency-collapsed [data-agency-brand] {
+    .agency-collapsed [data-agency-brand],
+    .agency-collapsed [data-agency-sidebar] .agency-user-meta,
+    .agency-collapsed [data-agency-sidebar] .agency-sidebar-logout span[data-agency-label] {
         display: none;
     }
 
@@ -476,8 +751,25 @@ body.dashboard-dark [data-agency-shell] {
         display: none;
     }
 
-    .agency-collapsed [data-agency-sidebar] nav a {
+    .agency-collapsed [data-agency-sidebar] nav a,
+    .agency-collapsed [data-agency-sidebar] .agency-user-card,
+    .agency-collapsed [data-agency-sidebar] .agency-sidebar-logout button {
         justify-content: center;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+
+    .agency-collapsed [data-agency-sidebar] .agency-user-card {
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .agency-collapsed [data-agency-sidebar] .agency-user-avatar {
+        width: 2.5rem;
+        height: 2.5rem;
+    }
+
+    .agency-collapsed [data-agency-sidebar] nav a {
         padding-left: 0.75rem;
         padding-right: 0.75rem;
     }
@@ -536,6 +828,10 @@ input:not([type='checkbox']):not([type='radio']) {
 
 .dashboard-shell [data-profile-menu] {
     order: 1;
+}
+
+.dashboard-shell [data-account-bookings-nav] {
+    order: 0;
 }
 
 .dashboard-shell [data-profile-trigger] > span:nth-child(2) > span:last-child,
@@ -985,13 +1281,16 @@ input:not([type='checkbox']):not([type='radio']) {
     }
 }
 
-@media (max-width: 767px) {
-    [data-account-main] header form[action*="account/discover"]:focus-within ~ div [data-account-theme],
-    [data-account-main] header form[action*="account/discover"]:focus-within ~ div > div:has(> [data-lang-button]) {
-        display: none;
+@media (max-width: 1023px) {
+    [data-account-main] header > div:first-child {
+        flex-wrap: wrap;
+        gap: 0.75rem;
     }
 
     [data-account-main] header form[action*="account/discover"] {
+        order: 1;
+        flex: 0 0 100%;
+        width: 100%;
         max-width: none;
     }
 

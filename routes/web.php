@@ -1,8 +1,15 @@
 <?php
 
+use App\Enums\PackageStatus;
+use App\Http\Controllers\AgencyAvailabilityController;
+use App\Http\Controllers\AgencyBookingController;
+use App\Http\Controllers\AgencyController;
+use App\Http\Controllers\AgencyOperationsController;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\BookingController;
 use App\Http\Controllers\FavoriteController;
+use App\Http\Controllers\InquiryController;
+use App\Http\Controllers\ReviewController;
 use App\Models\Agency;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
@@ -17,26 +24,66 @@ Route::get('/discover', function () {
     /** @var User $user */
     $user = Auth::user();
     $search = trim((string) request('search'));
-    $normalizedSearch = strtolower($search);
+    $normalizedSearch = strtolower(preg_replace('/\s+/', ' ', $search) ?? $search);
     $agencies = Agency::verified()->with(['countries', 'services', 'reviews'])
         ->withCount(['reviews as published_reviews_count' => fn ($query) => $query->where('status', 'published')])
         ->withAvg(['reviews as published_rating' => fn ($query) => $query->where('status', 'published')], 'rating')
         ->orderByDesc('trust_score')
         ->get();
 
-    if ($normalizedSearch !== '') {
-        $agencies = $agencies->filter(function (Agency $agency) use ($normalizedSearch): bool {
-            $searchableValues = [
-                strtolower($agency->company_name),
-                strtolower($agency->description ?? ''),
-                strtolower($agency->email ?? ''),
-                strtolower(Str::slug($agency->company_name)),
-                ...$agency->countries->pluck('name')->map(fn ($country) => strtolower((string) $country))->all(),
-                ...$agency->services->pluck('name')->map(fn ($service) => strtolower((string) $service))->all(),
-            ];
+    $matchesSearch = function (Agency $agency) use ($normalizedSearch): bool {
+        if ($normalizedSearch === '') {
+            return true;
+        }
 
-            return collect($searchableValues)->some(fn (string $value) => str_contains($value, $normalizedSearch));
-        });
+        $searchableValues = [
+            strtolower($agency->company_name),
+            strtolower($agency->description ?? ''),
+            strtolower($agency->email ?? ''),
+            strtolower(Str::slug($agency->company_name)),
+            ...$agency->countries->pluck('name')->map(fn ($country) => strtolower((string) $country))->all(),
+            ...$agency->services->pluck('name')->map(fn ($service) => strtolower((string) $service))->all(),
+        ];
+
+        foreach ($searchableValues as $value) {
+            $value = (string) $value;
+            if ($value === '') {
+                continue;
+            }
+
+            if (str_contains($value, $normalizedSearch)) {
+                return true;
+            }
+
+            foreach (preg_split('/[\s_\-]+/', $value) as $token) {
+                $token = strtolower((string) $token);
+                if ($token === '') {
+                    continue;
+                }
+
+                if (str_contains($token, $normalizedSearch)) {
+                    return true;
+                }
+
+                $score = 0;
+                similar_text($token, $normalizedSearch, $score);
+                if ($score >= 70) {
+                    return true;
+                }
+            }
+
+            $score = 0;
+            similar_text($value, $normalizedSearch, $score);
+            if ($score >= 80) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    if ($normalizedSearch !== '') {
+        $agencies = $agencies->filter($matchesSearch);
     } else {
         $agencies = $agencies->filter(fn (Agency $agency) => in_array($agency->company_name, ['Atlas Horizon Voyages', 'Lumiere Routes', 'Northstar Escapes'], true))->take(3);
     }
@@ -47,26 +94,66 @@ Route::get('/account/discover', function () {
     /** @var User $user */
     $user = Auth::user();
     $search = trim((string) request('search'));
-    $normalizedSearch = strtolower($search);
+    $normalizedSearch = strtolower(preg_replace('/\s+/', ' ', $search) ?? $search);
     $agencies = Agency::verified()->with(['countries', 'services', 'reviews'])
         ->withCount(['reviews as published_reviews_count' => fn ($query) => $query->where('status', 'published')])
         ->withAvg(['reviews as published_rating' => fn ($query) => $query->where('status', 'published')], 'rating')
         ->orderByDesc('trust_score')
         ->get();
 
-    if ($normalizedSearch !== '') {
-        $agencies = $agencies->filter(function (Agency $agency) use ($normalizedSearch): bool {
-            $searchableValues = [
-                strtolower($agency->company_name),
-                strtolower($agency->description ?? ''),
-                strtolower($agency->email ?? ''),
-                strtolower(Str::slug($agency->company_name)),
-                ...$agency->countries->pluck('name')->map(fn ($country) => strtolower((string) $country))->all(),
-                ...$agency->services->pluck('name')->map(fn ($service) => strtolower((string) $service))->all(),
-            ];
+    $matchesSearch = function (Agency $agency) use ($normalizedSearch): bool {
+        if ($normalizedSearch === '') {
+            return true;
+        }
 
-            return collect($searchableValues)->some(fn (string $value) => str_contains($value, $normalizedSearch));
-        });
+        $searchableValues = [
+            strtolower($agency->company_name),
+            strtolower($agency->description ?? ''),
+            strtolower($agency->email ?? ''),
+            strtolower(Str::slug($agency->company_name)),
+            ...$agency->countries->pluck('name')->map(fn ($country) => strtolower((string) $country))->all(),
+            ...$agency->services->pluck('name')->map(fn ($service) => strtolower((string) $service))->all(),
+        ];
+
+        foreach ($searchableValues as $value) {
+            $value = (string) $value;
+            if ($value === '') {
+                continue;
+            }
+
+            if (str_contains($value, $normalizedSearch)) {
+                return true;
+            }
+
+            foreach (preg_split('/[\s_\-]+/', $value) as $token) {
+                $token = strtolower((string) $token);
+                if ($token === '') {
+                    continue;
+                }
+
+                if (str_contains($token, $normalizedSearch)) {
+                    return true;
+                }
+
+                $score = 0;
+                similar_text($token, $normalizedSearch, $score);
+                if ($score >= 70) {
+                    return true;
+                }
+            }
+
+            $score = 0;
+            similar_text($value, $normalizedSearch, $score);
+            if ($score >= 80) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    if ($normalizedSearch !== '') {
+        $agencies = $agencies->filter($matchesSearch);
     } else {
         $agencies = $agencies->filter(fn (Agency $agency) => in_array($agency->company_name, ['Atlas Horizon Voyages', 'Lumiere Routes', 'Northstar Escapes'], true))->take(3);
     }
@@ -101,6 +188,18 @@ Route::get('/agencies/{slug}', function (string $slug) {
         abort(404);
     }
 
+    if ($agencyModel) {
+        $agencyModel->load(['packages' => fn ($query) => $query
+            ->where('status', PackageStatus::PUBLISHED->value)
+            ->with([
+                'images',
+                'availabilities' => fn ($availabilityQuery) => $availabilityQuery
+                    ->where('status', 'active')
+                    ->whereDate('departure_date', '>=', now()->toDateString())
+                    ->orderBy('departure_date'),
+            ])]);
+    }
+
     $agencyData = $agencyModel
         ? [
             'name' => $agencyModel->company_name,
@@ -123,11 +222,14 @@ Route::get('/agencies/{slug}', function (string $slug) {
     $ratingCounts = $agencyModel && $publishedReviewCount ? $agencyModel->reviews()->where('status', 'published')->get()->groupBy('rating')->map->count() : collect();
     $pendingReview = $agencyModel?->reviews()->where('user_id', $user->id)->where('status', 'pending')->latest()->first();
 
-    return view('agency-show', ['agency' => $agencyData, 'agencyModel' => $agencyModel, 'isSaved' => $agencyModel && $user->favoriteAgencies()->whereKey($agencyModel->id)->exists(), 'publishedReviews' => $publishedReviews, 'publishedReviewCount' => $publishedReviewCount, 'visibleReviewCount' => $visibleReviewCount, 'visibleRating' => $visibleRating, 'ratingCounts' => $ratingCounts, 'pendingReview' => $pendingReview]);
+    return view('agency-show', ['agency' => $agencyData, 'agencyModel' => $agencyModel, 'packages' => $agencyModel?->packages ?? collect(), 'isSaved' => $agencyModel && $user->favoriteAgencies()->whereKey($agencyModel->id)->exists(), 'publishedReviews' => $publishedReviews, 'publishedReviewCount' => $publishedReviewCount, 'visibleReviewCount' => $visibleReviewCount, 'visibleRating' => $visibleRating, 'ratingCounts' => $ratingCounts, 'pendingReview' => $pendingReview]);
 })->middleware('auth')->name('agency.show');
-Route::post('/agencies/{slug}/inquiries', [\App\Http\Controllers\InquiryController::class, 'store'])->middleware('auth')->name('inquiries.store');
+Route::post('/agencies/{slug}/inquiries', [InquiryController::class, 'store'])->middleware('auth')->name('inquiries.store');
 Route::post('/agencies/{slug}/reviews', [ReviewController::class, 'store'])->middleware('auth')->name('reviews.store');
 Route::post('/agencies/{slug}/favorite', [FavoriteController::class, 'toggle'])->middleware('auth')->name('favorites.toggle');
+Route::post('/agency/inquiries/{inquiry}/reply', [AgencyController::class, 'replyToInquiry'])->middleware(['auth', 'agency-owner'])->name('agency.inquiries.reply');
+Route::post('/agency/inquiries/{inquiry}/close', [AgencyController::class, 'closeInquiry'])->middleware(['auth', 'agency-owner'])->name('agency.inquiries.close');
+Route::delete('/agency/inquiries/{inquiry}', [AgencyController::class, 'destroyInquiry'])->middleware(['auth', 'agency-owner'])->name('agency.inquiries.destroy');
 Route::view('/how-it-works', 'how-it-works')->name('how-it-works');
 Route::view('/for-agencies', 'for-agencies')->name('for-agencies');
 Route::get('/terms', fn () => view('static-page', ['pageTitle' => __('messages.terms_of_use'), 'pageIntro' => __('messages.terms_intro'), 'pageBody' => __('messages.terms_body')]))->name('terms');
@@ -148,52 +250,54 @@ Route::get('/reset-password', [AuthController::class, 'showResetForm'])->name('p
 Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:password.reset')->name('password.update');
 Route::view('/login-successful', 'auth.success')->middleware('auth')->name('auth.success');
 Route::middleware(['auth', 'agency-owner'])->prefix('agency')->name('agency.')->group(function () {
-    Route::get('/dashboard', [\App\Http\Controllers\AgencyController::class, 'dashboard'])->name('dashboard');
-    Route::get('/profile', [\App\Http\Controllers\AgencyController::class, 'profile'])->name('profile');
-    Route::put('/profile', [\App\Http\Controllers\AgencyController::class, 'updateProfile'])->name('settings.update');
-    Route::post('/documents', [\App\Http\Controllers\AgencyController::class, 'storeDocument'])->name('documents.store');
-    Route::put('/documents/{document}', [\App\Http\Controllers\AgencyController::class, 'updateDocument'])->name('documents.update');
-    Route::delete('/documents/{document}', [\App\Http\Controllers\AgencyController::class, 'destroyDocument'])->name('documents.destroy');
-    Route::post('/experiences', [\App\Http\Controllers\AgencyController::class, 'storeExperience'])->name('experiences.store');
-    Route::get('/packages', [\App\Http\Controllers\AgencyController::class, 'indexPackages'])->name('packages.index');
-    Route::get('/packages/create', [\App\Http\Controllers\AgencyController::class, 'createPackage'])->name('packages.create');
-    Route::post('/packages', [\App\Http\Controllers\AgencyController::class, 'storePackage'])->name('packages.store');
-    Route::post('/packages/{package}/duplicate', [\App\Http\Controllers\AgencyController::class, 'duplicatePackage'])->name('packages.duplicate');
-    Route::get('/packages/{package}/edit', [\App\Http\Controllers\AgencyController::class, 'editPackage'])->name('packages.edit');
-    Route::put('/packages/{package}', [\App\Http\Controllers\AgencyController::class, 'updatePackage'])->name('packages.update');
-    Route::delete('/packages/{package}', [\App\Http\Controllers\AgencyController::class, 'destroyPackage'])->name('packages.destroy');
-    Route::post('/packages/{package}/images', [\App\Http\Controllers\AgencyController::class, 'uploadPackageImage'])->name('packages.images.store');
-    Route::delete('/packages/{package}/images/{image}', [\App\Http\Controllers\AgencyController::class, 'deletePackageImage'])->name('packages.images.destroy');
-    Route::post('/packages/{package}/images/{image}/primary', [\App\Http\Controllers\AgencyController::class, 'setPrimaryPackageImage'])->name('packages.images.primary');
+    Route::get('/dashboard', [AgencyController::class, 'dashboard'])->name('dashboard');
+    Route::get('/profile', [AgencyController::class, 'profile'])->name('profile');
+    Route::put('/profile', [AgencyController::class, 'updateProfile'])->name('settings.update');
+    Route::post('/documents', [AgencyController::class, 'storeDocument'])->name('documents.store');
+    Route::put('/documents/{document}', [AgencyController::class, 'updateDocument'])->name('documents.update');
+    Route::delete('/documents/{document}', [AgencyController::class, 'destroyDocument'])->name('documents.destroy');
+    Route::post('/experiences', [AgencyController::class, 'storeExperience'])->name('experiences.store');
+    Route::delete('/experiences/{experience}', [AgencyController::class, 'destroyExperience'])->name('experiences.destroy');
+    Route::get('/packages', [AgencyController::class, 'indexPackages'])->name('packages.index');
+    Route::get('/packages/create', [AgencyController::class, 'createPackage'])->name('packages.create');
+    Route::post('/packages', [AgencyController::class, 'storePackage'])->name('packages.store');
+    Route::post('/packages/{package}/duplicate', [AgencyController::class, 'duplicatePackage'])->name('packages.duplicate');
+    Route::get('/packages/{package}/edit', [AgencyController::class, 'editPackage'])->name('packages.edit');
+    Route::put('/packages/{package}', [AgencyController::class, 'updatePackage'])->name('packages.update');
+    Route::delete('/packages/{package}', [AgencyController::class, 'destroyPackage'])->name('packages.destroy');
+    Route::post('/packages/{package}/images', [AgencyController::class, 'uploadPackageImage'])->name('packages.images.store');
+    Route::delete('/packages/{package}/images/{image}', [AgencyController::class, 'deletePackageImage'])->name('packages.images.destroy');
+    Route::post('/packages/{package}/images/{image}/primary', [AgencyController::class, 'setPrimaryPackageImage'])->name('packages.images.primary');
 
-    Route::get('/availability', [\App\Http\Controllers\AgencyAvailabilityController::class, 'index'])->name('availability.index');
-    Route::get('/availability/create', [\App\Http\Controllers\AgencyAvailabilityController::class, 'create'])->name('availability.create');
-    Route::post('/availability', [\App\Http\Controllers\AgencyAvailabilityController::class, 'store'])->name('availability.store');
-    Route::get('/availability/{availability}/edit', [\App\Http\Controllers\AgencyAvailabilityController::class, 'edit'])->name('availability.edit');
-    Route::put('/availability/{availability}', [\App\Http\Controllers\AgencyAvailabilityController::class, 'update'])->name('availability.update');
-    Route::patch('/availability/{availability}/status', [\App\Http\Controllers\AgencyAvailabilityController::class, 'updateStatus'])->name('availability.status');
+    Route::get('/availability', [AgencyAvailabilityController::class, 'index'])->name('availability.index');
+    Route::get('/availability/create', [AgencyAvailabilityController::class, 'create'])->name('availability.create');
+    Route::post('/availability', [AgencyAvailabilityController::class, 'store'])->name('availability.store');
+    Route::get('/availability/{availability}/edit', [AgencyAvailabilityController::class, 'edit'])->name('availability.edit');
+    Route::put('/availability/{availability}', [AgencyAvailabilityController::class, 'update'])->name('availability.update');
+    Route::patch('/availability/{availability}/status', [AgencyAvailabilityController::class, 'updateStatus'])->name('availability.status');
 
-    Route::get('/bookings', [\App\Http\Controllers\AgencyBookingController::class, 'index'])->name('bookings.index');
-    Route::get('/bookings/{booking}', [\App\Http\Controllers\AgencyBookingController::class, 'show'])->name('bookings.show');
-    Route::patch('/bookings/{booking}/confirm', [\App\Http\Controllers\AgencyBookingController::class, 'confirm'])->name('bookings.confirm');
-    Route::patch('/bookings/{booking}/reject', [\App\Http\Controllers\AgencyBookingController::class, 'reject'])->name('bookings.reject');
-    Route::patch('/bookings/{booking}/cancel', [\App\Http\Controllers\AgencyBookingController::class, 'cancel'])->name('bookings.cancel');
-    Route::patch('/bookings/{booking}/complete', [\App\Http\Controllers\AgencyBookingController::class, 'complete'])->name('bookings.complete');
+    Route::get('/bookings', [AgencyBookingController::class, 'index'])->name('bookings.index');
+    Route::get('/bookings/{booking}', [AgencyBookingController::class, 'show'])->name('bookings.show');
+    Route::patch('/bookings/{booking}/confirm', [AgencyBookingController::class, 'confirm'])->name('bookings.confirm');
+    Route::patch('/bookings/{booking}/reject', [AgencyBookingController::class, 'reject'])->name('bookings.reject');
+    Route::patch('/bookings/{booking}/cancel', [AgencyBookingController::class, 'cancel'])->name('bookings.cancel');
+    Route::patch('/bookings/{booking}/complete', [AgencyBookingController::class, 'complete'])->name('bookings.complete');
 
-    Route::get('/customers', [\App\Http\Controllers\AgencyOperationsController::class, 'customers'])->name('customers.index');
-    Route::get('/reviews', [\App\Http\Controllers\AgencyOperationsController::class, 'reviews'])->name('reviews.index');
-    Route::get('/payments', [\App\Http\Controllers\AgencyOperationsController::class, 'payments'])->name('payments.index');
-    Route::get('/analytics', [\App\Http\Controllers\AgencyOperationsController::class, 'analytics'])->name('analytics.index');
+    Route::get('/inquiries', [AgencyOperationsController::class, 'inquiries'])->name('inquiries.index');
+    Route::get('/customers', [AgencyOperationsController::class, 'customers'])->name('customers.index');
+    Route::get('/reviews', [AgencyOperationsController::class, 'reviews'])->name('reviews.index');
+    Route::get('/payments', [AgencyOperationsController::class, 'payments'])->name('payments.index');
+    Route::get('/analytics', [AgencyOperationsController::class, 'analytics'])->name('analytics.index');
 });
 
-Route::get('/packages/{package}', [\App\Http\Controllers\BookingController::class, 'packageShow'])->name('packages.show');
-Route::middleware(['auth'])->get('/packages/{package}/book', [\App\Http\Controllers\BookingController::class, 'create'])->name('bookings.create');
+Route::get('/packages/{package}', [BookingController::class, 'packageShow'])->name('packages.show');
+Route::middleware(['auth'])->get('/packages/{package}/book', [BookingController::class, 'create'])->name('bookings.create');
 Route::middleware(['auth'])->prefix('bookings')->name('bookings.')->group(function () {
-    Route::get('/{booking}', [\App\Http\Controllers\BookingController::class, 'show'])->name('show');
-    Route::get('/{booking}/confirmation', [\App\Http\Controllers\BookingController::class, 'confirmation'])->name('confirmation');
-    Route::post('/{booking}/cancel', [\App\Http\Controllers\BookingController::class, 'cancel'])->name('cancel');
+    Route::get('/{booking}', [BookingController::class, 'show'])->name('show');
+    Route::get('/{booking}/confirmation', [BookingController::class, 'confirmation'])->name('confirmation');
+    Route::post('/{booking}/cancel', [BookingController::class, 'cancel'])->name('cancel');
 });
-Route::middleware(['auth'])->post('/packages/{package}/book', [\App\Http\Controllers\BookingController::class, 'store'])->name('bookings.store');
+Route::middleware(['auth'])->post('/packages/{package}/book', [BookingController::class, 'store'])->name('bookings.store');
 
 Route::get('/dashboard', function () {
     /** @var User $user */
@@ -218,6 +322,7 @@ Route::get('/dashboard', function () {
         'recommendedAgencies' => Agency::verified()->latest()->take(3)->get(),
     ]);
 })->middleware('auth')->name('dashboard');
+Route::get('/account/bookings', [BookingController::class, 'index'])->middleware('auth')->name('account.bookings');
 Route::view('/settings', 'auth.settings')->middleware('auth')->name('settings');
 Route::put('/settings/profile', [AuthController::class, 'updateProfile'])->middleware('auth')->name('settings.profile');
 Route::post('/settings/profile-photo', [AuthController::class, 'updateProfilePhoto'])->middleware('auth')->name('settings.profile-photo');
@@ -234,14 +339,25 @@ Route::get('/account/activity', function () {
     /** @var User $user */
     $user = Auth::user();
 
+    $user->unreadNotifications()->update(['read_at' => now()]);
+
     return view('auth.activity', [
         'user' => $user,
+        'notifications' => $user->notifications()->latest()->limit(20)->get(),
+        'notificationCount' => $user->unreadNotifications()->count(),
         'inquiries' => $user->inquiries()->with('agency')->latest()->get(),
         'reviews' => $user->reviews()->with('agency')->latest()->get(),
     ]);
 })->middleware('auth')->name('account.activity');
+Route::delete('/account/notifications/{notification}', function (string $notification) {
+    /** @var User $user */
+    $user = Auth::user();
+    $user->notifications()->whereKey($notification)->firstOrFail()->delete();
+
+    return redirect()->route('account.activity', ['lang' => app()->getLocale()]);
+})->middleware('auth')->name('account.notifications.destroy');
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
 
-Route::get('/reset-blade', function() {
+Route::get('/reset-blade', function () {
     return view('emails/password-reset-code');
 });

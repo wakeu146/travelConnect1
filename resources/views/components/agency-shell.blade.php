@@ -12,6 +12,7 @@
         $routeName === 'agency.availability.index' => __('messages.manage_departures'),
         $routeName === 'agency.bookings.show' => __('messages.booking_details'),
         $routeName === 'agency.bookings.index' => __('messages.booking_management'),
+        $routeName === 'agency.inquiries.index' => __('messages.inquiries'),
         $routeName === 'agency.customers.index' => __('messages.customers'),
         $routeName === 'agency.reviews.index' => __('messages.review_management'),
         $routeName === 'agency.payments.index' => __('messages.booking_payments'),
@@ -33,6 +34,7 @@
         ['route' => 'agency.packages.index', 'active' => 'agency.packages.*', 'label' => __('messages.travel_packages'), 'icon' => '<path d="M4 7.5 12 3l8 4.5-8 4.5-8-4.5Zm0 9 8 4.5 8-4.5M4 7.5V16l8 4.5V12"></path>'],
         ['route' => 'agency.availability.index', 'active' => 'agency.availability.*', 'label' => __('messages.availability'), 'icon' => '<rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path>'],
         ['route' => 'agency.bookings.index', 'active' => 'agency.bookings.*', 'label' => __('messages.bookings'), 'icon' => '<path d="M7 7h10M7 12h10M7 17h6"></path><rect x="3" y="4" width="18" height="16" rx="2"></rect>'],
+        ['route' => 'agency.inquiries.index', 'active' => 'agency.inquiries.*', 'label' => __('messages.inquiries'), 'icon' => '<path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H7l-4 2v-6.5A7.5 7.5 0 1 1 20 11.5Z"></path><path d="M8 11h8M8 14h5"></path>'],
         ['route' => 'agency.customers.index', 'label' => __('messages.customers'), 'icon' => '<circle cx="9" cy="8" r="3"></circle><path d="M3 20v-1a6 6 0 0 1 12 0v1M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 5v1"></path>'],
         ['route' => 'agency.reviews.index', 'label' => __('messages.reviews'), 'icon' => '<path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"></path>'],
         ['route' => 'agency.payments.index', 'label' => __('messages.payments'), 'icon' => '<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 10h18M7 15h4"></path>'],
@@ -80,14 +82,22 @@
         </div>
 
         <div class="mt-auto border-t border-[#e4e9e7] pt-5">
-            <div class="flex items-center gap-3 px-2">
-                <span class="flex h-10 w-10 items-center justify-center rounded-full bg-[#173042] text-sm font-bold text-white">{{ strtoupper(substr((auth()->user()?->name ?? 'A'), 0, 1)) }}</span>
-                <div class="min-w-0">
-                    <p class="truncate text-sm font-bold">{{ auth()->user()?->name ?? 'Agency owner' }}</p>
-                    <p class="truncate text-xs text-[#607985]">{{ $brandName }}</p>
+            <div class="agency-user-card flex items-center gap-3 px-2">
+                <span class="agency-user-avatar flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#173042] text-sm font-bold text-white">
+                    @if ($agency?->logoUrl())
+                        <img src="{{ $agency->logoUrl() }}" alt="{{ $brandName }}" class="h-full w-full object-cover">
+                    @elseif (auth()->user()?->profile_photo_path)
+                        <img src="{{ asset('storage/'.auth()->user()->profile_photo_path) }}" alt="{{ auth()->user()?->name ?? 'Agency owner' }}" class="h-full w-full object-cover">
+                    @else
+                        {{ strtoupper(substr((auth()->user()?->name ?? 'A'), 0, 1)) }}
+                    @endif
+                </span>
+                <div class="agency-user-meta min-w-0">
+                    <p data-agency-label class="truncate text-sm font-bold">{{ auth()->user()?->name ?? 'Agency owner' }}</p>
+                    <p data-agency-label class="truncate text-xs text-[#607985]">{{ $brandName }}</p>
                 </div>
             </div>
-            <form action="{{ route('logout') }}" method="POST" class="mt-4">@csrf<button type="submit" class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-[#607985] hover:bg-[#fff1ed] hover:text-[#e76f51]"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5" aria-hidden="true"><path d="M10 5H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h5M13 8l4 4-4 4M8 12h9"/></svg>{{ __('messages.logout') }}</button></form>
+            <form action="{{ route('logout') }}" method="POST" class="agency-sidebar-logout mt-4">@csrf<button type="submit" class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-[#607985] hover:bg-[#fff1ed] hover:text-[#e76f51]"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5" aria-hidden="true"><path d="M10 5H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h5M13 8l4 4-4 4M8 12h9"/></svg><span data-agency-label>{{ __('messages.logout') }}</span></button></form>
         </div>
     </aside>
 
@@ -125,6 +135,7 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m16.5 16.5 4 4"></path></svg>
                     </button>
                 </form>
+                @php($notificationCount = auth()->user()?->unreadNotifications()->count() ?? 0)
                 <div class="ml-auto flex shrink-0 items-center gap-2">
                 <button type="button" data-agency-theme-top class="flex h-10 w-10 items-center justify-center rounded-xl border border-[#dbe3e5] text-[#607985] hover:border-[#e76f51] hover:text-[#e76f51]" aria-label="{{ __('messages.toggle_theme') }}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5" aria-hidden="true"><path d="M20.5 15.2A8.5 8.5 0 0 1 8.8 3.5 8.5 8.5 0 1 0 20.5 15.2Z"></path></svg>
@@ -133,11 +144,14 @@
                     <a data-lang-button href="{{ request()->fullUrlWithQuery(['lang' => 'en']) }}" class="rounded-md px-2 py-1 text-[10px] font-bold {{ app()->getLocale() === 'en' ? 'bg-[#173042] text-white' : 'agency-text-subtle' }}">EN</a>
                     <a data-lang-button href="{{ request()->fullUrlWithQuery(['lang' => 'fr']) }}" class="rounded-md px-2 py-1 text-[10px] font-bold {{ app()->getLocale() === 'fr' ? 'bg-[#173042] text-white' : 'agency-text-subtle' }}">FR</a>
                 </div>
-                <a data-agency-header-profile data-agency-nav-link data-agency-nav-path="{{ parse_url(route('agency.profile', ['lang' => app()->getLocale()]), PHP_URL_PATH) }}" href="{{ route('agency.profile', ['lang' => app()->getLocale()]) }}" class="agency-button-secondary shrink-0 rounded-lg border px-2.5 py-2 text-sm font-semibold sm:px-3" aria-label="{{ __('messages.agency_profile_link') }}" title="{{ __('messages.agency_profile_link') }}">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4 sm:hidden" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>
-                    <span class="hidden sm:inline">{{ __('messages.agency_profile_link') }}</span>
-                    <span class="sr-only sm:hidden">{{ __('messages.agency_profile_link') }}</span>
-                </a>
+                <button type="button" aria-label="{{ __('messages.notifications') }}" title="{{ __('messages.notifications') }}" class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#dbe3e5] bg-white text-[#607985] transition hover:border-[#e76f51] hover:text-[#e76f51]">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5" aria-hidden="true"><path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5"></path><path d="M10 20a2 2 0 0 0 4 0"></path></svg>
+                    @if ($notificationCount > 0)
+                        <span class="absolute -right-1.5 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-[#e76f51] px-1 text-[10px] font-bold text-white">
+                            {{ $notificationCount > 99 ? '99+' : $notificationCount }}
+                        </span>
+                    @endif
+                </button>
                 </div>
             </div>
         </header>
@@ -156,10 +170,20 @@
         const pageLoader = document.getElementById('page-loader');
         const themeKey = 'travelconnect-dashboard-theme';
         const collapseKey = 'travelconnect-agency-collapsed';
+        let agencyLoaderTimer = null;
         const setPageLoading = (loading) => {
-            pageLoader?.classList.toggle('pointer-events-none', !loading);
-            pageLoader?.classList.toggle('opacity-0', !loading);
-            document.getElementById('agency-main-content')?.setAttribute('aria-busy', String(loading));
+            if (loading) {
+                window.clearTimeout(agencyLoaderTimer);
+                agencyLoaderTimer = window.setTimeout(() => {
+                    pageLoader?.classList.remove('pointer-events-none', 'opacity-0');
+                    document.getElementById('agency-main-content')?.setAttribute('aria-busy', 'true');
+                }, 700);
+                return;
+            }
+
+            window.clearTimeout(agencyLoaderTimer);
+            pageLoader?.classList.add('pointer-events-none', 'opacity-0');
+            document.getElementById('agency-main-content')?.setAttribute('aria-busy', 'false');
         };
         const getAgencyLocale = () => {
             const locale = new URL(window.location.href).searchParams.get('lang') || document.documentElement.lang.split('-')[0];
@@ -175,9 +199,16 @@
         };
         syncAgencyLinkLocale();
         document.querySelectorAll('[data-lang-button]').forEach((button) => {
-            button.addEventListener('click', () => {
+            button.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
                 const nextLocale = new URL(button.href, window.location.href).searchParams.get('lang');
-                if (['en', 'fr'].includes(nextLocale)) syncAgencyLinkLocale(nextLocale);
+                if (!['en', 'fr'].includes(nextLocale)) return;
+
+                const nextUrl = new URL(window.location.href);
+                nextUrl.searchParams.set('lang', nextLocale);
+                syncAgencyLinkLocale(nextLocale);
+                window.location.assign(nextUrl.toString());
             });
         });
         const setCollapsed = (collapsed) => {
