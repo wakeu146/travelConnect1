@@ -39,7 +39,7 @@
         ['route' => 'agency.reviews.index', 'label' => __('messages.reviews'), 'icon' => '<path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"></path>'],
         ['route' => 'agency.payments.index', 'label' => __('messages.payments'), 'icon' => '<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 10h18M7 15h4"></path>'],
         ['route' => 'agency.analytics.index', 'label' => __('messages.analytics'), 'icon' => '<path d="M4 19V5M4 19h17M8 15l3-4 3 2 5-7"></path>'],
-        ['route' => 'agency.profile', 'active' => 'agency.profile', 'label' => __('messages.profile'), 'icon' => '<path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 8a7 7 0 0 1 14 0"></path><path d="M17.5 5.5A2.5 2.5 0 0 1 20 8v8"></path>'],
+        ['route' => 'agency.profile', 'active' => 'agency.profile', 'label' => __('messages.profile'), 'icon' => '<circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.8 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 8.92 4.8a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.25.6.84 1 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"></path>'],
     ];
 @endphp
 
@@ -144,14 +144,14 @@
                     <a data-lang-button href="{{ request()->fullUrlWithQuery(['lang' => 'en']) }}" class="rounded-md px-2 py-1 text-[10px] font-bold {{ app()->getLocale() === 'en' ? 'bg-[#173042] text-white' : 'agency-text-subtle' }}">EN</a>
                     <a data-lang-button href="{{ request()->fullUrlWithQuery(['lang' => 'fr']) }}" class="rounded-md px-2 py-1 text-[10px] font-bold {{ app()->getLocale() === 'fr' ? 'bg-[#173042] text-white' : 'agency-text-subtle' }}">FR</a>
                 </div>
-                <button type="button" aria-label="{{ __('messages.notifications') }}" title="{{ __('messages.notifications') }}" class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#dbe3e5] bg-white text-[#607985] transition hover:border-[#e76f51] hover:text-[#e76f51]">
+                <a href="{{ route('agency.notifications.index', ['lang' => app()->getLocale()]) }}" aria-label="{{ __('messages.notifications') }}" title="{{ __('messages.notifications') }}" class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#dbe3e5] bg-white text-[#607985] transition hover:border-[#e76f51] hover:text-[#e76f51]">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5" aria-hidden="true"><path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5"></path><path d="M10 20a2 2 0 0 0 4 0"></path></svg>
                     @if ($notificationCount > 0)
                         <span class="absolute -right-1.5 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-[#e76f51] px-1 text-[10px] font-bold text-white">
                             {{ $notificationCount > 99 ? '99+' : $notificationCount }}
                         </span>
                     @endif
-                </button>
+                </a>
                 </div>
             </div>
         </header>

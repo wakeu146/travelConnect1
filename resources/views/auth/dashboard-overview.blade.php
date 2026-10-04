@@ -40,6 +40,58 @@
             </div>
         </section>
         <section id="activity" class="mt-10 border-t border-[#e4e9e7] pt-10"><div class="flex items-center justify-between"><div><p class="text-xs font-bold uppercase tracking-[.18em] text-[#e76f51]">{{ __('messages.my_activity') }}</p><h2 class="mt-2 font-serif text-3xl tracking-tight">{{ __('messages.keep_planning') }}</h2></div><a href="{{ route('account.activity', ['lang' => app()->getLocale()]) }}" class="text-sm font-bold text-[#e76f51]">{{ __('messages.view_all') }}</a></div><p class="mt-4 max-w-2xl text-sm leading-7 text-[#607985]">{{ __('messages.keep_planning_text') }}</p><div class="mt-6 grid gap-4 lg:grid-cols-2"><div class="dashboard-panel border-[#e7eceb] bg-white p-5"><h3 class="font-bold">{{ __('messages.open_inquiries') }}</h3><div class="mt-4 grid gap-3">@forelse ($recentInquiries as $inquiry)<div class="border-b border-[#e7eceb] pb-3 last:border-0 last:pb-0"><p class="text-sm font-semibold">{{ $inquiry->subject }}</p><p class="mt-1 text-xs text-[#607985]">{{ $inquiry->agency->company_name }} · {{ ucfirst($inquiry->status->value) }}</p></div>@empty<p class="text-sm text-[#607985]">{{ __('messages.no_inquiries_yet') }}</p>@endforelse</div></div><div class="dashboard-panel border-[#e7eceb] bg-white p-5"><h3 class="font-bold">{{ __('messages.reviews_written') }}</h3><div class="mt-4 grid gap-3">@forelse ($recentReviews as $review)<div class="border-b border-[#e7eceb] pb-3 last:border-0 last:pb-0"><div class="flex items-center justify-between gap-3"><p class="text-sm font-semibold">{{ $review->agency->company_name }}</p><span class="text-sm text-[#e76f51]">{{ $review->rating }} ★</span></div><p class="mt-1 truncate text-xs text-[#607985]">{{ $review->comment }}</p></div>@empty<p class="text-sm text-[#607985]">{{ __('messages.no_reviews_yet') }}</p>@endforelse</div></div></div></section>
-        <section class="mt-10 border-t border-[#e4e9e7] pt-10"><div class="flex items-end justify-between"><div><p class="text-xs font-bold uppercase tracking-[.18em] text-[#e76f51]">{{ __('messages.recommended_for_you') }}</p><h2 class="mt-2 font-serif text-3xl tracking-tight">{{ __('messages.trusted_travel_specialists') }}</h2></div><a href="{{ route('account.discover', ['lang' => app()->getLocale()]) }}" class="text-sm font-bold text-[#e76f51]">{{ __('messages.explore_agencies') }}</a></div><div class="mt-5 grid gap-4 sm:grid-cols-3">@foreach ($recommendedAgencies as $agency)<a href="{{ route('agency.show', ['slug' => \Illuminate\Support\Str::slug($agency->company_name), 'lang' => app()->getLocale()]) }}" class="dashboard-panel border-[#e7eceb] bg-white p-5 transition hover:border-[#e76f51]"><h3 class="font-bold">{{ $agency->company_name }}</h3><p class="mt-2 text-sm text-[#607985]">{{ $agency->description }}</p></a>@endforeach</div></section>
+        <section class="mt-10 border-t border-[#e4e9e7] pt-10">
+            <div>
+                <p class="text-xs font-bold uppercase tracking-[.18em] text-[#e76f51]">{{ __('messages.discover_agencies') }}</p>
+                <h2 class="mt-2 font-serif text-3xl tracking-tight">{{ __('messages.top_agencies_by_trust_score') }}</h2>
+            </div>
+            <div class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                @forelse ($recommendedAgencies as $agency)
+                    @php($agencyLogo = $agency->logoUrl())
+                    @php($agencyCover = $agency->coverImageUrl())
+                    @php($agencyInitials = collect(explode(' ', $agency->company_name))->filter()->take(2)->map(fn ($word) => mb_substr($word, 0, 1))->implode(''))
+                    <a href="{{ route('agency.show', ['slug' => \Illuminate\Support\Str::slug($agency->company_name), 'lang' => app()->getLocale()]) }}" class="dashboard-panel group overflow-hidden border-[#e7eceb] bg-white transition hover:border-[#e76f51]">
+                        <div class="relative h-32 overflow-hidden bg-[#edf4f3]">
+                            @if ($agencyCover)
+                                <img src="{{ $agencyCover }}" alt="" class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]">
+                            @else
+                                <div data-agency-cover-fallback class="h-full w-full bg-[#edf4f3]" aria-hidden="true"></div>
+                            @endif
+                            <span class="absolute right-3 top-3 rounded bg-white/95 px-2.5 py-1 text-xs font-bold text-[#55707c]">#{{ $loop->iteration }}</span>
+                        </div>
+                        <div class="px-5 pb-5">
+                            <div class="flex items-start gap-3">
+                                <div class="relative -mt-8 flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border-4 border-white bg-[#edf4f3] text-sm font-bold text-[#173042] shadow-sm">
+                                    @if ($agencyLogo)
+                                        <img src="{{ $agencyLogo }}" alt="{{ __('messages.agency_logo_alt', ['name' => $agency->company_name]) }}" class="h-full w-full object-cover">
+                                    @else
+                                        <span data-agency-logo-fallback aria-hidden="true">{{ $agencyInitials }}</span>
+                                    @endif
+                                </div>
+                                <div class="min-w-0 flex-1 pt-2">
+                                    <h3 class="break-words font-bold text-[#173042]">{{ $agency->company_name }}</h3>
+                                    <p class="mt-1 text-sm text-[#607985]">{{ $agency->countries->pluck('name')->join(', ') ?: __('messages.travel_agency') }}</p>
+                                    @if (filled($agency->address))<p class="mt-1 truncate text-xs text-[#607985]">{{ __('messages.agency_location') }}: {{ $agency->address }}</p>@endif
+                                </div>
+                            </div>
+                        @if ($agency->services->isNotEmpty())
+                                <p class="mt-4 text-sm text-[#607985]">{{ $agency->services->pluck('name')->join(' · ') }}</p>
+                        @endif
+                            <div class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-[#e7eceb] pt-3 text-sm">
+                                @if ($agency->published_reviews_count > 0)
+                                    <span class="font-semibold text-[#e76f51]">{{ number_format((float) $agency->published_rating, 1) }} <span aria-hidden="true">★</span></span>
+                                @else
+                                    <span class="text-[#607985]">{{ __('messages.no_reviews_yet') }}</span>
+                                @endif
+                                <span class="font-semibold text-[#173042]">{{ __('messages.trust_score') }}: {{ $agency->trust_score }}</span>
+                            </div>
+                        </div>
+                    </a>
+                @empty
+                    <p class="dashboard-panel col-span-full border-dashed border-[#cbd9d8] bg-transparent p-8 text-center text-sm text-[#607985]">{{ __('messages.no_agencies_available') }}</p>
+                @endforelse
+            </div>
+            <a href="{{ route('discover', ['lang' => app()->getLocale()]) }}" class="mt-5 inline-flex items-center justify-center rounded-xl bg-[#e76f51] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#d95f42]">{{ __('messages.view_all_agencies') }}</a>
+        </section>
     </main>
 </x-account-shell>

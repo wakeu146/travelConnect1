@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\BookingStatus;
 use App\Enums\ReviewStatus;
 use App\Models\Agency;
+use App\Models\Booking;
 use App\Notifications\AgencyActivityNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class ReviewController extends Controller
 {
@@ -23,20 +25,27 @@ class ReviewController extends Controller
         }
 
         $data = $request->validate([
+            'booking_id' => ['required', 'integer', Rule::exists('bookings', 'id')->where(fn ($query) => $query
+                ->where('agency_id', $agency->id)
+                ->where('user_id', $request->user()->id)
+                ->where('status', BookingStatus::COMPLETED->value))],
             'rating' => ['required', 'integer', 'between:1,5'],
             'comment' => ['required', 'string', 'min:10', 'max:2000'],
         ]);
 
+        $booking = Booking::query()->findOrFail($data['booking_id']);
+
         $agency->reviews()->create([
             'user_id' => $request->user()->id,
+            'booking_id' => $booking->id,
             'rating' => $data['rating'],
             'comment' => $data['comment'],
             'status' => ReviewStatus::PENDING,
         ]);
 
         $agency->owner?->notify(new AgencyActivityNotification(
-            'New traveler review',
-            $request->user()->name.' sent a review for '.$agency->company_name.'.',
+            __('messages.booking_notification_title'),
+            __('messages.new_review_notification', ['name' => $request->user()->name]),
             'review',
             route('agency.reviews.index', ['lang' => app()->getLocale()])
         ));

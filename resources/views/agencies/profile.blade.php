@@ -40,11 +40,11 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.phone') }}</label>
-                                <input name="phone" value="{{ old('phone', $agency->owner->phone ?: '+237 ') }}" placeholder="+237 6xx xxx xxx" pattern="^\+237\s?[0-9\s-]{9,15}$" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm outline-none focus:border-[#e76f51]">
+                                <input name="phone" value="{{ old('phone', $agency->owner->phone) }}" placeholder="+237 6xx xxx xxx" pattern="^\+237\s?[0-9\s-]{9,15}$" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm outline-none focus:border-[#e76f51]">
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.agency_phone') }}</label>
-                                <input name="agency_phone" value="{{ old('agency_phone', $agency->phone ?: '+237 ') }}" placeholder="+237 6xx xxx xxx" pattern="^\+237\s?[0-9\s-]{9,15}$" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm outline-none focus:border-[#e76f51]">
+                                <input name="agency_phone" value="{{ old('agency_phone', $agency->phone) }}" placeholder="+237 6xx xxx xxx" pattern="^\+237\s?[0-9\s-]{9,15}$" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm outline-none focus:border-[#e76f51]">
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.agency_email') }}</label>
@@ -63,7 +63,7 @@
                                 <input type="url" name="website" value="{{ old('website', $agency->website) }}" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm outline-none focus:border-[#e76f51]">
                             </div>
                             <div class="sm:col-span-2">
-                                <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.address') }}</label>
+                                <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.agency_location') }}</label>
                                 <input name="address" value="{{ old('address', $agency->address) }}" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm outline-none focus:border-[#e76f51]">
                             </div>
                         </div>

@@ -44,7 +44,7 @@
             <div class="space-y-4">
                 @forelse ($packages as $package)
                     @php
-                        $formattedPrice = number_format((float) $package->price_from, 2);
+                        $formattedPrice = config('travelconnect.currency').' '.number_format((float) $package->price_from, 2);
                         $packageStatus = $package->status->value ?? $package->status;
                         $readinessPercent = $package->images_count > 0 ? 100 : 0;
                     @endphp

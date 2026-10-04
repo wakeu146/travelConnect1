@@ -4,13 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Agency;
 use App\Models\Inquiry;
-use App\Notifications\AgencyActivityNotification;
+use App\Services\ConversationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class InquiryController extends Controller
 {
-    public function store(Request $request, string $slug): RedirectResponse
+    public function store(Request $request, string $slug, ConversationService $conversationService): RedirectResponse
     {
         abort_unless($request->user()?->isTraveler(), 403);
 
@@ -30,12 +30,7 @@ class InquiryController extends Controller
             'status' => 'open',
         ]);
 
-        $agency->owner?->notify(new AgencyActivityNotification(
-            'New inquiry received',
-            $request->user()->name.' sent a message about '.$inquiry->subject.'.',
-            'inquiry',
-            route('agency.dashboard', ['lang' => app()->getLocale()])
-        ));
+        $conversationService->startForInquiry($inquiry->load('user'));
 
         return back()->with('inquiry_status', 'Your inquiry was sent. The agency will reply soon.');
     }

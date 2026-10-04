@@ -71,11 +71,13 @@
                             </div>
                         </div>
 
-                        <dl class="mt-5 grid gap-3 sm:grid-cols-4">
-                            <div class="agency-panel-muted rounded-xl p-3"><dt class="text-xs agency-text-subtle">{{ __('messages.reserved_travelers') }}</dt><dd class="mt-1 text-lg font-bold">{{ $capacitySnapshot['reserved_travelers'] }}</dd></div>
+                        <dl class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+                            <div class="agency-panel-muted rounded-xl p-3"><dt class="text-xs agency-text-subtle">{{ __('messages.capacity') }}</dt><dd class="mt-1 text-lg font-bold">{{ $capacitySnapshot['capacity'] }}</dd></div>
+                            <div class="agency-panel-muted rounded-xl p-3"><dt class="text-xs agency-text-subtle">{{ __('messages.confirmed_travelers') }}</dt><dd class="mt-1 text-lg font-bold">{{ $capacitySnapshot['confirmed_travelers'] }}</dd></div>
+                            <div class="agency-panel-muted rounded-xl p-3"><dt class="text-xs agency-text-subtle">{{ __('messages.pending_travelers') }}</dt><dd class="mt-1 text-lg font-bold">{{ $capacitySnapshot['pending_travelers'] }}</dd></div>
                             <div class="agency-panel-muted rounded-xl p-3"><dt class="text-xs agency-text-subtle">{{ __('messages.remaining_capacity') }}</dt><dd class="mt-1 text-lg font-bold">{{ $capacitySnapshot['remaining_capacity'] }}</dd></div>
-                            <div class="agency-panel-muted rounded-xl p-3"><dt class="text-xs agency-text-subtle">{{ __('messages.occupancy') }}</dt><dd class="mt-1 text-lg font-bold">{{ $capacitySnapshot['occupancy_percent'] }}%</dd></div>
-                            <div class="agency-panel-muted rounded-xl p-3"><dt class="text-xs agency-text-subtle">{{ __('messages.active_bookings') }}</dt><dd class="mt-1 text-lg font-bold">{{ $capacitySnapshot['booking_count'] }}</dd></div>
+                            <div class="agency-panel-muted rounded-xl p-3"><dt class="text-xs agency-text-subtle">{{ __('messages.occupancy') }}</dt><dd class="mt-1 text-lg font-bold">{{ $capacitySnapshot['occupancy_percent'] }}%</dd><div class="mt-2 h-1.5 overflow-hidden rounded-full bg-[#dfe8e8]" role="progressbar" aria-label="{{ __('messages.departure_occupancy') }}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $capacitySnapshot['occupancy_percent'] }}"><span class="block h-full rounded-full {{ $capacitySnapshot['sold_out'] ? 'bg-[#d9534f]' : ($capacitySnapshot['near_capacity'] ? 'bg-[#e6a23c]' : 'bg-[#2f9e7a]') }}" style="width: {{ $capacitySnapshot['occupancy_percent'] }}%"></span></div></div>
+                            <div class="agency-panel-muted rounded-xl p-3"><dt class="text-xs agency-text-subtle">{{ __('messages.relevant_bookings') }}</dt><dd class="mt-1 text-lg font-bold">{{ $capacitySnapshot['booking_count'] }}</dd></div>
                         </dl>
                         @if ($capacitySnapshot['sold_out'] || $capacitySnapshot['near_capacity'])
                             <p class="mt-4 inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold {{ $capacitySnapshot['sold_out'] ? 'agency-state-danger' : 'agency-state-warning' }}">

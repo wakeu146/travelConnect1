@@ -346,6 +346,34 @@ class AgencyDashboardTest extends TestCase
         $public->assertSee('Rail journeys');
     }
 
+    public function test_an_agency_owner_can_update_a_new_profile_with_blank_optional_phone_numbers(): void
+    {
+        $agency = Agency::factory()->create(['phone' => null]);
+        $agency->owner->update(['phone' => null]);
+
+        $profile = $this->actingAs($agency->owner)->get(route('agency.profile'));
+
+        $profile->assertOk()
+            ->assertSee('name="phone" value=""', false)
+            ->assertSee('name="agency_phone" value=""', false);
+
+        $response = $this->actingAs($agency->owner)->put(route('agency.settings.update'), [
+            'name' => $agency->owner->name,
+            'email' => $agency->owner->email,
+            'company_name' => $agency->company_name,
+            'description' => 'This new agency profile can now be completed.',
+            'license_number' => '',
+            'address' => '',
+            'phone' => '',
+            'agency_phone' => '',
+            'agency_email' => '',
+            'website' => '',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertSame('This new agency profile can now be completed.', $agency->fresh()->description);
+    }
+
     public function test_an_agency_owner_can_upload_a_document_and_publish_an_experience(): void
     {
         Storage::fake('public');

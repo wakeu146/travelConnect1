@@ -10,7 +10,7 @@
             </div>
 
             <div class="grid gap-6 lg:grid-cols-[1.1fr_.9fr]">
-                <div class="rounded-2xl border border-[#e7eceb] bg-white p-6 shadow-sm">
+                <div class="border border-[#e7eceb] bg-white p-6 shadow-sm">
                     <p class="text-xs font-bold uppercase tracking-[.18em] text-[#e76f51]">Package</p>
                     <h2 class="mt-2 text-2xl font-bold">{{ $package->title }}</h2>
                     <p class="mt-2 text-sm text-[#607985]">{{ $package->destination }} · {{ $package->duration_days }} days</p>
@@ -33,7 +33,7 @@
                     </div>
                 </div>
 
-                <div class="rounded-2xl border border-[#e7eceb] bg-white p-6 shadow-sm">
+                <div class="border border-[#e7eceb] bg-white p-6 shadow-sm">
                     <form method="POST" action="{{ route('bookings.store', ['package' => $package->id, 'lang' => app()->getLocale()]) }}" class="space-y-5">
                         @csrf
 
@@ -59,9 +59,9 @@
                             <textarea id="notes" name="notes" rows="4" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm outline-none focus:border-[#e76f51]" placeholder="Optional trip details">{{ old('notes') }}</textarea>
                         </div>
 
-                        <div class="rounded-xl bg-[#fff8e8] p-4">
-                            <p class="text-xs font-bold uppercase tracking-[.18em] text-[#c58b27]">From</p>
-                            <p class="mt-2 text-2xl font-bold">${{ number_format((float) $unitPrice, 2) }} / traveler</p>
+                        <div class="bg-[#f1f6f4] p-4">
+                            <p class="text-xs font-bold uppercase tracking-[.18em] text-[#e76f51]">From</p>
+                            <p class="mt-2 text-2xl font-bold">{{ config('travelconnect.currency') }} {{ number_format((float) $unitPrice, 2) }} / traveler</p>
                         </div>
 
                         <div class="flex justify-end">

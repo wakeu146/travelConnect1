@@ -12,6 +12,7 @@ use App\Models\Inquiry;
 use App\Models\Package;
 use App\Models\PackageAvailability;
 use App\Models\Review;
+use App\Models\Service;
 use App\Models\User;
 use App\Notifications\AgencyActivityNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -39,6 +40,164 @@ class TravelerDashboardTest extends TestCase
         $response->assertSee('North Star Travel');
         $response->assertSee('>1</p>', false);
         $response->assertSee('data-remove-saved-agency', false);
+    }
+
+    public function test_dashboard_shows_only_the_three_highest_trust_score_agencies_in_rank_order(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        $this->createVerifiedAgency('High Trust Agency', 95);
+        $this->createVerifiedAgency('Second Trust Agency', 82);
+        $this->createVerifiedAgency('Third Trust Agency', 71);
+        $this->createVerifiedAgency('Newest Low Trust Agency', 5);
+
+        $response = $this->actingAs($traveler)->get(route('dashboard'));
+
+        $response->assertOk()
+            ->assertSeeInOrder(['High Trust Agency', 'Second Trust Agency', 'Third Trust Agency'])
+            ->assertSee('Trust score: 95')
+            ->assertSee('data-agency-cover-fallback', false)
+            ->assertSee('data-agency-logo-fallback', false)
+            ->assertDontSee('Newest Low Trust Agency');
+    }
+
+    public function test_dashboard_places_uploaded_cover_and_logo_in_stable_card_regions(): void
+    {
+        Storage::fake('public');
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        $agency = $this->createVerifiedAgency('Image Layout Agency', 99, [
+            'logo_path' => 'agency-logos/1/logo.png',
+            'cover_image_path' => 'agency-covers/1/cover.png',
+        ]);
+        Storage::disk('public')->put($agency->logo_path, 'logo image');
+        Storage::disk('public')->put($agency->cover_image_path, 'cover image');
+
+        $response = $this->actingAs($traveler)->get(route('dashboard'));
+
+        $response->assertOk()->assertSeeInOrder([
+            $agency->coverImageUrl(),
+            $agency->logoUrl(),
+        ]);
+    }
+
+    public function test_dashboard_orders_equal_trust_scores_by_agency_name(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        $this->createVerifiedAgency('Zulu Journeys', 80);
+        $this->createVerifiedAgency('Alpha Journeys', 80);
+
+        $response = $this->actingAs($traveler)->get(route('dashboard'));
+
+        $response->assertOk()->assertSeeInOrder(['Alpha Journeys', 'Zulu Journeys']);
+    }
+
+    public function test_dashboard_handles_fewer_than_three_verified_agencies(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        $this->createVerifiedAgency('Only One Travel', 40);
+        $this->createVerifiedAgency('Only Two Travel', 30);
+
+        $response = $this->actingAs($traveler)->get(route('dashboard'));
+
+        $response->assertOk()
+            ->assertSee('Only One Travel')
+            ->assertSee('Only Two Travel')
+            ->assertSee(__('messages.view_all_agencies'));
+    }
+
+    public function test_dashboard_shows_an_empty_state_when_no_verified_agencies_exist(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+
+        $response = $this->actingAs($traveler)->get(route('dashboard'));
+
+        $response->assertOk()->assertSee(__('messages.no_agencies_available'));
+    }
+
+    public function test_all_agencies_page_lists_database_agencies_and_hides_private_fields(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        $agency = $this->createVerifiedAgency('Publicly Listed Travel', 74, [
+            'description' => 'Plans considered journeys around the world.',
+            'address' => 'Douala, Cameroon',
+            'email' => 'private-contact@example.test',
+            'phone' => 'private-phone-value',
+            'license_number' => 'private-license-value',
+        ]);
+        $agency->countries()->attach(Country::factory()->create(['name' => 'Iceland']));
+        $agency->services()->attach(Service::factory()->create(['name' => 'Guided tours']));
+        Review::factory()->create(['agency_id' => $agency->id, 'rating' => 5, 'status' => 'published']);
+        Agency::factory()->create(['company_name' => 'Pending Agency']);
+
+        $dashboard = $this->actingAs($traveler)->get(route('dashboard'));
+        $response = $this->actingAs($traveler)->get(route('discover'));
+
+        $dashboard->assertOk()
+            ->assertSee(__('messages.view_all_agencies'))
+            ->assertSee('Douala, Cameroon')
+            ->assertSee(route('discover', ['lang' => 'en']));
+        $response->assertOk()
+            ->assertSee('Publicly Listed Travel')
+            ->assertSee('Plans considered journeys around the world.')
+            ->assertSee('Douala, Cameroon')
+            ->assertSee('Iceland')
+            ->assertSee('Guided tours')
+            ->assertSee('5.0')
+            ->assertSee('5.0 out of 5 stars')
+            ->assertSee('1 traveler rating')
+            ->assertSee('Trust score: 74')
+            ->assertSee('data-agency-logo-fallback', false)
+            ->assertSee('PL')
+            ->assertDontSee('Pending Agency')
+            ->assertDontSee('private-contact@example.test')
+            ->assertDontSee('private-phone-value')
+            ->assertDontSee('private-license-value');
+    }
+
+    public function test_all_agencies_page_keeps_the_existing_authentication_boundary(): void
+    {
+        $response = $this->get(route('discover'));
+
+        $response->assertRedirect(route('login'));
+    }
+
+    public function test_all_agencies_page_paginates_and_preserves_search_filters(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+
+        foreach (range(1, 13) as $number) {
+            $this->createVerifiedAgency(sprintf('Directory Agency %02d', $number), 50);
+        }
+
+        $firstPage = $this->actingAs($traveler)->get(route('discover'));
+        $secondPage = $this->actingAs($traveler)->get(route('discover', ['page' => 2]));
+        $searchPage = $this->actingAs($traveler)->get(route('discover', ['search' => 'Directory Agency 13']));
+
+        $firstPage->assertOk()
+            ->assertSee('Directory Agency 01')
+            ->assertDontSee('Directory Agency 13')
+            ->assertSee('page=2');
+        $secondPage->assertOk()
+            ->assertSee('Directory Agency 13')
+            ->assertDontSee('Directory Agency 01');
+        $searchPage->assertOk()
+            ->assertSee('Directory Agency 13')
+            ->assertDontSee('Directory Agency 01');
+    }
+
+    private function createVerifiedAgency(string $companyName, int $trustScore, array $attributes = []): Agency
+    {
+        $agency = Agency::factory()->create(array_merge([
+            'company_name' => $companyName,
+            'verification_status' => 'verified',
+            'trust_score' => $trustScore,
+        ], $attributes));
+
+        AgencyDocument::factory()->create([
+            'agency_id' => $agency->id,
+            'status' => 'approved',
+        ]);
+
+        return $agency;
     }
 
     public function test_a_traveler_can_view_only_their_own_bookings(): void
@@ -73,7 +232,7 @@ class TravelerDashboardTest extends TestCase
                 'traveler_count' => 2,
                 'unit_price' => 1200,
                 'total_amount' => 2400,
-                'currency' => 'USD',
+                'currency' => 'XAF',
                 'expires_at' => now()->addHour(),
             ]);
         }
@@ -96,6 +255,172 @@ class TravelerDashboardTest extends TestCase
         $response = $this->actingAs($agency->owner)->get(route('account.bookings', ['lang' => 'en']));
 
         $response->assertForbidden();
+    }
+
+    public function test_a_traveler_can_create_a_booking_from_the_booking_page_and_pay_for_it(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler', 'name' => 'Nadia Stone']);
+        $agency = $this->createVerifiedAgency('Blue Horizon Travel', 70, [
+            'address' => 'Yaounde, Cameroon',
+        ]);
+        $country = Country::factory()->create(['name' => 'Iceland']);
+        $agency->countries()->attach($country);
+        $package = Package::factory()->create([
+            'agency_id' => $agency->id,
+            'title' => 'Iceland Escape',
+            'destination' => $country->name,
+            'status' => PackageStatus::PUBLISHED,
+            'price_from' => 1200,
+        ]);
+        $availability = PackageAvailability::create([
+            'package_id' => $package->id,
+            'departure_date' => '2026-11-20',
+            'capacity' => 8,
+            'status' => 'active',
+        ]);
+
+        $dashboard = $this->actingAs($traveler)->get(route('dashboard', ['lang' => 'en']));
+        $dashboard->assertOk()->assertSee(route('account.bookings', ['lang' => 'en']));
+
+        $page = $this->actingAs($traveler)->get(route('account.bookings', [
+            'lang' => 'en',
+            'country_id' => $country->id,
+            'agency_id' => $agency->id,
+            'package_id' => $package->id,
+        ]));
+        $page->assertOk()
+            ->assertSee('Booking')
+            ->assertSee('Book')
+            ->assertSee('Yaounde, Cameroon')
+            ->assertSee('XAF 1,200.00');
+
+        $response = $this->actingAs($traveler)->post(route('account.bookings.store', ['lang' => 'en']), [
+            'country_id' => $country->id,
+            'agency_id' => $agency->id,
+            'package_id' => $package->id,
+            'package_availability_id' => $availability->id,
+            'traveler_count' => 2,
+            'notes' => 'Need a window seat.',
+        ]);
+
+        $response->assertRedirect(route('account.bookings', ['lang' => 'en']));
+        $this->assertDatabaseHas('bookings', [
+            'agency_id' => $agency->id,
+            'package_id' => $package->id,
+            'user_id' => $traveler->id,
+            'traveler_count' => 2,
+            'payment_status' => PaymentStatus::PAID->value,
+            'currency' => 'XAF',
+        ]);
+        $this->assertDatabaseHas('booking_payment_transactions', [
+            'booking_id' => Booking::query()->where('user_id', $traveler->id)->first()->id,
+            'type' => 'charge',
+            'status' => 'succeeded',
+            'currency' => 'XAF',
+        ]);
+        $this->assertSame(1, $agency->owner->notifications()->whereJsonContains('data->type', 'booking')->count());
+    }
+
+    public function test_booking_page_lists_only_packages_with_upcoming_departures_in_the_selected_country(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        $japan = Country::factory()->create(['name' => 'Japan']);
+        $france = Country::factory()->create(['name' => 'France']);
+        $japanAgency = $this->createVerifiedAgency('Japan Journeys', 80);
+        $japanAgency->countries()->attach($japan);
+        $japanPackage = Package::factory()->create([
+            'agency_id' => $japanAgency->id,
+            'title' => 'Kyoto Spring Escape',
+            'destination' => $japan->name,
+            'status' => PackageStatus::PUBLISHED,
+        ]);
+        $japanAvailability = PackageAvailability::create([
+            'package_id' => $japanPackage->id,
+            'departure_date' => now()->addDays(10)->toDateString(),
+            'capacity' => 10,
+            'status' => 'active',
+        ]);
+        $secondJapanPackage = Package::factory()->create([
+            'agency_id' => $japanAgency->id,
+            'title' => 'Hokkaido Winter Route',
+            'destination' => $japan->name,
+            'status' => PackageStatus::PUBLISHED,
+        ]);
+        PackageAvailability::create([
+            'package_id' => $secondJapanPackage->id,
+            'departure_date' => now()->addDays(20)->toDateString(),
+            'capacity' => 8,
+            'status' => 'active',
+        ]);
+        $unavailableJapanPackage = Package::factory()->create([
+            'agency_id' => $japanAgency->id,
+            'title' => 'Japan Without Departures',
+            'destination' => $japan->name,
+            'status' => PackageStatus::PUBLISHED,
+        ]);
+        PackageAvailability::create([
+            'package_id' => $unavailableJapanPackage->id,
+            'departure_date' => now()->addDays(30)->toDateString(),
+            'capacity' => 5,
+            'status' => 'inactive',
+        ]);
+        $franceAgency = $this->createVerifiedAgency('France Journeys', 75);
+        $franceAgency->countries()->attach($france);
+        $francePackage = Package::factory()->create([
+            'agency_id' => $franceAgency->id,
+            'title' => 'Paris Weekend',
+            'destination' => $france->name,
+            'status' => PackageStatus::PUBLISHED,
+        ]);
+        PackageAvailability::create([
+            'package_id' => $francePackage->id,
+            'departure_date' => now()->addDays(10)->toDateString(),
+            'capacity' => 5,
+            'status' => 'active',
+        ]);
+
+        $response = $this->actingAs($traveler)->get(route('account.bookings', [
+            'lang' => 'en',
+            'country_id' => $japan->id,
+        ]));
+
+        $response->assertOk()
+            ->assertSee('Japan Journeys')
+            ->assertSee('Kyoto Spring Escape')
+            ->assertSee('Hokkaido Winter Route')
+            ->assertDontSee('Japan Without Departures')
+            ->assertDontSee('France Journeys')
+            ->assertDontSee('Paris Weekend')
+            ->assertSee(route('account.bookings', [
+                'lang' => 'en',
+                'country_id' => $japan->id,
+                'agency_id' => $japanAgency->id,
+                'package_id' => $japanPackage->id,
+            ]));
+
+        $this->actingAs($traveler)
+            ->post(route('account.bookings.store', ['lang' => 'en']), [
+                'country_id' => $france->id,
+                'agency_id' => $japanAgency->id,
+                'package_id' => $japanPackage->id,
+                'package_availability_id' => $japanAvailability->id,
+                'traveler_count' => 1,
+            ])
+            ->assertNotFound();
+        $this->assertDatabaseCount('bookings', 0);
+
+        $selectedPackageResponse = $this->actingAs($traveler)->get(route('account.bookings', [
+            'lang' => 'en',
+            'country_id' => $japan->id,
+            'agency_id' => $japanAgency->id,
+            'package_id' => $japanPackage->id,
+        ]));
+
+        $selectedPackageResponse->assertOk()
+            ->assertSee('name="country_id" value="'.$japan->id.'"', false)
+            ->assertSee('name="package_id" value="'.$japanPackage->id.'"', false)
+            ->assertSee('name="agency_id" value="'.$japanAgency->id.'"', false)
+            ->assertSee('name="package_availability_id"', false);
     }
 
     public function test_an_authenticated_traveler_keeps_account_navigation_on_discovery(): void
@@ -357,10 +682,24 @@ class TravelerDashboardTest extends TestCase
         $response = $this->actingAs($traveler)->get(route('agency.show', ['slug' => 'atlas-horizon-voyages']));
 
         $response->assertOk();
+        $response->assertSee('4.0')
+            ->assertSee('Basé sur 7 avis');
         $response->assertSee('Top review one');
         $response->assertSee('Top review five');
         $response->assertDontSee('Lower review one');
         $response->assertDontSee('Lower review two');
+    }
+
+    public function test_agency_profile_hides_preset_ratings_without_published_traveler_reviews(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+
+        $response = $this->actingAs($traveler)->get(route('agency.show', ['slug' => 'atlas-horizon-voyages']));
+
+        $response->assertOk()
+            ->assertSee('0.0')
+            ->assertDontSee('4.9')
+            ->assertDontSee('38 avis');
     }
 
     public function test_a_traveler_can_upload_a_profile_photo(): void
@@ -423,8 +762,10 @@ class TravelerDashboardTest extends TestCase
     {
         $traveler = User::factory()->create(['role' => 'traveler']);
         $agency = Agency::factory()->create(['company_name' => 'Atlas Horizon Voyages']);
+        $booking = $this->createCompletedReviewBooking($agency, $traveler);
 
         $response = $this->actingAs($traveler)->post(route('reviews.store', ['slug' => 'atlas-horizon-voyages']), [
+            'booking_id' => $booking->id,
             'rating' => 5,
             'comment' => 'The planning was thoughtful and the trip felt wonderfully easy.',
         ]);
@@ -433,6 +774,7 @@ class TravelerDashboardTest extends TestCase
         $this->assertDatabaseHas('reviews', [
             'agency_id' => $agency->id,
             'user_id' => $traveler->id,
+            'booking_id' => $booking->id,
             'rating' => 5,
             'status' => 'pending',
         ]);
@@ -507,20 +849,66 @@ class TravelerDashboardTest extends TestCase
     {
         $traveler = User::factory()->create(['role' => 'traveler']);
         $agency = Agency::factory()->create(['company_name' => 'Atlas Horizon Voyages']);
+        $booking = $this->createCompletedReviewBooking($agency, $traveler);
 
         $first = $this->actingAs($traveler)->post(route('reviews.store', ['slug' => 'atlas-horizon-voyages']), [
+            'booking_id' => $booking->id,
             'rating' => 5,
             'comment' => 'The planning was thoughtful and the trip felt wonderfully easy.',
         ]);
         $first->assertRedirect();
 
         $second = $this->actingAs($traveler)->post(route('reviews.store', ['slug' => 'atlas-horizon-voyages']), [
+            'booking_id' => $booking->id,
             'rating' => 4,
             'comment' => 'A second review from the same traveler should be blocked.',
         ]);
 
         $second->assertSessionHasErrors('review');
         $this->assertSame(1, $agency->fresh()->reviews()->where('user_id', $traveler->id)->count());
+    }
+
+    public function test_a_traveler_cannot_review_an_agency_without_a_completed_booking(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        Agency::factory()->create(['company_name' => 'Atlas Horizon Voyages']);
+
+        $response = $this->actingAs($traveler)->post(route('reviews.store', ['slug' => 'atlas-horizon-voyages']), [
+            'rating' => 5,
+            'comment' => 'The planning was thoughtful and the trip felt wonderfully easy.',
+        ]);
+
+        $response->assertSessionHasErrors('booking_id');
+        $this->assertDatabaseMissing('reviews', ['user_id' => $traveler->id]);
+    }
+
+    public function test_a_traveler_cannot_use_another_agencys_completed_booking_for_a_review(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        $reviewedAgency = Agency::factory()->create(['company_name' => 'Atlas Horizon Voyages']);
+        $bookingAgency = Agency::factory()->create();
+        $booking = $this->createCompletedReviewBooking($bookingAgency, $traveler);
+
+        $response = $this->actingAs($traveler)->post(route('reviews.store', ['slug' => 'atlas-horizon-voyages']), [
+            'booking_id' => $booking->id,
+            'rating' => 5,
+            'comment' => 'The planning was thoughtful and the trip felt wonderfully easy.',
+        ]);
+
+        $response->assertSessionHasErrors('booking_id');
+        $this->assertSame(0, $reviewedAgency->reviews()->count());
+    }
+
+    public function test_agency_profile_explains_when_a_traveler_has_no_completed_booking_to_review(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        Agency::factory()->create(['company_name' => 'Atlas Horizon Voyages']);
+
+        $response = $this->actingAs($traveler)->get(route('agency.show', ['slug' => 'atlas-horizon-voyages']));
+
+        $response->assertOk()
+            ->assertSee(__('messages.no_completed_booking_for_review'))
+            ->assertDontSee('name="booking_id"', false);
     }
 
     public function test_agency_owner_sees_the_unread_notification_count_for_new_activity(): void
@@ -626,5 +1014,31 @@ class TravelerDashboardTest extends TestCase
         $response->assertOk();
         $response->assertSee('storage/agency-covers/lumiere-cover.jpg');
         $response->assertSee('data-remove-saved-agency', false);
+    }
+
+    private function createCompletedReviewBooking(Agency $agency, User $traveler): Booking
+    {
+        $package = Package::factory()->create(['agency_id' => $agency->id, 'status' => PackageStatus::PUBLISHED]);
+        $availability = PackageAvailability::create([
+            'package_id' => $package->id,
+            'departure_date' => now()->subDays(3)->toDateString(),
+            'capacity' => 10,
+            'status' => 'active',
+        ]);
+
+        return Booking::create([
+            'agency_id' => $agency->id,
+            'package_id' => $package->id,
+            'package_availability_id' => $availability->id,
+            'user_id' => $traveler->id,
+            'booking_reference' => 'TC-REVIEW-'.str_pad((string) $agency->id, 6, '0', STR_PAD_LEFT),
+            'status' => 'completed',
+            'payment_status' => PaymentStatus::UNPAID,
+            'traveler_count' => 1,
+            'unit_price' => 100,
+            'total_amount' => 100,
+            'currency' => 'XAF',
+            'completed_at' => now()->subDay(),
+        ]);
     }
 }

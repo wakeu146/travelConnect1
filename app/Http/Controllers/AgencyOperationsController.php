@@ -6,9 +6,14 @@ use App\Enums\PaymentStatus;
 use App\Enums\ReviewStatus;
 use App\Models\Agency;
 use App\Models\Booking;
+use App\Models\Review;
 use App\Models\User;
+use App\Notifications\AgencyActivityNotification;
 use Carbon\Carbon;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class AgencyOperationsController extends Controller
@@ -76,10 +81,18 @@ class AgencyOperationsController extends Controller
         $agency = $this->currentAgency();
         $status = $request->query('status');
         $rating = $request->query('rating');
+        $search = trim((string) $request->query('search', ''));
         $validStatuses = array_map(fn (ReviewStatus $value) => $value->value, ReviewStatus::cases());
 
         $reviews = $agency->reviews()
-            ->with('user:id,name')
+            ->with(['user:id,name,email,phone,profile_photo_path', 'booking:id,booking_reference,package_id,status', 'booking.package:id,title,destination'])
+            ->when($search !== '', fn ($query) => $query->where(function ($reviewQuery) use ($search): void {
+                $reviewQuery->where('comment', 'like', "%{$search}%")
+                    ->orWhereHas('user', fn ($userQuery) => $userQuery
+                        ->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%"))
+                    ->orWhereHas('booking', fn ($bookingQuery) => $bookingQuery->where('booking_reference', 'like', "%{$search}%"));
+            }))
             ->when($status && in_array($status, $validStatuses, true), fn ($query) => $query->where('status', $status))
             ->when($rating && in_array((int) $rating, [1, 2, 3, 4, 5], true), fn ($query) => $query->where('rating', (int) $rating))
             ->latest()
@@ -92,12 +105,60 @@ class AgencyOperationsController extends Controller
         return view('agencies.reviews.index', [
             'agency' => $agency,
             'reviews' => $reviews,
+            'search' => $search,
             'status' => $status ?? '',
             'rating' => $rating ?? '',
             'publishedReviewCount' => (clone $publishedReviews)->count(),
             'averageRating' => (float) ((clone $publishedReviews)->avg('rating') ?? 0),
             'ratingCounts' => $ratingCounts,
         ]);
+    }
+
+    public function respondToReview(Request $request, Review $review): RedirectResponse
+    {
+        $agency = $this->currentAgency();
+        abort_unless($review->agency_id === $agency->id, 404);
+        abort_unless($review->status === ReviewStatus::PUBLISHED, 403);
+
+        $data = $request->validate([
+            'agency_response' => ['required', 'string', 'min:10', 'max:2000'],
+        ]);
+
+        $review->update([
+            'agency_response' => $data['agency_response'],
+            'agency_responded_at' => now(),
+        ]);
+
+        $review->user?->notify(new AgencyActivityNotification(
+            __('messages.review_response_notification_title'),
+            __('messages.review_response_notification', ['agency' => $agency->company_name]),
+            'review_response',
+            route('agency.show', ['slug' => Str::slug($agency->company_name), 'lang' => app()->getLocale()]).'#reviews'
+        ));
+
+        return back()->with('status', __('messages.review_response_saved'));
+    }
+
+    public function publishReview(Review $review): RedirectResponse
+    {
+        $agency = $this->currentAgency();
+        abort_unless($review->agency_id === $agency->id, 404);
+        abort_unless($review->status === ReviewStatus::PENDING, 409);
+
+        DB::transaction(function () use ($agency, $review): void {
+            $lockedReview = Review::query()
+                ->where('agency_id', $agency->id)
+                ->whereKey($review->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            abort_unless($lockedReview->status === ReviewStatus::PENDING, 409);
+
+            $lockedReview->update(['status' => ReviewStatus::PUBLISHED]);
+            $agency->refresh()->recalculateTrustScoreFromPublishedReviews();
+        });
+
+        return back()->with('status', __('messages.review_published'));
     }
 
     public function payments(Request $request): View

@@ -69,6 +69,67 @@ html {
     background: var(--agency-accent, #e76f51);
 }
 
+[data-agency-shell] *::-webkit-scrollbar-thumb,
+[data-account-shell] *::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--agency-accent, var(--account-accent)) 72%, #ffffff 28%);
+}
+
+[data-agency-shell] *::-webkit-scrollbar-track,
+[data-account-shell] *::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+[data-agency-shell] h1,
+[data-agency-shell] h2,
+[data-agency-shell] h3,
+[data-agency-shell] h4,
+[data-agency-shell] h5,
+[data-agency-shell] h6,
+[data-account-shell] h1,
+[data-account-shell] h2,
+[data-account-shell] h3,
+[data-account-shell] h4,
+[data-account-shell] h5,
+[data-account-shell] h6 {
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+[data-agency-shell] .agency-panel,
+[data-agency-shell] .agency-panel-elevated,
+[data-agency-shell] .agency-kpi,
+[data-account-shell] .dashboard-panel,
+[data-account-shell] [data-profile-dropdown],
+[data-agency-shell] .agency-panel-muted,
+[data-agency-shell] .agency-empty-state,
+[data-account-shell] [data-account-sidebar],
+[data-account-shell] [data-account-main] header,
+[data-agency-shell] table,
+[data-agency-shell] .agency-input,
+[data-account-shell] .account-card {
+    border-radius: 0 !important;
+}
+
+[data-agency-shell] table,
+[data-agency-shell] table th,
+[data-agency-shell] table td {
+    border-color: var(--agency-border) !important;
+    background-color: var(--agency-surface) !important;
+    color: var(--agency-text) !important;
+}
+
+[data-agency-shell] table thead th {
+    background-color: var(--agency-surface-soft) !important;
+    color: var(--agency-text) !important;
+}
+
+[data-agency-shell] table tbody tr:nth-child(even) td {
+    background-color: var(--agency-surface-alt) !important;
+}
+
 [data-agency-shell] {
     --agency-bg: #f7f8f6;
     --agency-surface: #ffffff;

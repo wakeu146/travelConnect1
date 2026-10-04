@@ -318,10 +318,18 @@
                     <div class="mt-6">
                         @php $latestInquiry = $recentInquiries->first(); @endphp
                         @if ($latestInquiry)
-                            @php $inquiryStatus = $latestInquiry->getRawOriginal('status'); @endphp
+                            @php
+                                $inquiryStatus = $latestInquiry->getRawOriginal('status');
+                                $showInquirySubject = \App\Models\Inquiry::query()->count() === 1;
+                            @endphp
                             <div class="agency-panel-muted rounded-2xl border p-5">
                                 <p class="agency-text-subtle text-[10px] font-bold uppercase tracking-[.15em]">{{ __('messages.latest_inquiry') }}</p>
-                                <p class="mt-3 text-xl font-bold text-[#173042]">Top {{ $latestInquiry->user?->name ?? __('messages.traveler') }} · {{ $latestInquiry->created_at->translatedFormat('d M Y') }}</p>
+                                @if ($showInquirySubject)
+                                    <p class="mt-3 text-base font-bold text-[#173042]">{{ $latestInquiry->subject }}</p>
+                                    <p class="mt-2 text-sm agency-text-subtle">{{ $latestInquiry->user?->name ?? __('messages.traveler') }} · {{ $latestInquiry->created_at->translatedFormat('d M Y') }}</p>
+                                @else
+                                    <p class="mt-3 text-xl font-bold text-[#173042]">Top {{ $latestInquiry->user?->name ?? __('messages.traveler') }} · {{ $latestInquiry->created_at->translatedFormat('d M Y') }}</p>
+                                @endif
                                 <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
                                     <span class="agency-pill agency-pill-neutral rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.12em]">{{ __('messages.inquiry_status_'.$inquiryStatus) }}</span>
                                     <a href="{{ route('agency.inquiries.index', ['lang' => app()->getLocale()]) }}" class="agency-button-secondary rounded-lg border px-3 py-2 text-[10px] font-bold">{{ __('messages.view_all_inquiries') }}</a>

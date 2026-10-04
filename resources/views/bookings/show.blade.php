@@ -34,7 +34,7 @@
                 <dl class="mt-8 grid gap-5 md:grid-cols-3">
                     <div class="rounded-xl bg-[#f7f8f6] p-4">
                         <dt class="text-xs font-bold uppercase tracking-[.18em] text-[#607985]">Total</dt>
-                        <dd class="mt-2 text-xl font-bold">${{ number_format((float) $booking->total_amount, 2) }}</dd>
+                        <dd class="mt-2 text-xl font-bold">{{ $booking->currency }} {{ number_format((float) $booking->total_amount, 2) }}</dd>
                     </div>
                     <div class="rounded-xl bg-[#f7f8f6] p-4">
                         <dt class="text-xs font-bold uppercase tracking-[.18em] text-[#607985]">Payment</dt>

@@ -10,10 +10,8 @@ use App\Models\Booking;
 use App\Models\Package;
 use App\Models\PackageAvailability;
 use App\Models\User;
-use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection as SupportCollection;
+use Illuminate\Support\Facades\DB;
 
 class BookingService
 {
@@ -61,7 +59,7 @@ class BookingService
                 'traveler_count' => $travelerCount,
                 'unit_price' => $unitPrice,
                 'total_amount' => $total,
-                'currency' => 'USD',
+                'currency' => config('travelconnect.currency'),
                 'expires_at' => now()->addMinutes((int) config('travelconnect.booking_pending_expiry_minutes', 60)),
             ]);
 
@@ -83,11 +81,10 @@ class BookingService
             ? collect()
             : Booking::query()
                 ->selectRaw('package_availability_id, COUNT(*) as active_booking_count, SUM(traveler_count) as reserved_travelers')
+                ->selectRaw('SUM(CASE WHEN status = ? THEN traveler_count ELSE 0 END) as pending_travelers', [BookingStatus::PENDING->value])
+                ->selectRaw('SUM(CASE WHEN status = ? THEN traveler_count ELSE 0 END) as confirmed_travelers', [BookingStatus::CONFIRMED->value])
                 ->whereIn('package_availability_id', $ids)
-                ->whereIn('status', [BookingStatus::PENDING->value, BookingStatus::CONFIRMED->value])
-                ->where(function ($query): void {
-                    $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
-                })
+                ->reservesCapacity()
                 ->groupBy('package_availability_id')
                 ->get()
                 ->keyBy('package_availability_id');
@@ -102,6 +99,8 @@ class BookingService
                 'capacity' => $capacity,
                 'booking_count' => (int) ($reservation->active_booking_count ?? 0),
                 'reserved_travelers' => $reserved,
+                'pending_travelers' => (int) ($reservation->pending_travelers ?? 0),
+                'confirmed_travelers' => (int) ($reservation->confirmed_travelers ?? 0),
                 'remaining_capacity' => $remaining,
                 'occupancy_percent' => $capacity > 0 ? (int) round(($reserved / $capacity) * 100) : 0,
                 'sold_out' => $capacity > 0 && $remaining === 0,
@@ -157,7 +156,7 @@ class BookingService
             switch ($newStatus) {
                 case BookingStatus::CONFIRMED:
                     $payload['confirmed_at'] = now();
-                    $payload['payment_status'] = PaymentStatus::PAID;
+                    $payload['payment_status'] = PaymentStatus::PAID->value;
                     break;
 
                 case BookingStatus::REJECTED:

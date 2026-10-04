@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\DocumentStatus;
+use App\Enums\ReviewStatus;
 use App\Enums\VerificationStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -58,6 +59,11 @@ class Agency extends Model
         return $this->hasMany(Review::class);
     }
 
+    public function conversations(): HasMany
+    {
+        return $this->hasMany(Conversation::class);
+    }
+
     public function inquiries(): HasMany
     {
         return $this->hasMany(Inquiry::class);
@@ -76,6 +82,32 @@ class Agency extends Model
     public function trustScoreLogs(): HasMany
     {
         return $this->hasMany(TrustScoreLog::class);
+    }
+
+    public function recalculateTrustScoreFromPublishedReviews(): int
+    {
+        $publishedReviews = $this->reviews()->where('status', ReviewStatus::PUBLISHED->value);
+        $reviewCount = (clone $publishedReviews)->count();
+
+        if ($reviewCount === 0) {
+            return (int) $this->trust_score;
+        }
+
+        $averageRating = (float) (clone $publishedReviews)->avg('rating');
+        $score = (int) round($averageRating * 20);
+
+        $this->update(['trust_score' => $score]);
+        $this->trustScoreLogs()->create([
+            'score' => $score,
+            'factors' => [
+                'average_published_rating' => $averageRating,
+                'published_review_count' => $reviewCount,
+                'calculation' => 'average_rating_x_20',
+            ],
+            'calculated_at' => now(),
+        ]);
+
+        return $score;
     }
 
     public function logoUrl(): ?string

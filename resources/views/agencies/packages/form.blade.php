@@ -54,7 +54,7 @@
                             <input type="number" name="duration_days" min="1" max="365" value="{{ old('duration_days', $package?->duration_days ?? 1) }}" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm outline-none focus:border-[#e76f51]" required>
                         </div>
                         <div>
-                            <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.price_from') }}</label>
+                            <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.price_from') }} ({{ config('travelconnect.currency') }})</label>
                             <input type="number" step="0.01" min="0" name="price_from" value="{{ old('price_from', $package?->price_from ?? 0) }}" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm outline-none focus:border-[#e76f51]" required>
                         </div>
                         <div>

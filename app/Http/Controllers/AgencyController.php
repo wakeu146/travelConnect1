@@ -16,6 +16,7 @@ use App\Models\PackageImage;
 use App\Models\Service;
 use App\Notifications\AgencyActivityNotification;
 use App\Services\BookingService;
+use App\Services\ConversationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -104,7 +105,7 @@ class AgencyController extends Controller
         ]);
     }
 
-    public function replyToInquiry(Request $request, Inquiry $inquiry): RedirectResponse
+    public function replyToInquiry(Request $request, Inquiry $inquiry, ConversationService $conversationService): RedirectResponse
     {
         $agency = $this->currentAgency();
         abort_unless($inquiry->agency_id === $agency->id, 403);
@@ -127,27 +128,31 @@ class AgencyController extends Controller
 
         $inquiry->update($updateData);
 
+        $conversation = $conversationService->startForInquiry($inquiry->load('user'));
+        $conversationService->send($conversation, $agency->owner, $data['reply_message']);
+        $conversationPath = parse_url(route('agency.conversations.show', [
+            'conversation' => $conversation->id,
+            'lang' => app()->getLocale(),
+        ]), PHP_URL_PATH);
+
         $agency->owner
             ->unreadNotifications()
             ->where('type', AgencyActivityNotification::class)
             ->get()
-            ->filter(function ($notification) use ($inquiry): bool {
+            ->filter(function ($notification) use ($inquiry, $conversationPath): bool {
                 $data = $notification->data ?? [];
                 $message = strtolower((string) ($data['message'] ?? ''));
                 $title = strtolower((string) ($data['title'] ?? ''));
                 $subject = strtolower($inquiry->subject);
 
-                return ($data['type'] ?? null) === 'inquiry'
+                $isInquiryNotification = ($data['type'] ?? null) === 'inquiry'
                     && ($message === '' || str_contains($message, $subject) || str_contains($title, $subject));
+                $isConversationNotification = ($data['type'] ?? null) === 'conversation'
+                    && parse_url((string) ($data['url'] ?? ''), PHP_URL_PATH) === $conversationPath;
+
+                return $isInquiryNotification || $isConversationNotification;
             })
             ->each(fn ($notification) => $notification->markAsRead());
-
-        $inquiry->user?->notify(new AgencyActivityNotification(
-            'Agency response',
-            'The agency replied to your inquiry: '.$inquiry->subject.'.',
-            'inquiry_reply',
-            route('account.activity', ['lang' => app()->getLocale()])
-        ));
 
         return back()->with('inquiry_reply_status', 'Your reply was sent to the traveler.');
     }
@@ -164,6 +169,7 @@ class AgencyController extends Controller
         }
 
         $inquiry->update($updateData);
+        $inquiry->conversation?->update(['status' => 'closed']);
 
         $inquiry->user?->notify(new AgencyActivityNotification(
             'Inquiry closed',
@@ -246,7 +252,7 @@ class AgencyController extends Controller
             'cover_image' => ['directory' => 'agency-covers', 'column' => 'cover_image_path', 'remove' => 'remove_cover_image'],
         ] as $input => $options) {
             if ($request->hasFile($input)) {
-                $path = $request->file($input)->store($options['directory'].'/'.$agency->id, 'public');
+                $path = $request->file($input)->storePublicly($options['directory'].'/'.$agency->id, 'public');
                 if (! $path) {
                     $disk->delete($newPaths);
 

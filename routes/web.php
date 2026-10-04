@@ -4,6 +4,9 @@ use App\Enums\PackageStatus;
 use App\Http\Controllers\AgencyAvailabilityController;
 use App\Http\Controllers\AgencyBookingController;
 use App\Http\Controllers\AgencyController;
+use App\Http\Controllers\AgencyConversationController;
+use App\Http\Controllers\AgencyDiscoveryController;
+use App\Http\Controllers\AgencyNotificationController;
 use App\Http\Controllers\AgencyOperationsController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BookingController;
@@ -20,146 +23,8 @@ Route::get('/', function () {
     return view('public-home');
 })->name('home');
 
-Route::get('/discover', function () {
-    /** @var User $user */
-    $user = Auth::user();
-    $search = trim((string) request('search'));
-    $normalizedSearch = strtolower(preg_replace('/\s+/', ' ', $search) ?? $search);
-    $agencies = Agency::verified()->with(['countries', 'services', 'reviews'])
-        ->withCount(['reviews as published_reviews_count' => fn ($query) => $query->where('status', 'published')])
-        ->withAvg(['reviews as published_rating' => fn ($query) => $query->where('status', 'published')], 'rating')
-        ->orderByDesc('trust_score')
-        ->get();
-
-    $matchesSearch = function (Agency $agency) use ($normalizedSearch): bool {
-        if ($normalizedSearch === '') {
-            return true;
-        }
-
-        $searchableValues = [
-            strtolower($agency->company_name),
-            strtolower($agency->description ?? ''),
-            strtolower($agency->email ?? ''),
-            strtolower(Str::slug($agency->company_name)),
-            ...$agency->countries->pluck('name')->map(fn ($country) => strtolower((string) $country))->all(),
-            ...$agency->services->pluck('name')->map(fn ($service) => strtolower((string) $service))->all(),
-        ];
-
-        foreach ($searchableValues as $value) {
-            $value = (string) $value;
-            if ($value === '') {
-                continue;
-            }
-
-            if (str_contains($value, $normalizedSearch)) {
-                return true;
-            }
-
-            foreach (preg_split('/[\s_\-]+/', $value) as $token) {
-                $token = strtolower((string) $token);
-                if ($token === '') {
-                    continue;
-                }
-
-                if (str_contains($token, $normalizedSearch)) {
-                    return true;
-                }
-
-                $score = 0;
-                similar_text($token, $normalizedSearch, $score);
-                if ($score >= 70) {
-                    return true;
-                }
-            }
-
-            $score = 0;
-            similar_text($value, $normalizedSearch, $score);
-            if ($score >= 80) {
-                return true;
-            }
-        }
-
-        return false;
-    };
-
-    if ($normalizedSearch !== '') {
-        $agencies = $agencies->filter($matchesSearch);
-    } else {
-        $agencies = $agencies->filter(fn (Agency $agency) => in_array($agency->company_name, ['Atlas Horizon Voyages', 'Lumiere Routes', 'Northstar Escapes'], true))->take(3);
-    }
-
-    return view('discover', ['agencies' => $agencies, 'savedAgencyNames' => $user->favoriteAgencies()->pluck('company_name')->all()]);
-})->middleware('auth')->name('discover');
-Route::get('/account/discover', function () {
-    /** @var User $user */
-    $user = Auth::user();
-    $search = trim((string) request('search'));
-    $normalizedSearch = strtolower(preg_replace('/\s+/', ' ', $search) ?? $search);
-    $agencies = Agency::verified()->with(['countries', 'services', 'reviews'])
-        ->withCount(['reviews as published_reviews_count' => fn ($query) => $query->where('status', 'published')])
-        ->withAvg(['reviews as published_rating' => fn ($query) => $query->where('status', 'published')], 'rating')
-        ->orderByDesc('trust_score')
-        ->get();
-
-    $matchesSearch = function (Agency $agency) use ($normalizedSearch): bool {
-        if ($normalizedSearch === '') {
-            return true;
-        }
-
-        $searchableValues = [
-            strtolower($agency->company_name),
-            strtolower($agency->description ?? ''),
-            strtolower($agency->email ?? ''),
-            strtolower(Str::slug($agency->company_name)),
-            ...$agency->countries->pluck('name')->map(fn ($country) => strtolower((string) $country))->all(),
-            ...$agency->services->pluck('name')->map(fn ($service) => strtolower((string) $service))->all(),
-        ];
-
-        foreach ($searchableValues as $value) {
-            $value = (string) $value;
-            if ($value === '') {
-                continue;
-            }
-
-            if (str_contains($value, $normalizedSearch)) {
-                return true;
-            }
-
-            foreach (preg_split('/[\s_\-]+/', $value) as $token) {
-                $token = strtolower((string) $token);
-                if ($token === '') {
-                    continue;
-                }
-
-                if (str_contains($token, $normalizedSearch)) {
-                    return true;
-                }
-
-                $score = 0;
-                similar_text($token, $normalizedSearch, $score);
-                if ($score >= 70) {
-                    return true;
-                }
-            }
-
-            $score = 0;
-            similar_text($value, $normalizedSearch, $score);
-            if ($score >= 80) {
-                return true;
-            }
-        }
-
-        return false;
-    };
-
-    if ($normalizedSearch !== '') {
-        $agencies = $agencies->filter($matchesSearch);
-    } else {
-        $agencies = $agencies->filter(fn (Agency $agency) => in_array($agency->company_name, ['Atlas Horizon Voyages', 'Lumiere Routes', 'Northstar Escapes'], true))->take(3);
-    }
-
-    return view('discover', ['agencies' => $agencies, 'savedAgencyNames' => $user->favoriteAgencies()->pluck('company_name')->all()]);
-})->middleware('auth')->name('account.discover');
+Route::get('/discover', [AgencyDiscoveryController::class, 'index'])->middleware('auth')->name('discover');
+Route::get('/account/discover', [AgencyDiscoveryController::class, 'index'])->middleware('auth')->name('account.discover');
 Route::get('/agencies/{slug}', function (string $slug) {
     $fallbackAgencies = [
         'atlas-horizon-voyages' => ['name' => 'Atlas Horizon Voyages', 'country' => 'France', 'service' => 'Adventure travel', 'rating' => '4.9', 'reviews' => '38', 'description' => 'Tailor-made adventures across Europe and beyond, planned by a team that knows the routes personally.', 'cover' => asset('images/agencies/atlas-horizon.jpg')],
@@ -217,12 +82,22 @@ Route::get('/agencies/{slug}', function (string $slug) {
 
     $publishedReviewCount = $agencyModel?->reviews()->where('status', 'published')->count() ?? 0;
     $publishedReviews = $agencyModel?->reviews()->with('user')->where('status', 'published')->orderByDesc('rating')->orderByDesc('created_at')->limit(5)->get() ?? collect();
-    $visibleReviewCount = $publishedReviewCount ?: (int) ($agencyData['reviews'] ?? 0);
-    $visibleRating = $publishedReviewCount ? number_format($agencyModel->reviews()->where('status', 'published')->avg('rating') ?? 0, 1) : ($agencyData['rating'] ?? '0');
+    $visibleReviewCount = $publishedReviewCount;
+    $visibleRating = $publishedReviewCount
+        ? number_format((float) $agencyModel->reviews()->where('status', 'published')->avg('rating'), 1)
+        : '0.0';
     $ratingCounts = $agencyModel && $publishedReviewCount ? $agencyModel->reviews()->where('status', 'published')->get()->groupBy('rating')->map->count() : collect();
     $pendingReview = $agencyModel?->reviews()->where('user_id', $user->id)->where('status', 'pending')->latest()->first();
+    $eligibleReviewBookings = $agencyModel && $user->isTraveler() && ! $agencyModel->reviews()->where('user_id', $user->id)->exists()
+        ? $user->bookings()
+            ->where('agency_id', $agencyModel->id)
+            ->where('status', 'completed')
+            ->whereDoesntHave('review')
+            ->with('package:id,title')
+            ->get(['id', 'package_id', 'booking_reference', 'completed_at'])
+        : collect();
 
-    return view('agency-show', ['agency' => $agencyData, 'agencyModel' => $agencyModel, 'packages' => $agencyModel?->packages ?? collect(), 'isSaved' => $agencyModel && $user->favoriteAgencies()->whereKey($agencyModel->id)->exists(), 'publishedReviews' => $publishedReviews, 'publishedReviewCount' => $publishedReviewCount, 'visibleReviewCount' => $visibleReviewCount, 'visibleRating' => $visibleRating, 'ratingCounts' => $ratingCounts, 'pendingReview' => $pendingReview]);
+    return view('agency-show', ['agency' => $agencyData, 'agencyModel' => $agencyModel, 'packages' => $agencyModel?->packages ?? collect(), 'isSaved' => $agencyModel && $user->favoriteAgencies()->whereKey($agencyModel->id)->exists(), 'publishedReviews' => $publishedReviews, 'publishedReviewCount' => $publishedReviewCount, 'visibleReviewCount' => $visibleReviewCount, 'visibleRating' => $visibleRating, 'ratingCounts' => $ratingCounts, 'pendingReview' => $pendingReview, 'eligibleReviewBookings' => $eligibleReviewBookings]);
 })->middleware('auth')->name('agency.show');
 Route::post('/agencies/{slug}/inquiries', [InquiryController::class, 'store'])->middleware('auth')->name('inquiries.store');
 Route::post('/agencies/{slug}/reviews', [ReviewController::class, 'store'])->middleware('auth')->name('reviews.store');
@@ -286,8 +161,22 @@ Route::middleware(['auth', 'agency-owner'])->prefix('agency')->name('agency.')->
     Route::get('/inquiries', [AgencyOperationsController::class, 'inquiries'])->name('inquiries.index');
     Route::get('/customers', [AgencyOperationsController::class, 'customers'])->name('customers.index');
     Route::get('/reviews', [AgencyOperationsController::class, 'reviews'])->name('reviews.index');
+    Route::patch('/reviews/{review}/publish', [AgencyOperationsController::class, 'publishReview'])->name('reviews.publish');
+    Route::post('/reviews/{review}/response', [AgencyOperationsController::class, 'respondToReview'])->name('reviews.response');
     Route::get('/payments', [AgencyOperationsController::class, 'payments'])->name('payments.index');
     Route::get('/analytics', [AgencyOperationsController::class, 'analytics'])->name('analytics.index');
+    Route::get('/conversations', [AgencyConversationController::class, 'index'])->name('conversations.index');
+    Route::get('/conversations/{conversation}', [AgencyConversationController::class, 'show'])->name('conversations.show');
+    Route::post('/conversations/{conversation}/messages', [AgencyConversationController::class, 'send'])->name('conversations.messages.store');
+    Route::get('/notifications', [AgencyNotificationController::class, 'index'])->name('notifications.index');
+    Route::patch('/notifications/read-all', [AgencyNotificationController::class, 'markAllRead'])->name('notifications.read-all');
+    Route::patch('/notifications/{notification}/read', [AgencyNotificationController::class, 'markRead'])->name('notifications.read');
+});
+
+Route::middleware('auth')->prefix('account/conversations')->name('account.conversations.')->group(function (): void {
+    Route::get('/', [TravelerConversationController::class, 'index'])->name('index');
+    Route::get('/{conversation}', [TravelerConversationController::class, 'show'])->name('show');
+    Route::post('/{conversation}/messages', [TravelerConversationController::class, 'send'])->name('messages.store');
 });
 
 Route::get('/packages/{package}', [BookingController::class, 'packageShow'])->name('packages.show');
@@ -319,10 +208,19 @@ Route::get('/dashboard', function () {
         'publishedReviewCount' => $user->reviews()->count(),
         'recentInquiries' => $user->inquiries()->with('agency')->latest()->take(3)->get(),
         'recentReviews' => $user->reviews()->with('agency')->latest()->take(3)->get(),
-        'recommendedAgencies' => Agency::verified()->latest()->take(3)->get(),
+        'recommendedAgencies' => Agency::verified()
+            ->with(['countries:id,name', 'services:id,name'])
+            ->withCount(['reviews as published_reviews_count' => fn ($query) => $query->where('status', 'published')])
+            ->withAvg(['reviews as published_rating' => fn ($query) => $query->where('status', 'published')], 'rating')
+            ->orderByDesc('trust_score')
+            ->orderBy('company_name')
+            ->orderBy('id')
+            ->limit(3)
+            ->get(),
     ]);
 })->middleware('auth')->name('dashboard');
 Route::get('/account/bookings', [BookingController::class, 'index'])->middleware('auth')->name('account.bookings');
+Route::post('/account/bookings', [BookingController::class, 'storeFromAccount'])->middleware('auth')->name('account.bookings.store');
 Route::view('/settings', 'auth.settings')->middleware('auth')->name('settings');
 Route::put('/settings/profile', [AuthController::class, 'updateProfile'])->middleware('auth')->name('settings.profile');
 Route::post('/settings/profile-photo', [AuthController::class, 'updateProfilePhoto'])->middleware('auth')->name('settings.profile-photo');
