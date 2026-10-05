@@ -28,28 +28,9 @@
             </div>
             <aside><div class="sticky top-8 rounded-xl border border-[#e7eceb] bg-white p-6 shadow-[0_12px_30px_rgba(23,48,66,.06)]"><h2 class="text-lg font-bold text-[#173042]">{{ __('messages.connect_with_this_agency') }}</h2><p class="mt-3 text-sm leading-6 text-[#607985]">{{ __('messages.tell_the_agency') }}</p>
 
-                    @php($agencyContact = $agencyModel ?? null)
-                    @if ($agencyContact && ($agencyContact->email || $agencyContact->phone))
-                        <div class="mt-5 space-y-3 border-t border-[#e7eceb] pt-5">
-                            @if (filled($agencyContact->email))
-                                <div>
-                                    <p class="text-[10px] font-bold uppercase tracking-[.18em] text-[#607985]">{{ __('messages.email') }}</p>
-                                    <a href="mailto:{{ $agencyContact->email }}" class="mt-1 block text-sm font-semibold text-[#173042] hover:text-[#e76f51]">{{ $agencyContact->email }}</a>
-                                </div>
-                            @endif
-
-                            @if (filled($agencyContact->phone))
-                                <div>
-                                    <p class="text-[10px] font-bold uppercase tracking-[.18em] text-[#607985]">{{ __('messages.phone') }}</p>
-                                    <a href="tel:{{ preg_replace('/[^0-9+]/', '', $agencyContact->phone) }}" class="mt-1 block text-sm font-semibold text-[#173042] hover:text-[#e76f51]">{{ $agencyContact->phone }}</a>
-                                </div>
-                            @endif
-                        </div>
-                    @endif
-
                     <div class="mt-5 rounded-xl border border-[#f3d7b7] bg-[#fffaf0] p-4">
                         <p class="text-xs font-bold uppercase tracking-[.16em] text-[#b7771b]">{{ __('messages.payment') }}</p>
-                        <p class="mt-2 text-sm leading-6 text-[#674b23]">{{ __('messages.external_payment_guidance') }}</p>
+                        <p class="mt-2 text-sm leading-6 text-[#674b23]">{{ __('messages.booking_platform_guidance') }}</p>
                     </div>
 
                     @if (session('inquiry_status'))<p class="mt-4 rounded-lg bg-[#e8f5ef] px-3 py-2 text-sm font-semibold text-[#247653]">{{ session('inquiry_status') }}</p>@endif @if (auth()->check() && auth()->user()->isTraveler())<form action="{{ route('inquiries.store', ['slug' => request()->route('slug'), 'lang' => app()->getLocale()]) }}" method="POST" class="mt-5 grid gap-3">@csrf<div><label for="inquiry-subject" class="mb-1 block text-xs font-bold uppercase tracking-[.12em] text-[#607985]">{{ __('messages.subject') }}</label><input id="inquiry-subject" type="text" name="subject" value="{{ old('subject') }}" required maxlength="255" placeholder="{{ __('messages.subject') }}" class="w-full rounded-xl border border-[#d7e0e1] bg-white px-3 py-2.5 text-sm text-[#173042] outline-none focus:border-[#e76f51]"></div><div><label for="inquiry-message" class="mb-1 block text-xs font-bold uppercase tracking-[.12em] text-[#607985]">{{ __('messages.message') }}</label><textarea id="inquiry-message" name="message" rows="5" required minlength="10" maxlength="2000" placeholder="{{ __('messages.tell_the_agency') }}" class="w-full rounded-xl border border-[#d7e0e1] bg-white px-3 py-2.5 text-sm text-[#173042] outline-none focus:border-[#e76f51]">{{ old('message') }}</textarea></div>@error('subject')<p class="text-sm font-semibold text-[#b42318]">{{ $message }}</p>@enderror @error('message')<p class="text-sm font-semibold text-[#b42318]">{{ $message }}</p>@enderror<button type="submit" class="mt-1 flex w-full items-center justify-center rounded-xl bg-[#e76f51] px-5 py-3.5 text-sm font-bold text-white transition hover:bg-[#d95f42]">{{ __('messages.send_an_inquiry') }} <span class="ml-2" aria-hidden="true">&rarr;</span></button></form>@else<a href="{{ route('login', ['lang' => app()->getLocale()]) }}" class="mt-6 flex w-full items-center justify-center rounded-xl bg-[#e76f51] px-5 py-3.5 text-sm font-bold text-white transition hover:bg-[#d95f42]">{{ __('messages.send_an_inquiry') }} <span class="ml-2" aria-hidden="true">&rarr;</span></a>@endif<button type="button" data-favorite-toggle data-agency-slug="{{ request()->route('slug') }}" data-saved="{{ $isSaved ? 'true' : 'false' }}" data-authenticated="{{ auth()->check() ? 'true' : 'false' }}" data-login-url="{{ route('login', ['lang' => app()->getLocale()]) }}" aria-pressed="{{ $isSaved ? 'true' : 'false' }}" class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-[#d7e0e1] px-5 py-3.5 text-sm font-bold text-[#173042] transition hover:border-[#e76f51] hover:text-[#e76f51]"><span data-favorite-icon aria-hidden="true">{{ $isSaved ? '♥' : '♡' }}</span><span data-favorite-label>{{ $isSaved ? __('messages.agency_saved') : __('messages.save_agency') }}</span></button><div class="mt-6 border-t border-[#e7eceb] pt-5 text-sm text-[#607985]"><p class="font-semibold text-[#173042]">{{ __('messages.trust_signals') }}</p><p class="mt-2">{{ __('messages.business_identity_reviewed') }}</p><p class="mt-1">{{ __('messages.verified_agency_information') }}</p><p class="mt-1">{{ __('messages.traveler_reviews_published') }}</p></div></div></aside>

@@ -39,6 +39,11 @@ class BookingService
 
         return DB::transaction(function () use ($traveler, $package, $availability, $travelerCount): Booking {
             $availability->refresh();
+
+            if ($availability->departure_date->lte(today())) {
+                throw new \RuntimeException('This departure date has passed.');
+            }
+
             $available = $this->lockAndGetAvailableCapacity($availability);
 
             if ($travelerCount > $available) {
@@ -88,10 +93,20 @@ class BookingService
                 ->groupBy('package_availability_id')
                 ->get()
                 ->keyBy('package_availability_id');
+        $completedReservations = $ids->isEmpty()
+            ? collect()
+            : Booking::query()
+                ->selectRaw('package_availability_id, SUM(traveler_count) as completed_travelers')
+                ->whereIn('package_availability_id', $ids)
+                ->where('status', BookingStatus::COMPLETED->value)
+                ->groupBy('package_availability_id')
+                ->get()
+                ->keyBy('package_availability_id');
 
-        return $availabilities->mapWithKeys(function (PackageAvailability $availability) use ($reservations): array {
+        return $availabilities->mapWithKeys(function (PackageAvailability $availability) use ($reservations, $completedReservations): array {
             $capacity = max(0, (int) $availability->capacity);
             $reservation = $reservations->get($availability->id);
+            $completedReservation = $completedReservations->get($availability->id);
             $reserved = min($capacity, (int) ($reservation->reserved_travelers ?? 0));
             $remaining = max(0, $capacity - $reserved);
 
@@ -99,6 +114,7 @@ class BookingService
                 'capacity' => $capacity,
                 'booking_count' => (int) ($reservation->active_booking_count ?? 0),
                 'reserved_travelers' => $reserved,
+                'completed_travelers' => (int) ($completedReservation->completed_travelers ?? 0),
                 'pending_travelers' => (int) ($reservation->pending_travelers ?? 0),
                 'confirmed_travelers' => (int) ($reservation->confirmed_travelers ?? 0),
                 'remaining_capacity' => $remaining,
@@ -122,6 +138,14 @@ class BookingService
         }
 
         return $expiredBookings->count();
+    }
+
+    public function expirePastDepartures(): int
+    {
+        return PackageAvailability::query()
+            ->where('status', PackageAvailabilityStatus::ACTIVE->value)
+            ->whereDate('departure_date', '<=', today()->toDateString())
+            ->update(['status' => PackageAvailabilityStatus::EXPIRED->value]);
     }
 
     public function transitionStatus(Booking $booking, BookingStatus $newStatus, ?string $cancellationReason = null): Booking

@@ -437,6 +437,7 @@ class AgencyBookingManagementTest extends TestCase
             ['status' => 'pending', 'traveler_count' => 3, 'expires_at' => now()->subMinute()],
             ['status' => 'cancelled', 'traveler_count' => 4, 'expires_at' => now()->addHour()],
             ['status' => 'confirmed', 'traveler_count' => 1, 'expires_at' => now()->subMinute()],
+            ['status' => 'completed', 'traveler_count' => 1, 'expires_at' => now()->subMinute()],
         ] as $index => $attributes) {
             Booking::create(array_merge($attributes, [
                 'agency_id' => $agency->id,
@@ -457,6 +458,7 @@ class AgencyBookingManagementTest extends TestCase
         $this->assertSame(4, $snapshot['reserved_travelers']);
         $this->assertSame(1, $snapshot['pending_travelers']);
         $this->assertSame(3, $snapshot['confirmed_travelers']);
+        $this->assertSame(1, $snapshot['completed_travelers']);
         $this->assertSame(1, $snapshot['remaining_capacity']);
         $this->assertSame(80, $snapshot['occupancy_percent']);
         $this->assertFalse($snapshot['sold_out']);
@@ -480,6 +482,53 @@ class AgencyBookingManagementTest extends TestCase
         $this->assertSame(0, $fullSnapshot['remaining_capacity']);
         $this->assertTrue($fullSnapshot['sold_out']);
         $this->assertFalse($fullSnapshot['near_capacity']);
+    }
+
+    public function test_departures_on_or_before_today_are_expired_but_future_departures_stay_active(): void
+    {
+        $agency = Agency::factory()->create();
+        $package = Package::factory()->create(['agency_id' => $agency->id]);
+        $pastDeparture = PackageAvailability::create([
+            'package_id' => $package->id,
+            'departure_date' => today()->subDay()->toDateString(),
+            'capacity' => 10,
+            'status' => 'active',
+        ]);
+        $departureToday = PackageAvailability::create([
+            'package_id' => $package->id,
+            'departure_date' => today()->toDateString(),
+            'capacity' => 10,
+            'status' => 'active',
+        ]);
+        $futureDeparture = PackageAvailability::create([
+            'package_id' => $package->id,
+            'departure_date' => today()->addDay()->toDateString(),
+            'capacity' => 10,
+            'status' => 'active',
+        ]);
+
+        $expiredCount = (new BookingService)->expirePastDepartures();
+
+        $this->assertSame(2, $expiredCount);
+        $this->assertSame('expired', $pastDeparture->fresh()->status->value);
+        $this->assertSame('expired', $departureToday->fresh()->status->value);
+        $this->assertSame('active', $futureDeparture->fresh()->status->value);
+    }
+
+    public function test_a_traveler_cannot_book_a_departure_on_or_before_today(): void
+    {
+        $agency = Agency::factory()->create();
+        $package = Package::factory()->create(['agency_id' => $agency->id, 'status' => PackageStatus::PUBLISHED]);
+        $availability = PackageAvailability::create([
+            'package_id' => $package->id,
+            'departure_date' => today()->toDateString(),
+            'capacity' => 10,
+            'status' => 'active',
+        ]);
+        $traveler = User::factory()->create(['role' => 'traveler']);
+
+        $this->expectException(\RuntimeException::class);
+        (new BookingService)->createBooking($traveler, $package, $availability, 1);
     }
 
     public function test_invalid_booking_transition_is_rejected(): void
@@ -536,6 +585,12 @@ class AgencyBookingManagementTest extends TestCase
             'traveler_count' => 3,
             'expires_at' => now()->subHour(),
         ]);
+        $this->createBooking($agency, $package, $availability, User::factory()->create(['role' => 'traveler']), 'TC-AVAIL-000003', [
+            'status' => 'completed',
+            'payment_status' => PaymentStatus::PAID->value,
+            'traveler_count' => 4,
+            'expires_at' => now()->subDay(),
+        ]);
 
         $this->actingAs($agency->owner)
             ->get(route('agency.availability.index'))
@@ -544,7 +599,26 @@ class AgencyBookingManagementTest extends TestCase
             ->assertSee('2026-11-10')
             ->assertSee(__('messages.confirmed_travelers'))
             ->assertSee(__('messages.pending_travelers'))
+            ->assertSee(__('messages.completed_travelers'))
+            ->assertSee('>4</dd>', false)
             ->assertSee('42%');
+    }
+
+    public function test_agency_availability_page_expires_departures_that_have_reached_today(): void
+    {
+        $agency = Agency::factory()->create();
+        $package = Package::factory()->create(['agency_id' => $agency->id, 'status' => PackageStatus::PUBLISHED]);
+        $availability = PackageAvailability::create([
+            'package_id' => $package->id,
+            'departure_date' => today()->toDateString(),
+            'capacity' => 12,
+            'status' => 'active',
+        ]);
+
+        $response = $this->actingAs($agency->owner)->get(route('agency.availability.index'));
+
+        $response->assertOk()->assertSee(__('messages.expired'));
+        $this->assertSame('expired', $availability->fresh()->status->value);
     }
 
     public function test_agency_booking_detail_page_renders_for_the_current_agency(): void

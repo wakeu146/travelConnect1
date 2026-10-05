@@ -47,12 +47,12 @@
     <div data-agency-shell class="dashboard-shell min-h-screen bg-[#f7f8f6] text-[#173042] transition-colors duration-300">
         <aside data-agency-sidebar class="fixed inset-y-0 left-0 z-50 flex w-72 -translate-x-full flex-col overflow-y-auto overscroll-contain border-r border-[#e4e9e7] bg-white px-5 py-6 shadow-xl transition-transform duration-300 lg:translate-x-0 lg:shadow-none">
         <div class="flex items-center justify-between gap-2 px-2">
-            <a data-agency-brand href="{{ route('home', ['lang' => app()->getLocale()]) }}" class="flex min-w-0 items-center gap-3 text-lg font-semibold">
+            <div data-agency-brand class="flex min-w-0 items-center gap-3 text-lg font-semibold">
                 <span class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#f1f6f4]">
                     <img src="{{ asset('images/logo.png') }}" alt="TravelConnect logo" class="h-full w-full object-contain">
                 </span>
                 <span>Travel<span class="font-normal text-[#e76f51]">Connect</span></span>
-            </a>
+            </div>
             <button type="button" data-agency-expand class="hidden h-9 w-9 items-center justify-center rounded-lg text-[#607985] hover:bg-[#f1f6f4]" aria-label="{{ __('messages.expand_navigation') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5" aria-hidden="true"><path d="m9 5 6 7-6 7"/></svg></button>
             <button type="button" data-agency-collapse class="hidden h-9 w-9 items-center justify-center rounded-lg text-[#607985] hover:bg-[#f1f6f4] lg:flex" aria-label="{{ __('messages.collapse_navigation') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5" aria-hidden="true"><path d="m15 5-6 7 6 7"/></svg></button>
             <button type="button" data-agency-close class="flex h-9 w-9 items-center justify-center rounded-lg text-[#607985] hover:bg-[#f1f6f4] lg:hidden" aria-label="{{ __('messages.close_navigation') }}">

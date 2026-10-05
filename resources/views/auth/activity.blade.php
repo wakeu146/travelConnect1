@@ -29,7 +29,7 @@
                             </div>
                             <p class="mt-2 text-sm leading-6 text-[#607985]">{{ $data['message'] ?? '' }}</p>
                             @if (!empty($data['url']))
-                                <a href="{{ $data['url'] }}" class="mt-3 inline-flex text-sm font-bold text-[#e76f51] hover:text-[#b94d35]">{{ __('messages.view_all') }}</a>
+                                <a href="{{ ($data['type'] ?? null) === 'booking' ? route('account.bookings', ['lang' => app()->getLocale()]) : $data['url'] }}" class="mt-3 inline-flex text-sm font-bold text-[#e76f51] hover:text-[#b94d35]">{{ __('messages.view_all') }}</a>
                             @endif
                         </article>
                     @empty

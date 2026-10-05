@@ -13,3 +13,8 @@ Schedule::call(fn () => app(BookingService::class)->expirePendingBookings())
     ->everyMinute()
     ->name('bookings.expire-pending')
     ->withoutOverlapping();
+
+Schedule::call(fn () => app(BookingService::class)->expirePastDepartures())
+    ->dailyAt('00:05')
+    ->name('availability.expire-past-departures')
+    ->withoutOverlapping();

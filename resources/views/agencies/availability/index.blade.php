@@ -30,6 +30,7 @@
                             <option value="active" {{ ($status ?? '') === 'active' ? 'selected' : '' }}>{{ __('messages.active') }}</option>
                             <option value="inactive" {{ ($status ?? '') === 'inactive' ? 'selected' : '' }}>{{ __('messages.inactive') }}</option>
                             <option value="cancelled" {{ ($status ?? '') === 'cancelled' ? 'selected' : '' }}>{{ __('messages.cancelled') }}</option>
+                            <option value="expired" {{ ($status ?? '') === 'expired' ? 'selected' : '' }}>{{ __('messages.expired') }}</option>
                         </select>
                     </div>
                     <div class="lg:w-52">
@@ -71,9 +72,10 @@
                             </div>
                         </div>
 
-                        <dl class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+                        <dl class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-7">
                             <div class="agency-panel-muted rounded-xl p-3"><dt class="text-xs agency-text-subtle">{{ __('messages.capacity') }}</dt><dd class="mt-1 text-lg font-bold">{{ $capacitySnapshot['capacity'] }}</dd></div>
                             <div class="agency-panel-muted rounded-xl p-3"><dt class="text-xs agency-text-subtle">{{ __('messages.confirmed_travelers') }}</dt><dd class="mt-1 text-lg font-bold">{{ $capacitySnapshot['confirmed_travelers'] }}</dd></div>
+                            <div class="agency-panel-muted rounded-xl p-3"><dt class="text-xs agency-text-subtle">{{ __('messages.completed_travelers') }}</dt><dd class="mt-1 text-lg font-bold">{{ $capacitySnapshot['completed_travelers'] }}</dd></div>
                             <div class="agency-panel-muted rounded-xl p-3"><dt class="text-xs agency-text-subtle">{{ __('messages.pending_travelers') }}</dt><dd class="mt-1 text-lg font-bold">{{ $capacitySnapshot['pending_travelers'] }}</dd></div>
                             <div class="agency-panel-muted rounded-xl p-3"><dt class="text-xs agency-text-subtle">{{ __('messages.remaining_capacity') }}</dt><dd class="mt-1 text-lg font-bold">{{ $capacitySnapshot['remaining_capacity'] }}</dd></div>
                             <div class="agency-panel-muted rounded-xl p-3"><dt class="text-xs agency-text-subtle">{{ __('messages.occupancy') }}</dt><dd class="mt-1 text-lg font-bold">{{ $capacitySnapshot['occupancy_percent'] }}%</dd><div class="mt-2 h-1.5 overflow-hidden rounded-full bg-[#dfe8e8]" role="progressbar" aria-label="{{ __('messages.departure_occupancy') }}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $capacitySnapshot['occupancy_percent'] }}"><span class="block h-full rounded-full {{ $capacitySnapshot['sold_out'] ? 'bg-[#d9534f]' : ($capacitySnapshot['near_capacity'] ? 'bg-[#e6a23c]' : 'bg-[#2f9e7a]') }}" style="width: {{ $capacitySnapshot['occupancy_percent'] }}%"></span></div></div>
@@ -87,6 +89,9 @@
                         @endif
 
                         <div class="mt-5 flex flex-wrap items-center gap-3">
+                            @if ($availabilityStatus === 'expired')
+                                <span class="agency-panel-muted rounded-lg px-3 py-2 text-sm font-semibold">{{ __('messages.expired') }}</span>
+                            @else
                             <form method="POST" action="{{ route('agency.availability.status', ['availability' => $item->id, 'lang' => app()->getLocale()]) }}" class="flex items-center gap-2">
                                 @csrf
                                 @method('PATCH')
@@ -97,6 +102,7 @@
                                 </select>
                                 <button type="submit" class="inline-flex items-center justify-center rounded-xl bg-[#173042] px-3 py-2 text-sm font-semibold text-white hover:bg-[#102936]">{{ __('messages.update_status') }}</button>
                             </form>
+                            @endif
                             <a href="{{ route('agency.bookings.index', ['availability_id' => $item->id, 'lang' => app()->getLocale()]) }}" class="agency-button-secondary rounded-lg border px-3 py-2 text-sm font-semibold">{{ __('messages.view_related_bookings') }}</a>
                         </div>
                     </article>

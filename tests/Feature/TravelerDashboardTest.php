@@ -35,7 +35,13 @@ class TravelerDashboardTest extends TestCase
 
         $response = $this->actingAs($traveler)->get(route('dashboard'));
 
-        $response->assertOk();
+        $response->assertOk()
+            ->assertSee(
+                'href="'.route('account.bookings', ['lang' => 'en']).'" class="text-sm font-bold text-[#e76f51]">'.__('messages.view_all').'</a>',
+                false,
+            )
+            ->assertSee('<div data-account-brand', false)
+            ->assertDontSee('<a data-account-brand', false);
         $response->assertSee('Good to see you, Maya Chen.');
         $response->assertSee('North Star Travel');
         $response->assertSee('>1</p>', false);
@@ -484,7 +490,11 @@ class TravelerDashboardTest extends TestCase
     public function test_agency_profile_shows_all_published_packages_and_a_booking_link(): void
     {
         $traveler = User::factory()->create(['role' => 'traveler']);
-        $agency = Agency::factory()->create(['company_name' => 'Atlas Horizon Voyages']);
+        $agency = Agency::factory()->create([
+            'company_name' => 'Atlas Horizon Voyages',
+            'email' => 'direct-contact@atlas.test',
+            'phone' => '+237 690 000 000',
+        ]);
         $bookablePackage = Package::factory()->create([
             'agency_id' => $agency->id,
             'title' => 'Alpine Lakes Journey',
@@ -495,6 +505,17 @@ class TravelerDashboardTest extends TestCase
             'package_id' => $bookablePackage->id,
             'departure_date' => '2026-10-10',
             'capacity' => 12,
+            'status' => 'active',
+        ]);
+        $reachedDatePackage = Package::factory()->create([
+            'agency_id' => $agency->id,
+            'title' => 'Departure Reaching Today',
+            'status' => PackageStatus::PUBLISHED,
+        ]);
+        PackageAvailability::create([
+            'package_id' => $reachedDatePackage->id,
+            'departure_date' => today()->toDateString(),
+            'capacity' => 8,
             'status' => 'active',
         ]);
         Package::factory()->create([
@@ -512,11 +533,19 @@ class TravelerDashboardTest extends TestCase
 
         $response->assertOk()
             ->assertSee('Alpine Lakes Journey')
-            ->assertSee('Published Without Dates')
+            ->assertDontSee('Published Without Dates')
+            ->assertDontSee('Departure Reaching Today')
             ->assertDontSee('Private Draft Journey')
+            ->assertDontSee(today()->translatedFormat('d M Y'))
             ->assertSee('data-booking-modal-open', false)
             ->assertSee('data-package-booking-dialog', false)
             ->assertSee(route('bookings.store', ['package' => $bookablePackage->id, 'lang' => 'en']));
+
+        $response->assertDontSee('direct-contact@atlas.test')
+            ->assertDontSee('+237 690 000 000')
+            ->assertSee(__('messages.booking_platform_guidance'))
+            ->assertDontSee('mailto:direct-contact@atlas.test')
+            ->assertDontSee('tel:+237690000000');
 
         $bookingPage = $this->actingAs($traveler)->get(route('bookings.create', ['package' => $bookablePackage->id, 'lang' => 'en']));
 
@@ -780,6 +809,19 @@ class TravelerDashboardTest extends TestCase
         ]);
     }
 
+    public function test_completed_booking_details_show_a_review_form_to_its_traveler(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        $agency = Agency::factory()->create(['company_name' => 'Atlas Horizon Voyages']);
+        $booking = $this->createCompletedReviewBooking($agency, $traveler);
+
+        $response = $this->actingAs($traveler)->get(route('bookings.show', ['booking' => $booking->id]));
+
+        $response->assertOk()
+            ->assertSee('data-booking-review-form', false)
+            ->assertSee('name="booking_id" value="'.$booking->id.'"', false);
+    }
+
     public function test_a_traveler_can_save_and_unsave_an_agency(): void
     {
         $traveler = User::factory()->create(['role' => 'traveler']);
@@ -845,27 +887,47 @@ class TravelerDashboardTest extends TestCase
         $response->assertSee('Wakue Emmanuel Travel');
     }
 
-    public function test_a_traveler_can_only_submit_one_review_per_agency(): void
+    public function test_a_traveler_can_review_each_completed_booking_once_even_with_an_older_review(): void
     {
         $traveler = User::factory()->create(['role' => 'traveler']);
         $agency = Agency::factory()->create(['company_name' => 'Atlas Horizon Voyages']);
-        $booking = $this->createCompletedReviewBooking($agency, $traveler);
+        Review::factory()->create([
+            'agency_id' => $agency->id,
+            'user_id' => $traveler->id,
+            'booking_id' => null,
+            'status' => 'pending',
+        ]);
+        $firstBooking = $this->createCompletedReviewBooking($agency, $traveler);
+        $secondBooking = $this->createCompletedReviewBooking($agency, $traveler);
+
+        $agencyProfile = $this->actingAs($traveler)->get(route('agency.show', ['slug' => 'atlas-horizon-voyages']));
+        $agencyProfile->assertOk()
+            ->assertSee('name="booking_id"', false)
+            ->assertSee($firstBooking->booking_reference)
+            ->assertSee($secondBooking->booking_reference);
 
         $first = $this->actingAs($traveler)->post(route('reviews.store', ['slug' => 'atlas-horizon-voyages']), [
-            'booking_id' => $booking->id,
+            'booking_id' => $firstBooking->id,
             'rating' => 5,
             'comment' => 'The planning was thoughtful and the trip felt wonderfully easy.',
         ]);
         $first->assertRedirect();
 
         $second = $this->actingAs($traveler)->post(route('reviews.store', ['slug' => 'atlas-horizon-voyages']), [
-            'booking_id' => $booking->id,
+            'booking_id' => $secondBooking->id,
             'rating' => 4,
-            'comment' => 'A second review from the same traveler should be blocked.',
+            'comment' => 'A second completed booking deserves its own review.',
+        ]);
+        $second->assertRedirect();
+
+        $duplicate = $this->actingAs($traveler)->post(route('reviews.store', ['slug' => 'atlas-horizon-voyages']), [
+            'booking_id' => $firstBooking->id,
+            'rating' => 3,
+            'comment' => 'A second review for the same booking should be blocked.',
         ]);
 
-        $second->assertSessionHasErrors('review');
-        $this->assertSame(1, $agency->fresh()->reviews()->where('user_id', $traveler->id)->count());
+        $duplicate->assertSessionHasErrors('booking_id');
+        $this->assertSame(3, $agency->fresh()->reviews()->where('user_id', $traveler->id)->count());
     }
 
     public function test_a_traveler_cannot_review_an_agency_without_a_completed_booking(): void
@@ -971,6 +1033,27 @@ class TravelerDashboardTest extends TestCase
         $this->assertSame('closed', $inquiry->fresh()->status->value);
     }
 
+    public function test_booking_notifications_link_to_the_travelers_all_bookings_page(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        $bookingDetailsUrl = route('bookings.show', ['booking' => 10, 'lang' => 'en']);
+        $traveler->notify(new AgencyActivityNotification(
+            'Booking update',
+            'Your booking was confirmed.',
+            'booking',
+            $bookingDetailsUrl,
+        ));
+
+        $response = $this->actingAs($traveler)->get(route('account.activity', ['lang' => 'en']));
+
+        $response->assertOk()
+            ->assertSee(
+                'href="'.route('account.bookings', ['lang' => 'en']).'" class="mt-3 inline-flex text-sm font-bold text-[#e76f51] hover:text-[#b94d35]">'.__('messages.view_all').'</a>',
+                false,
+            )
+            ->assertDontSee('href="'.$bookingDetailsUrl.'"', false);
+    }
+
     public function test_traveler_sees_the_agency_reply_in_their_activity_feed(): void
     {
         $traveler = User::factory()->create(['role' => 'traveler']);
@@ -1031,7 +1114,7 @@ class TravelerDashboardTest extends TestCase
             'package_id' => $package->id,
             'package_availability_id' => $availability->id,
             'user_id' => $traveler->id,
-            'booking_reference' => 'TC-REVIEW-'.str_pad((string) $agency->id, 6, '0', STR_PAD_LEFT),
+            'booking_reference' => 'TC-REVIEW-'.str_pad((string) ($agency->bookings()->count() + 1), 6, '0', STR_PAD_LEFT),
             'status' => 'completed',
             'payment_status' => PaymentStatus::UNPAID,
             'traveler_count' => 1,

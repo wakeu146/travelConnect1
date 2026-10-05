@@ -43,6 +43,9 @@
                             <option value="active" {{ old('status', $availability->status->value ?? $availability->status) === 'active' ? 'selected' : '' }}>{{ __('messages.active') }}</option>
                             <option value="inactive" {{ old('status', $availability->status->value ?? $availability->status) === 'inactive' ? 'selected' : '' }}>{{ __('messages.inactive') }}</option>
                             <option value="cancelled" {{ old('status', $availability->status->value ?? $availability->status) === 'cancelled' ? 'selected' : '' }}>{{ __('messages.cancelled') }}</option>
+                            @if (($availability->status->value ?? $availability->status) === 'expired')
+                                <option value="expired" selected>{{ __('messages.expired') }}</option>
+                            @endif
                         </select>
                     </div>
 

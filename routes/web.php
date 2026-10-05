@@ -56,11 +56,14 @@ Route::get('/agencies/{slug}', function (string $slug) {
     if ($agencyModel) {
         $agencyModel->load(['packages' => fn ($query) => $query
             ->where('status', PackageStatus::PUBLISHED->value)
+            ->whereHas('availabilities', fn ($availabilityQuery) => $availabilityQuery
+                ->where('status', 'active')
+                ->whereDate('departure_date', '>', today()->toDateString()))
             ->with([
                 'images',
                 'availabilities' => fn ($availabilityQuery) => $availabilityQuery
                     ->where('status', 'active')
-                    ->whereDate('departure_date', '>=', now()->toDateString())
+                    ->whereDate('departure_date', '>', today()->toDateString())
                     ->orderBy('departure_date'),
             ])]);
     }
@@ -88,7 +91,7 @@ Route::get('/agencies/{slug}', function (string $slug) {
         : '0.0';
     $ratingCounts = $agencyModel && $publishedReviewCount ? $agencyModel->reviews()->where('status', 'published')->get()->groupBy('rating')->map->count() : collect();
     $pendingReview = $agencyModel?->reviews()->where('user_id', $user->id)->where('status', 'pending')->latest()->first();
-    $eligibleReviewBookings = $agencyModel && $user->isTraveler() && ! $agencyModel->reviews()->where('user_id', $user->id)->exists()
+    $eligibleReviewBookings = $agencyModel && $user->isTraveler()
         ? $user->bookings()
             ->where('agency_id', $agencyModel->id)
             ->where('status', 'completed')

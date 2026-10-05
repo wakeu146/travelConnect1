@@ -20,15 +20,11 @@ class ReviewController extends Controller
         $agency = Agency::whereRaw('LOWER(REPLACE(company_name, " ", "-")) = ?', [mb_strtolower($slug)])
             ->firstOrFail();
 
-        if ($agency->reviews()->where('user_id', $request->user()->id)->exists()) {
-            return back()->withErrors(['review' => 'You have already submitted a review for this agency.']);
-        }
-
         $data = $request->validate([
             'booking_id' => ['required', 'integer', Rule::exists('bookings', 'id')->where(fn ($query) => $query
                 ->where('agency_id', $agency->id)
                 ->where('user_id', $request->user()->id)
-                ->where('status', BookingStatus::COMPLETED->value))],
+                ->where('status', BookingStatus::COMPLETED->value)), Rule::unique('reviews', 'booking_id')],
             'rating' => ['required', 'integer', 'between:1,5'],
             'comment' => ['required', 'string', 'min:10', 'max:2000'],
         ]);

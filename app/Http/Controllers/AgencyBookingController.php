@@ -26,7 +26,7 @@ class AgencyBookingController extends Controller
 
         $upcomingReservations = (clone $agencyBookings)
             ->reservesCapacity()
-            ->whereHas('availability', fn ($query) => $query->whereDate('departure_date', '>=', now()->toDateString()));
+            ->whereHas('availability', fn ($query) => $query->whereDate('departure_date', '>', today()->toDateString()));
         $upcomingConfirmedCount = (clone $upcomingReservations)
             ->where('status', BookingStatus::CONFIRMED->value)
             ->count();
@@ -131,7 +131,7 @@ class AgencyBookingController extends Controller
 
         if ($upcoming) {
             $query->reservesCapacity()
-                ->whereHas('availability', fn ($availabilityQuery) => $availabilityQuery->whereDate('departure_date', '>=', now()->toDateString()));
+                ->whereHas('availability', fn ($availabilityQuery) => $availabilityQuery->whereDate('departure_date', '>', today()->toDateString()));
         }
 
         [$sortColumn, $sortDirection] = $sorts[$sort];

@@ -247,6 +247,8 @@ class AgencyDashboardTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('data-agency-brand', false);
+        $response->assertSee('<div data-agency-brand', false);
+        $response->assertDontSee('<a data-agency-brand', false);
         $response->assertSee('storage/agency-logos/emma.png');
         $response->assertSee('Emma Travel');
     }

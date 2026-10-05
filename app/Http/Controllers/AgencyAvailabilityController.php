@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\PackageAvailabilityStatus;
 use App\Models\Package;
 use App\Models\PackageAvailability;
 use App\Services\BookingService;
@@ -14,6 +13,7 @@ class AgencyAvailabilityController extends Controller
 {
     public function index(Request $request, BookingService $bookingService): View
     {
+        $bookingService->expirePastDepartures();
         $agency = auth()->user()->agency;
 
         $query = PackageAvailability::query()
@@ -74,6 +74,10 @@ class AgencyAvailabilityController extends Controller
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
+        if (today()->gte($data['departure_date'])) {
+            return back()->withErrors(['departure_date' => __('messages.departure_date_passed')])->withInput();
+        }
+
         $package = Package::findOrFail($data['package_id']);
         abort_unless($package->agency_id === $agency->id, 403);
 
@@ -111,12 +115,16 @@ class AgencyAvailabilityController extends Controller
             'package_id' => ['required', 'exists:packages,id'],
             'departure_date' => ['required', 'date'],
             'capacity' => ['required', 'integer', 'min:1'],
-            'status' => ['required', 'in:active,inactive,cancelled'],
+            'status' => ['required', 'in:active,inactive,cancelled,expired'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $package = Package::findOrFail($data['package_id']);
         abort_unless($package->agency_id === auth()->user()->agency->id, 403);
+
+        if ($data['status'] === 'active' && today()->gte($data['departure_date'])) {
+            return back()->withErrors(['departure_date' => __('messages.departure_date_passed')])->withInput();
+        }
 
         if ($package->availabilities()->where('id', '!=', $availability->id)->whereDate('departure_date', $data['departure_date'])->exists()) {
             return back()->withErrors(['departure_date' => __('messages.departure_date_duplicate')])->withInput();
@@ -134,6 +142,10 @@ class AgencyAvailabilityController extends Controller
         $status = $request->validate([
             'status' => ['required', 'in:active,inactive,cancelled'],
         ])['status'];
+
+        if ($status === 'active' && $availability->departure_date->lte(today())) {
+            return back()->withErrors(['status' => __('messages.departure_date_passed')]);
+        }
 
         $availability->update(['status' => $status]);
 

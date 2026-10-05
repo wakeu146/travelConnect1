@@ -62,6 +62,36 @@
                         </form>
                     </div>
                 @endif
+
+                @if (auth()->user()->isTraveler() && $statusValue === 'completed')
+                    @if (session('review_status'))
+                        <p class="mt-6 rounded-lg bg-[#e8f5ef] px-4 py-3 text-sm font-semibold text-[#247653]">{{ session('review_status') }}</p>
+                    @endif
+                    @if ($booking->review)
+                        @if ($booking->review->status->value === 'pending')
+                            <p class="mt-6 rounded-lg bg-[#fffaf0] px-4 py-3 text-sm font-semibold text-[#b7771b]">{{ __('messages.review_pending_notice') }}</p>
+                        @endif
+                    @else
+                        <section data-booking-review-form class="mt-8 border-t border-[#e7eceb] pt-6">
+                            <p class="text-xs font-bold uppercase tracking-[.18em] text-[#e76f51]">{{ __('messages.share_your_experience') }}</p>
+                            <h2 class="mt-2 font-serif text-2xl tracking-tight">{{ __('messages.rate_this_agency') }}</h2>
+                            <p class="mt-2 text-sm text-[#607985]">{{ __('messages.choose_a_rating') }}</p>
+                            <form action="{{ route('reviews.store', ['slug' => \Illuminate\Support\Str::slug($booking->agency->company_name), 'lang' => app()->getLocale()]) }}" method="POST" class="mt-5 grid gap-4">
+                                @csrf
+                                <input type="hidden" name="booking_id" value="{{ $booking->id }}">
+                                <div class="flex gap-1" role="group" aria-label="{{ __('messages.choose_a_rating') }}">
+                                    @for ($rating = 1; $rating <= 5; $rating++)<label><input class="sr-only" type="radio" name="rating" value="{{ $rating }}" required><span class="block cursor-pointer text-3xl text-[#d7e0e1] transition hover:text-[#e76f51]">★</span></label>@endfor
+                                </div>
+                                @error('rating')<p class="text-sm font-semibold text-[#b42318]">{{ $message }}</p>@enderror
+                                <label class="grid gap-2 text-sm font-semibold text-[#173042]" for="booking-review-comment">{{ __('messages.share_your_experience') }}
+                                    <textarea id="booking-review-comment" name="comment" rows="5" required minlength="10" maxlength="2000" placeholder="{{ __('messages.review_placeholder') }}" class="w-full rounded-xl border border-[#d7e0e1] bg-white px-4 py-3 text-sm text-[#173042] outline-none focus:border-[#e76f51]">{{ old('comment') }}</textarea>
+                                </label>
+                                @error('comment')<p class="text-sm font-semibold text-[#b42318]">{{ $message }}</p>@enderror
+                                <button type="submit" class="w-fit rounded-xl bg-[#173042] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#26495d]">{{ __('messages.publish_review') }}</button>
+                            </form>
+                        </section>
+                    @endif
+                @endif
             </div>
         </div>
     </div>

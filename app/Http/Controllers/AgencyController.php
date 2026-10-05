@@ -46,7 +46,7 @@ class AgencyController extends Controller
     {
         $agency = $this->currentAgency();
         $departureItems = $agency->packages()
-            ->with(['availabilities' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>=', now()->toDateString())->orderBy('departure_date')->limit(5)])
+            ->with(['availabilities' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>', today()->toDateString())->orderBy('departure_date')->limit(5)])
             ->get()
             ->flatMap(fn ($package) => $package->availabilities->map(fn ($availability) => [
                 'package' => $package,
@@ -62,7 +62,7 @@ class AgencyController extends Controller
             ];
         });
         $recentPackages = $agency->packages()
-            ->withCount(['images', 'bookings', 'availabilities as upcoming_departures_count' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>=', now()->toDateString())])
+            ->withCount(['images', 'bookings', 'availabilities as upcoming_departures_count' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>', today()->toDateString())])
             ->withSum('bookings as travelers_booked', 'traveler_count')
             ->latest()
             ->take(5)
@@ -470,7 +470,7 @@ class AgencyController extends Controller
             'agency' => $agency,
             'destinations' => $agency->countries()->orderBy('countries.name')->pluck('countries.name'),
             'package' => $package->load(['images'])
-                ->loadCount(['bookings', 'availabilities as upcoming_departures_count' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>=', now()->toDateString())])
+                ->loadCount(['bookings', 'availabilities as upcoming_departures_count' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>', today()->toDateString())])
                 ->loadSum('bookings as travelers_booked', 'traveler_count'),
         ]);
     }
@@ -606,7 +606,7 @@ class AgencyController extends Controller
                 });
             })
             ->with('images')
-            ->withCount(['images', 'bookings', 'availabilities as upcoming_departures_count' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>=', now()->toDateString())])
+            ->withCount(['images', 'bookings', 'availabilities as upcoming_departures_count' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>', today()->toDateString())])
             ->withSum('bookings as travelers_booked', 'traveler_count')
             ->orderByDesc('updated_at')
             ->paginate(10)

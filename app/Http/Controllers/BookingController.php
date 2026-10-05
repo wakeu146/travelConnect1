@@ -58,7 +58,7 @@ class BookingController extends Controller
         if ($selectedCountry) {
             $availableDepartureQuery = static function (Builder|Relation $query): void {
                 $query->where('status', PackageAvailabilityStatus::ACTIVE->value)
-                    ->whereDate('departure_date', '>=', today()->toDateString());
+                    ->whereDate('departure_date', '>', today()->toDateString());
             };
             $bookablePackageQuery = static function (Builder|Relation $query) use ($selectedCountry, $availableDepartureQuery): void {
                 $query->where('status', PackageStatus::PUBLISHED->value)
@@ -121,7 +121,7 @@ class BookingController extends Controller
         $availability = $package->availabilities()
             ->whereKey($data['package_availability_id'])
             ->where('status', PackageAvailabilityStatus::ACTIVE->value)
-            ->whereDate('departure_date', '>=', today()->toDateString())
+            ->whereDate('departure_date', '>', today()->toDateString())
             ->firstOrFail();
 
         try {
@@ -156,7 +156,7 @@ class BookingController extends Controller
 
     public function packageShow(Package $package): View
     {
-        $package->load(['agency', 'images', 'availabilities' => fn ($query) => $query->where('status', 'active')->orderBy('departure_date')]);
+        $package->load(['agency', 'images', 'availabilities' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>', today()->toDateString())->orderBy('departure_date')]);
 
         return view('packages.show', [
             'package' => $package,
@@ -168,7 +168,7 @@ class BookingController extends Controller
     {
         $this->authorize('create', Booking::class);
 
-        $package->load(['agency', 'images', 'availabilities' => fn ($query) => $query->where('status', 'active')->orderBy('departure_date')]);
+        $package->load(['agency', 'images', 'availabilities' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>', today()->toDateString())->orderBy('departure_date')]);
 
         return view('bookings.create', [
             'package' => $package,
@@ -264,7 +264,7 @@ class BookingController extends Controller
         $this->authorize('view', $booking);
 
         return view('bookings.show', [
-            'booking' => $booking->load(['package', 'availability', 'traveler', 'agency']),
+            'booking' => $booking->load(['package', 'availability', 'traveler', 'agency', 'review']),
         ]);
     }
 }
