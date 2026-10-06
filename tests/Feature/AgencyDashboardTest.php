@@ -2,7 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Contracts\AdminSecondFactor;
 use App\Enums\UserRole;
+use App\Mail\AdminLoginCodeMail;
+use App\Mail\AdminSecurityAlertMail;
+use App\Models\AdminLoginChallenge;
 use App\Models\Agency;
 use App\Models\AgencyDocument;
 use App\Models\Country;
@@ -12,6 +16,7 @@ use App\Models\Service;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -49,20 +54,383 @@ class AgencyDashboardTest extends TestCase
         $response->assertSessionHas('success_redirect', route('agency.dashboard'));
     }
 
-    public function test_an_admin_login_keeps_the_default_dashboard_behavior(): void
+    public function test_admin_is_not_authenticated_until_email_code_is_verified(): void
     {
-        $admin = User::factory()->create([
+        $admin = User::factory()->withRole(UserRole::ADMIN)->create([
             'email' => 'admin-login@example.com',
-            'role' => UserRole::ADMIN,
+        ]);
+        $originalRememberToken = $admin->remember_token;
+        Mail::fake();
+
+        $response = $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.17'])
+            ->post(route('login.store'), [
+                'email' => $admin->email,
+                'password' => 'password',
+                'remember' => '1',
+            ]);
+
+        $response->assertRedirect(route('admin.login.verify', ['lang' => 'en']));
+        $this->assertGuest();
+        $response->assertSessionHas('pending_admin_login.user_id', $admin->id);
+        $this->assertDatabaseHas('admin_login_challenges', [
+            'user_id' => $admin->id,
+            'attempts' => 0,
+            'consumed_at' => null,
+        ]);
+        $this->assertDatabaseHas('admin_login_events', [
+            'user_id' => $admin->id,
+            'outcome' => 'code_sent',
+        ]);
+        $this->assertNotSame($originalRememberToken, $admin->fresh()->remember_token);
+        $code = null;
+        Mail::assertSent(AdminLoginCodeMail::class, function (AdminLoginCodeMail $mail) use (&$code): bool {
+            $code = $mail->code;
+
+            return true;
+        });
+        Mail::assertSent(AdminSecurityAlertMail::class, fn (AdminSecurityAlertMail $mail): bool => $mail->ipAddress === '198.51.100.17' && ! str_contains($mail->alertMessage, (string) $code));
+    }
+
+    public function test_wrong_password_uses_the_same_generic_response_and_records_admin_failure(): void
+    {
+        $admin = User::factory()->withRole(UserRole::ADMIN)->create(['email' => 'admin-wrong@example.com']);
+        $traveler = User::factory()->create(['email' => 'traveler-wrong@example.com']);
+        $attempts = [
+            $admin->email,
+            $traveler->email,
+            'unknown-wrong@example.com',
+        ];
+
+        foreach ($attempts as $email) {
+            $this->from(route('login'))->post(route('login.store'), [
+                'email' => $email,
+                'password' => 'incorrect-password',
+            ])->assertRedirect(route('login'))
+                ->assertSessionHasErrors(['email' => __('messages.credentials_invalid')]);
+        }
+
+        $this->assertDatabaseHas('admin_login_events', [
+            'user_id' => $admin->id,
+            'outcome' => 'password_failed',
+            'failed_step' => 'password',
+        ]);
+    }
+
+    public function test_admin_email_code_verification_authenticates_and_opens_placeholder_dashboard(): void
+    {
+        $admin = User::factory()->withRole(UserRole::ADMIN)->create([
+            'email' => 'admin-verified@example.com',
+        ]);
+        Mail::fake();
+
+        $this->post(route('login.store', ['lang' => 'en']), [
+            'email' => $admin->email,
+            'password' => 'password',
+        ])->assertRedirect(route('admin.login.verify', ['lang' => 'en']));
+
+        $this->assertGuest();
+        $code = null;
+        Mail::assertSent(AdminLoginCodeMail::class, function (AdminLoginCodeMail $mail) use (&$code): bool {
+            $code = $mail->code;
+
+            return true;
+        });
+
+        $response = $this->post(route('admin.login.verify.submit', ['lang' => 'en']), ['code' => $code]);
+
+        $response->assertRedirect(route('admin.totp.setup'));
+        $response->assertCookie(config('admin.trusted_device_cookie'));
+        $this->assertAuthenticatedAs($admin);
+        $this->assertDatabaseHas('admin_login_challenges', [
+            'user_id' => $admin->id,
+            'consumed_at' => now(),
         ]);
 
-        $response = $this->post(route('login.store'), [
+        $this->get(route('admin.dashboard', ['lang' => 'en']))
+            ->assertOk()
+            ->assertSee(__('messages.admin_dashboard_coming_soon'))
+            ->assertSee($admin->name)
+            ->assertSee(route('admin.logout', ['lang' => 'en']));
+    }
+
+    public function test_successful_admin_login_from_an_unrecognized_device_sends_a_security_alert(): void
+    {
+        $admin = User::factory()->withRole(UserRole::ADMIN)->create();
+        Mail::fake();
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.41'])
+            ->post(route('login.store'), [
+                'email' => $admin->email,
+                'password' => 'password',
+            ]);
+
+        $code = null;
+        Mail::assertSent(AdminLoginCodeMail::class, function (AdminLoginCodeMail $mail) use (&$code): bool {
+            $code = $mail->code;
+
+            return true;
+        });
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.41'])
+            ->post(route('admin.login.verify.submit'), ['code' => $code])
+            ->assertRedirect(route('admin.totp.setup'));
+
+        Mail::assertSent(AdminSecurityAlertMail::class, fn (AdminSecurityAlertMail $mail): bool => $mail->ipAddress === '203.0.113.41'
+            && $mail->alertMessage === __('messages.admin_alert_login_new_device'));
+        $this->assertDatabaseHas('admin_login_events', [
+            'user_id' => $admin->id,
+            'ip_address' => '203.0.113.41',
+            'outcome' => 'success',
+            'failed_step' => 'complete',
+        ]);
+    }
+
+    public function test_failed_admin_login_burst_alert_is_throttled_during_the_cooldown(): void
+    {
+        $admin = User::factory()->withRole(UserRole::ADMIN)->create();
+        Mail::fake();
+        config(['admin.failed_alert_threshold' => 2]);
+
+        for ($attempt = 1; $attempt <= 4; $attempt++) {
+            $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.80'])
+                ->from(route('login'))
+                ->post(route('login.store'), [
+                    'email' => $admin->email,
+                    'password' => 'incorrect-password',
+                ])
+                ->assertSessionHasErrors('email');
+        }
+
+        Mail::assertSent(AdminSecurityAlertMail::class, fn (AdminSecurityAlertMail $mail): bool => $mail->alertMessage === __('messages.admin_alert_failed_burst'));
+        Mail::assertSentCount(1);
+        $this->assertDatabaseCount('admin_login_events', 4);
+    }
+
+    public function test_five_failed_admin_password_attempts_lock_the_account_and_alert_the_admin(): void
+    {
+        $admin = User::factory()->withRole(UserRole::ADMIN)->create();
+        Mail::fake();
+
+        for ($attempt = 1; $attempt <= 5; $attempt++) {
+            $this->withServerVariables(['REMOTE_ADDR' => '192.0.2.'.$attempt])
+                ->from(route('login'))
+                ->post(route('login.store'), [
+                    'email' => $admin->email,
+                    'password' => 'incorrect-password',
+                ])
+                ->assertSessionHasErrors(['email' => __('messages.credentials_invalid')]);
+        }
+
+        Mail::assertSent(AdminSecurityAlertMail::class, fn (AdminSecurityAlertMail $mail): bool => $mail->alertMessage === __('messages.admin_alert_password_lockout', ['attempts' => 5, 'minutes' => 15]));
+        Mail::assertSentCount(1);
+
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.200'])
+            ->from(route('login'))
+            ->post(route('login.store'), [
+                'email' => $admin->email,
+                'password' => 'password',
+            ])
+            ->assertSessionHasErrors(['email' => __('messages.credentials_invalid')]);
+
+        $this->assertGuest();
+        $this->assertDatabaseMissing('admin_login_challenges', ['user_id' => $admin->id]);
+        $this->assertDatabaseHas('admin_login_events', [
+            'user_id' => $admin->id,
+            'outcome' => 'blocked',
+            'failed_step' => 'password_lockout',
+        ]);
+
+        $this->travel((int) config('admin.password_lockout_minutes') + 1)->minutes();
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.200'])
+            ->post(route('login.store'), [
+                'email' => $admin->email,
+                'password' => 'password',
+            ])
+            ->assertRedirect(route('admin.login.verify', ['lang' => 'en']));
+        Mail::assertSent(AdminLoginCodeMail::class);
+        $this->travelBack();
+    }
+
+    public function test_guests_are_redirected_to_shared_login_for_every_admin_route(): void
+    {
+        $routes = [
+            ['GET', route('admin.login.verify')],
+            ['POST', route('admin.login.verify.submit')],
+            ['POST', route('admin.login.resend')],
+            ['GET', route('admin.totp.setup')],
+            ['POST', route('admin.totp.confirm')],
+            ['POST', route('admin.totp.skip')],
+            ['GET', route('admin.dashboard')],
+            ['POST', route('admin.logout')],
+        ];
+
+        foreach ($routes as [$method, $url]) {
+            $response = $method === 'GET' ? $this->get($url) : $this->post($url, []);
+            $response->assertRedirect(route('login'));
+        }
+    }
+
+    public function test_travelers_and_agency_owners_are_forbidden_from_every_admin_route(): void
+    {
+        $traveler = User::factory()->create(['role' => UserRole::TRAVELER]);
+        $agencyOwner = Agency::factory()->create()->owner;
+        $routes = [
+            ['GET', route('admin.login.verify')],
+            ['POST', route('admin.login.verify.submit')],
+            ['POST', route('admin.login.resend')],
+            ['GET', route('admin.totp.setup')],
+            ['POST', route('admin.totp.confirm')],
+            ['POST', route('admin.totp.skip')],
+            ['GET', route('admin.dashboard')],
+            ['POST', route('admin.logout')],
+        ];
+        $requestNumber = 1;
+
+        foreach ([$traveler, $agencyOwner] as $user) {
+            foreach ($routes as [$method, $url]) {
+                $this->withServerVariables(['REMOTE_ADDR' => '192.0.2.'.$requestNumber]);
+                $response = $method === 'GET'
+                    ? $this->actingAs($user)->get($url)
+                    : $this->actingAs($user)->post($url, []);
+                $response->assertForbidden();
+                $requestNumber++;
+            }
+        }
+    }
+
+    public function test_wrong_admin_code_is_counted_and_fifth_attempt_invalidates_challenge(): void
+    {
+        $admin = User::factory()->withRole(UserRole::ADMIN)->create();
+        Mail::fake();
+
+        $this->post(route('login.store'), [
             'email' => $admin->email,
             'password' => 'password',
         ]);
 
-        $response->assertRedirect(route('auth.success'));
-        $response->assertSessionHas('success_redirect', route('dashboard'));
+        for ($attempt = 1; $attempt <= 5; $attempt++) {
+            $this->post(route('admin.login.verify.submit'), ['code' => '000000'])
+                ->assertSessionHasErrors('code');
+        }
+
+        $challenge = AdminLoginChallenge::query()->where('user_id', $admin->id)->firstOrFail();
+        $this->assertSame(5, $challenge->attempts);
+        $this->assertNotNull($challenge->invalidated_at);
+        $this->assertGuest();
+    }
+
+    public function test_expired_and_consumed_admin_codes_cannot_be_verified(): void
+    {
+        $admin = User::factory()->withRole(UserRole::ADMIN)->create();
+        Mail::fake();
+
+        $this->post(route('login.store'), [
+            'email' => $admin->email,
+            'password' => 'password',
+        ]);
+
+        $code = null;
+        Mail::assertSent(AdminLoginCodeMail::class, function (AdminLoginCodeMail $mail) use (&$code): bool {
+            $code = $mail->code;
+
+            return true;
+        });
+        $challenge = AdminLoginChallenge::query()->where('user_id', $admin->id)->firstOrFail();
+
+        $this->travel(61)->seconds();
+        $this->post(route('admin.login.verify.submit'), ['code' => $code])->assertSessionHasErrors('code');
+        $this->travelBack();
+
+        $this->assertNull($challenge->fresh()->consumed_at);
+
+        $this->post(route('login.store'), [
+            'email' => $admin->email,
+            'password' => 'password',
+        ]);
+        $freshCode = null;
+        Mail::assertSent(AdminLoginCodeMail::class, function (AdminLoginCodeMail $mail) use (&$freshCode): bool {
+            $freshCode = $mail->code;
+
+            return true;
+        });
+        $freshChallenge = AdminLoginChallenge::query()->where('user_id', $admin->id)->latest('id')->firstOrFail();
+
+        $this->post(route('admin.login.verify.submit'), ['code' => $freshCode])
+            ->assertRedirect(route('admin.totp.setup'));
+        $freshChallenge->refresh();
+        $this->assertNotNull($freshChallenge->consumed_at);
+        $this->assertFalse(app(AdminSecondFactor::class)->verify($admin, $freshChallenge, $freshCode));
+    }
+
+    public function test_idle_admin_session_is_logged_out_and_audited(): void
+    {
+        $admin = User::factory()->withRole(UserRole::ADMIN)->create();
+        Mail::fake();
+
+        $this->post(route('login.store'), [
+            'email' => $admin->email,
+            'password' => 'password',
+        ]);
+        $code = null;
+        Mail::assertSent(AdminLoginCodeMail::class, function (AdminLoginCodeMail $mail) use (&$code): bool {
+            $code = $mail->code;
+
+            return true;
+        });
+        $this->post(route('admin.login.verify.submit'), ['code' => $code])
+            ->assertRedirect(route('admin.totp.setup'));
+
+        $this->travel((int) config('admin.idle_timeout_minutes') + 1)->minutes();
+        $this->get(route('admin.dashboard'))->assertRedirect(route('login'));
+        $this->travelBack();
+
+        $this->assertGuest();
+        $this->assertDatabaseHas('admin_login_events', [
+            'user_id' => $admin->id,
+            'outcome' => 'blocked',
+            'failed_step' => 'idle_timeout',
+        ]);
+    }
+
+    public function test_admin_code_resend_is_throttled(): void
+    {
+        $admin = User::factory()->withRole(UserRole::ADMIN)->create();
+        Mail::fake();
+
+        $this->post(route('login.store'), [
+            'email' => $admin->email,
+            'password' => 'password',
+        ]);
+
+        $this->post(route('admin.login.resend'))->assertRedirect();
+        $this->post(route('admin.login.resend'))->assertStatus(429);
+    }
+
+    public function test_admin_code_resend_does_not_reset_failed_attempts(): void
+    {
+        $admin = User::factory()->withRole(UserRole::ADMIN)->create();
+        Mail::fake();
+
+        $this->post(route('login.store'), [
+            'email' => $admin->email,
+            'password' => 'password',
+        ]);
+        $this->post(route('admin.login.verify.submit'), ['code' => '000000'])
+            ->assertSessionHasErrors('code');
+        $this->assertSame(1, AdminLoginChallenge::query()->where('user_id', $admin->id)->value('attempts'));
+
+        $this->post(route('admin.login.resend'))->assertRedirect();
+
+        $this->assertSame(1, AdminLoginChallenge::query()->where('user_id', $admin->id)->value('attempts'));
+    }
+
+    public function test_user_role_cannot_be_changed_through_mass_assignment(): void
+    {
+        $traveler = User::factory()->create(['role' => UserRole::TRAVELER]);
+
+        $traveler->fill(['role' => UserRole::ADMIN])->save();
+
+        $this->assertSame(UserRole::TRAVELER, $traveler->fresh()->role);
     }
 
     public function test_an_agency_owner_can_view_their_dashboard(): void

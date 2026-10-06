@@ -18,3 +18,8 @@ Schedule::call(fn () => app(BookingService::class)->expirePastDepartures())
     ->dailyAt('00:05')
     ->name('availability.expire-past-departures')
     ->withoutOverlapping();
+
+Schedule::command('admin:prune-login-events')
+    ->dailyAt('01:00')
+    ->name('admin.prune-login-events')
+    ->withoutOverlapping();

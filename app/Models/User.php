@@ -20,7 +20,7 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable, SoftDeletes;
 
-    protected $fillable = ['name', 'email', 'password', 'phone', 'profile_photo_path', 'role'];
+    protected $fillable = ['name', 'email', 'password', 'phone', 'profile_photo_path'];
 
     /**
      * Get the attributes that should be cast.
@@ -33,7 +33,28 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'role' => UserRole::class,
+            'admin_session_version' => 'integer',
         ];
+    }
+
+    public function adminLoginEvents(): HasMany
+    {
+        return $this->hasMany(AdminLoginEvent::class);
+    }
+
+    public function adminLoginChallenges(): HasMany
+    {
+        return $this->hasMany(AdminLoginChallenge::class);
+    }
+
+    public function adminTotpCredential(): HasOne
+    {
+        return $this->hasOne(AdminTotpCredential::class);
+    }
+
+    public function trustedAdminDevices(): HasMany
+    {
+        return $this->hasMany(TrustedAdminDevice::class);
     }
 
     public function agency(): HasOne

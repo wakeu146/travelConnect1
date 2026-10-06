@@ -2,7 +2,16 @@
 
 namespace Database\Seeders;
 
-use App\Models\{Agency, AgencyDocument, AgencyExperience, Country, Inquiry, Review, Service, TrustScoreLog, User};
+use App\Enums\UserRole;
+use App\Models\Agency;
+use App\Models\AgencyDocument;
+use App\Models\AgencyExperience;
+use App\Models\Country;
+use App\Models\Inquiry;
+use App\Models\Review;
+use App\Models\Service;
+use App\Models\TrustScoreLog;
+use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -31,7 +40,6 @@ class DatabaseSeeder extends Seeder
                 'Cultural tours', 'Honeymoon planning', 'Cruises', 'Business travel',
             ])->map(fn (string $name) => Service::create(['name' => $name]));
 
-            User::factory()->create(['name' => 'Amelie Laurent', 'role' => 'admin', 'email' => 'amelie.laurent@travelconnect.test']);
             $travelers = User::factory(10)->create(['role' => 'traveler']);
             $agencies = collect();
 
@@ -39,7 +47,7 @@ class DatabaseSeeder extends Seeder
                 'Atlas Horizon Voyages', 'Lumiere Routes', 'Northstar Escapes',
                 'Sirocco Travel House', 'Blue Fern Expeditions',
             ] as $companyName) {
-                $owner = User::factory()->create(['role' => 'agency_owner']);
+                $owner = User::factory()->withRole(UserRole::AGENCY_OWNER)->create();
                 $agency = Agency::factory()->create([
                     'user_id' => $owner->id,
                     'company_name' => $companyName,

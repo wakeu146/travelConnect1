@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\UserRole;
 use App\Models\Agency;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -14,7 +15,7 @@ class AgencyFactory extends Factory
     public function definition(): array
     {
         return [
-            'user_id' => User::factory()->state(['role' => 'agency_owner']),
+            'user_id' => User::factory()->withRole(UserRole::AGENCY_OWNER),
             'company_name' => fake()->company().' Travel',
             'description' => fake()->sentence(18),
             'license_number' => fake()->unique()->bothify('TA-####-????'),

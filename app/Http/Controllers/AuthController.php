@@ -3,14 +3,18 @@
 namespace App\Http\Controllers;
 
 use App\Enums\UserRole;
+use App\Mail\AdminPasswordResetNoticeMail;
 use App\Models\User;
 use App\Notifications\PasswordResetCode;
+use App\Services\AdminAuthenticationService;
+use App\Services\AdminLoginSecurityService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -67,12 +71,12 @@ class AuthController extends Controller
             'terms.accepted' => 'You must accept the terms to create an account.',
         ]);
 
-        $user = User::create([
+        $user = new User([
             'name' => $data['name'],
             'email' => $data['email'],
             'password' => $data['password'],
-            'role' => UserRole::TRAVELER,
         ]);
+        $user->forceFill(['role' => UserRole::TRAVELER])->save();
 
         Auth::login($user);
         $request->session()->regenerate();
@@ -99,12 +103,12 @@ class AuthController extends Controller
         ]);
 
         $user = DB::transaction(function () use ($data): User {
-            $user = User::create([
+            $user = new User([
                 'name' => $data['name'],
                 'email' => $data['email'],
                 'password' => $data['password'],
-                'role' => UserRole::AGENCY_OWNER,
             ]);
+            $user->forceFill(['role' => UserRole::AGENCY_OWNER])->save();
 
             $user->agency()->create([
                 'company_name' => $data['agency_name'],
@@ -125,21 +129,52 @@ class AuthController extends Controller
         ]);
     }
 
-    public function login(Request $request): RedirectResponse
-    {
+    public function login(
+        Request $request,
+        AdminAuthenticationService $adminAuthentication,
+        AdminLoginSecurityService $adminSecurity,
+    ): RedirectResponse {
         $credentials = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],
         ]);
+        $credentials['email'] = Str::lower($credentials['email']);
+        $user = User::query()->where('email', $credentials['email'])->first();
 
-        if (! Auth::attempt($credentials, $request->boolean('remember'))) {
-            return back()->withErrors(['email' => 'These credentials do not match our records.'])->onlyInput('email');
+        if ($user?->isAdmin() && $adminSecurity->isPasswordLockedOut($user)) {
+            $adminSecurity->recordPasswordLockoutAttempt($user, $credentials['email'], $request);
+
+            return back()->withErrors(['email' => __('messages.credentials_invalid')])->onlyInput('email');
         }
 
-        $user = Auth::user();
+        if (! Auth::validate($credentials)) {
+            $adminSecurity->recordFailedPasswordAttempt($user, $credentials['email'], $request);
+
+            return back()->withErrors(['email' => __('messages.credentials_invalid')])->onlyInput('email');
+        }
+
+        if ($user?->isAdmin()) {
+            try {
+                $adminAuthentication->begin($user, $request);
+            } catch (TransportExceptionInterface $exception) {
+                Log::warning('Admin login code email could not be delivered.', [
+                    'admin_id' => $user->id,
+                    'exception' => $exception,
+                ]);
+
+                return back()->withErrors(['email' => __('messages.admin_login_code_delivery_failed')])->onlyInput('email');
+            }
+
+            return redirect()->route('admin.login.verify', ['lang' => app()->getLocale()])
+                ->with('status', $adminAuthentication->adminUsesAuthenticator($user)
+                    ? __('messages.admin_totp_login_required')
+                    : __('messages.admin_login_code_sent'));
+        }
+
+        Auth::login($user, $request->boolean('remember'));
         $successRedirect = route('dashboard');
 
-        if ($user && $user->isAgencyOwner()) {
+        if ($user->isAgencyOwner()) {
             $successRedirect = route('agency.dashboard');
         }
 
@@ -164,9 +199,33 @@ class AuthController extends Controller
     {
         $email = Str::lower($request->validate(['email' => ['required', 'email']])['email']);
         $user = User::where('email', $email)->first();
+        $neutralMessage = __('messages.password_reset_neutral');
+
+        if ($user?->isAdmin()) {
+            try {
+                Mail::to($user->email)->send(new AdminPasswordResetNoticeMail($user->name));
+            } catch (TransportExceptionInterface $exception) {
+                Log::warning('Admin password reset notice email could not be delivered.', [
+                    'admin_id' => $user->id,
+                    'exception' => $exception,
+                ]);
+            }
+
+            Log::notice('Self-service password reset requested for an admin account.', [
+                'admin_id' => $user->id,
+                'ip_address' => $request->ip(),
+            ]);
+
+            $request->session()->put('password_reset_email', $email);
+
+            return redirect()->route('password.code')->with('status', $neutralMessage);
+        }
 
         if (! $user) {
-            return back()->with('status', 'If an account exists for that email, a verification code has been sent.');
+            $this->performDummyResetWork();
+            $request->session()->put('password_reset_email', $email);
+
+            return redirect()->route('password.code')->with('status', $neutralMessage);
         }
 
         $code = (string) random_int(100000, 999999);
@@ -190,14 +249,12 @@ class AuthController extends Controller
                 'exception' => $exception,
             ]);
 
-            return back()->withErrors([
-                'email' => 'We could not send the reset email right now. Please try again later.',
-            ])->withInput();
+            return back()->with('status', $neutralMessage);
         }
 
         $request->session()->put('password_reset_email', $email);
 
-        return redirect()->route('password.code');
+        return redirect()->route('password.code')->with('status', $neutralMessage);
     }
 
     public function showCodeForm(Request $request): View
@@ -212,6 +269,11 @@ class AuthController extends Controller
             'code' => ['required', 'digits:6'],
         ]);
         $email = Str::lower($data['email']);
+        $user = User::query()->where('email', $email)->first();
+        if ($user?->isAdmin()) {
+            return back()->withErrors(['code' => 'This verification code is invalid or expired.'])->withInput();
+        }
+
         $resetCode = DB::table('password_reset_codes')->where('email', $email)->first();
 
         if (! $resetCode || now()->greaterThan($resetCode->expires_at) || $resetCode->attempts >= 5) {
@@ -246,6 +308,12 @@ class AuthController extends Controller
             return redirect()->route('password.request');
         }
 
+        if (User::query()->where('email', $email)->where('role', UserRole::ADMIN)->exists()) {
+            $request->session()->forget(['password_reset_email', 'password_reset_verified_email']);
+
+            return redirect()->route('password.request')->with('status', __('messages.password_reset_neutral'));
+        }
+
         $data = $request->validate(['password' => ['required', 'string', 'min:8', 'confirmed']]);
         $user = User::where('email', $email)->first();
 
@@ -260,5 +328,10 @@ class AuthController extends Controller
         $request->session()->forget(['password_reset_email', 'password_reset_verified_email']);
 
         return redirect()->route('login')->with('status', 'Your password has been reset.');
+    }
+
+    private function performDummyResetWork(): void
+    {
+        Hash::make(Str::random(32));
     }
 }

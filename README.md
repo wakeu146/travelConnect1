@@ -43,11 +43,67 @@ This README is also the continuation handoff for future AI agents. Read the curr
 - Vite
 - PHPUnit
 
+## Admin authentication and security
+
+Admins are existing `users` records with the `admin` role. They use the shared email/password login form; there is no web-based admin creation, Google sign-in, magic-link login, or API-token login. The `role` attribute is not mass assignable.
+
+### Login and second factors
+
+- A correct admin password starts a pending login but does not authenticate the session. The session is authenticated and its ID regenerated only after second-factor verification.
+- Admins without authenticator enrollment receive a six-digit email code. Codes are stored hashed, expire after 60 seconds, allow at most five attempts, and email resend is rate limited.
+- After email verification, an unenrolled admin is offered authenticator enrollment. Enrollment is optional; skipping continues to the dashboard for that session, and setup is offered again after a later email-code login.
+- TOTP enrollment uses a locally rendered QR code. The secret is encrypted at rest. Once enrolled, login requires an authenticator code; email-code fallback is not available. TOTP time-step reuse is rejected.
+- Ten hashed recovery codes are shown once after enrollment. Each code can be used once. If the admin loses the authenticator and recovery codes, use `admin:reset` to clear enrollment and recover through email verification.
+- Authenticator codes cannot be resent. Email-code users have a resend action; TOTP users can use one unused recovery code instead.
+
+### Password, session, and device protections
+
+- Five failed admin password attempts in a rolling 15-minute window temporarily lock the account for 15 minutes. The admin receives a security email; attempts during lockout are rejected even if the password is correct. Login failures keep the same generic credential error.
+- Admin remember-me is ignored. The remember token is rotated when an admin login starts.
+- Admin routes require a fully verified session and enforce a 20-minute idle timeout by default.
+- After a complete login, the application issues a random trusted-device cookie (`HttpOnly`, `SameSite=Lax`, `Secure` in production) and stores only the token hash. The default cookie lifetime is 90 days.
+- Alerts are sent for an accepted password from an unrecognized device, a successful login from a new device/IP, and a burst of failed attempts. Login events record the email, IP, user agent, outcome, failed step, and device hash.
+- Login-event retention defaults to 180 days. `admin:prune-login-events` runs daily at 01:00.
+- `TRUSTED_PROXIES` configures which proxies may supply forwarded client IP headers. Set it to the actual proxy IPs/CIDRs in production; do not trust arbitrary forwarded headers.
+
+### Admin commands and configuration
+
+Create the initial admin interactively; the password is entered through a hidden prompt and must be at least 12 characters:
+
+```powershell
+php artisan admin:create
+```
+
+Reset an existing admin's email and password interactively:
+
+```powershell
+php artisan admin:reset
+```
+
+Reset rotates the remember token and session version, removes pending login challenges, TOTP enrollment/recovery hashes and trusted devices, invalidates database-backed sessions, and writes an audit log entry. Never pass admin passwords as command-line arguments or commit credentials.
+
+Relevant environment settings are listed in `.env.example`, including `ADMIN_LOGIN_CODE_EXPIRES_MINUTES`, `ADMIN_LOGIN_CODE_MAX_ATTEMPTS`, `ADMIN_PASSWORD_LOCKOUT_ATTEMPTS`, `ADMIN_PASSWORD_LOCKOUT_MINUTES`, `ADMIN_IDLE_TIMEOUT_MINUTES`, `ADMIN_TRUSTED_DEVICE_DAYS`, and `ADMIN_LOGIN_EVENT_RETENTION_DAYS`. Configure a real mail transport for deployed environments; the example uses the `log` mailer. Keep `APP_KEY` stable and backed up: it encrypts TOTP secrets.
+
+Admin routes are registered from `routes/admin.php` under `/admin`. The dashboard remains a placeholder; no admin moderation, verification queue, user management, or reporting features are implemented.
+
+The additive migrations are `2026_10_06_094104_create_admin_security_tables.php` and `2026_10_06_115313_create_admin_totp_credentials_table.php`. They add admin security tables and a defaulted session-version column; they do not delete traveler, agency, or booking data. Review pending migrations before deploying: this repository also has older unrelated migrations that should not be applied blindly.
+
+Implementation entry points are `routes/admin.php`, `app/Http/Controllers/Admin`, `app/Services/ConfiguredAdminSecondFactor.php`, `app/Services/TotpAdminSecondFactor.php`, `app/Services/EmailAdminSecondFactor.php`, `app/Models/AdminTotpCredential.php`, and `resources/views/admin/auth`. Focused verification commands:
+
+Latest verification on 2026-10-06: the full suite passed 140 tests with 939 assertions; Composer audit was clean; Blade caching and the production asset build succeeded. `php artisan route:list` is still blocked by the unrelated missing `TravelerConversationController` reference noted below.
+
+```powershell
+php artisan test --compact tests/Feature/AdminConsoleCommandsTest.php tests/Feature/AdminTotpAuthenticationTest.php tests/Feature/AgencyDashboardTest.php tests/Feature/PasswordRecoveryTest.php
+php artisan view:cache
+composer audit --locked
+npm run build
+```
+
 ## Current implementation state
 
 TravelConnect is an active Laravel marketplace with separate traveler and agency workspaces. The main discovery, booking, inquiry, verification, and review flows use database-backed records and role-scoped routes. Treat the current dashboard and booking behavior below as the continuation baseline.
 
-### Recent implementation baseline
+### Marketplace implementation baseline
 
 The following focused checks passed during the departure-expiry, booking-review, and dashboard updates:
 
@@ -58,7 +114,7 @@ php artisan schedule:list --no-interaction
 vendor/bin/pint --dirty --format agent
 ```
 
-All listed commands passed. The affected feature suites reported 101 passing tests, the final traveler-dashboard run reported 46 passing tests, and the complete suite reported 118 passing tests with 659 assertions. Blade caching and the production asset build also passed.
+These results describe the earlier marketplace/departure work and are retained as historical context. For the current full-suite result, run `php artisan test --compact` after your changes.
 
 ### Active session handoff
 
@@ -204,7 +260,7 @@ Public routes include `/`, `/how-it-works`, `/for-agencies`, `/terms`, `/privacy
 
 Authenticated traveler routes include `/dashboard`, `/account/discover`, `/account/saved`, `/account/activity`, `/account/bookings`, `/agencies/{slug}`, `POST /agencies/{slug}/favorite`, `POST /agencies/{slug}/reviews`, and `DELETE /account/notifications/{notification}`. Package booking uses `GET /packages/{package}/book`, `POST /packages/{package}/book`, `GET /bookings/{booking}`, and `GET /bookings/{booking}/confirmation`.
 
-Authentication routes include login, registration, password recovery, verification-code reset, and logout.
+Authentication routes include login, registration, password recovery, verification-code reset, and logout. Admin login verification, TOTP setup/confirmation, and admin logout are under `/admin`; TOTP routes require an authenticated, second-factor-verified admin session.
 
 The active agency dashboard is `GET /agency/dashboard` (`agency.dashboard`), protected by `auth` and `agency-owner`. Agency mutations, experience deletion, and booking transitions must remain scoped to the authenticated owner, with validation and feature tests.
 
@@ -274,11 +330,14 @@ Factory-created user passwords default to `password` for local testing. Never us
 
 ## Remaining work before final polish
 
-1. Add pagination to the activity notification feed, which currently shows the latest 20 notifications, and ensure review moderation/admin events produce notifications.
-2. Continue simplifying labels, help text, and empty states for users with limited computer experience.
-3. Select a payment provider and define reconciliation/payout rules before adding payout functionality; current booking payments are status tracking only.
-4. Add browser-level coverage for locale switching, profile-media replacement, booking dialogs, delete actions, and mobile navigation if a browser test tool is introduced.
-5. Keep booking transitions, cancellation, payment filters, and currency totals covered by focused feature tests.
+1. Fix the `TravelerConversationController` reference used in `routes/web.php`; currently `php artisan route:list` fails while reflecting that controller. TOTP routes themselves are registered and feature tested.
+2. Decide whether admin TOTP enrollment should remain optional or become mandatory. Currently an unenrolled admin can skip setup for a session and is prompted again after a later email-code login.
+3. Run a real mail/TOTP/recovery-code smoke test in a production-like environment before deployment.
+4. Add pagination to the activity notification feed, which currently shows the latest 20 notifications, and ensure review moderation/admin events produce notifications.
+5. Continue simplifying labels, help text, and empty states for users with limited computer experience.
+6. Select a payment provider and define reconciliation/payout rules before adding payout functionality; current booking payments are status tracking only.
+7. Add browser-level coverage for locale switching, profile-media replacement, booking dialogs, delete actions, and mobile navigation if a browser test tool is introduced.
+8. Keep booking transitions, cancellation, payment filters, and currency totals covered by focused feature tests.
 
 ## Continuing-project rules
 
