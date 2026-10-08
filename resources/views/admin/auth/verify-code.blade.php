@@ -35,6 +35,10 @@
                     <button type="submit" class="text-sm font-semibold text-[#e76f51] hover:text-[#b94d35]">{{ __('messages.admin_resend_code') }}</button>
                 </form>
             @endif
+
+            <a href="{{ route('login', ['lang' => app()->getLocale()]) }}" class="mt-5 block text-center text-sm font-semibold text-[#173042] underline decoration-[#173042] underline-offset-4 transition hover:text-[#173042]">
+                {{ __('messages.back_to_log_in') }}
+            </a>
         </section>
     </main>
 @endsection

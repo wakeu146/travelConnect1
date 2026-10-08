@@ -55,6 +55,7 @@ Admins are existing `users` records with the `admin` role. They use the shared e
 - TOTP enrollment uses a locally rendered QR code. The secret is encrypted at rest. Once enrolled, login requires an authenticator code; email-code fallback is not available. TOTP time-step reuse is rejected.
 - Ten hashed recovery codes are shown once after enrollment. Each code can be used once. If the admin loses the authenticator and recovery codes, use `admin:reset` to clear enrollment and recover through email verification.
 - Authenticator codes cannot be resent. Email-code users have a resend action; TOTP users can use one unused recovery code instead.
+- The password-recovery and admin TOTP verification screens both show a localized “Back to log in” link. The link uses the application's dark `#173042` text and underline color, has no icon, and points to the shared login route. The TOTP verification form, recovery-code behavior, and authentication flow remain unchanged.
 
 ### Password, session, and device protections
 
