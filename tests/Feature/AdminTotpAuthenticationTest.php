@@ -87,6 +87,8 @@ class AdminTotpAuthenticationTest extends TestCase
             ->assertOk()
             ->assertSee('placeholder="'.__('messages.admin_totp_code_placeholder').'"', false)
             ->assertSee(__('messages.admin_totp_recovery_hint'))
+            ->assertSee(__('messages.back_to_log_in'))
+            ->assertSee('underline', 1)
             ->assertDontSee(__('messages.admin_resend_code'));
 
         $authenticatorCode = $google2fa->getCurrentOtp($secret);

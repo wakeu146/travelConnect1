@@ -17,6 +17,15 @@ class PasswordRecoveryTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_password_recovery_page_has_an_underlined_back_to_login_link(): void
+    {
+        $response = $this->get(route('password.request'));
+
+        $response->assertOk()
+            ->assertSee(__('messages.back_to_log_in'))
+            ->assertSee('underline', 1);
+    }
+
     public function test_it_sends_a_verification_code_for_an_existing_account(): void
     {
         $user = User::factory()->create(['email' => 'traveler@example.com']);

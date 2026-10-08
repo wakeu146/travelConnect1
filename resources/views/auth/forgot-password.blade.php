@@ -63,7 +63,7 @@
                     </button>
                 </form>
 
-                <a href="{{ route('login', ['lang' => app()->getLocale()]) }}" class="mt-6 flex items-center justify-center gap-2 text-sm font-semibold text-[#607985] transition hover:text-[#173042]">
+                <a href="{{ route('login', ['lang' => app()->getLocale()]) }}" class="mt-6 flex items-center justify-center gap-2 text-sm font-semibold text-[#607985] underline decoration-[#e76f51] underline-offset-4 transition hover:text-[#173042]">
                     <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                         <path d="M15 18 9 12l6-6"/>
                     </svg>

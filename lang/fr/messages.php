@@ -909,7 +909,7 @@ return [
     'admin_totp_verification_title' => 'Vérification par application',
     'admin_totp_verification_intro' => 'Saisissez le code actuel à six chiffres de votre application d’authentification.',
     'admin_totp_verification_submit' => 'Vérifier et continuer',
-    'admin_totp_code_placeholder' => '123456 ou ABCD-EFGH-IJKL',
+    'admin_totp_code_placeholder' => '123456',
     'admin_email_code_placeholder' => '000000',
     'admin_totp_recovery_hint' => 'Les codes sont générés par votre application et ne peuvent pas être renvoyés. Si vous n’y avez pas accès, saisissez ci-dessus un code de récupération inutilisé.',
     'admin_totp_login_required' => 'Saisissez le code actuel de votre application d’authentification pour continuer.',
