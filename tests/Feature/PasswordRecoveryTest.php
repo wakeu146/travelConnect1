@@ -23,7 +23,8 @@ class PasswordRecoveryTest extends TestCase
 
         $response->assertOk()
             ->assertSee(__('messages.back_to_log_in'))
-            ->assertSee('underline', 1);
+            ->assertSee('text-[#173042] underline decoration-[#173042] underline-offset-4', 1)
+            ->assertDontSee('<svg', 1);
     }
 
     public function test_it_sends_a_verification_code_for_an_existing_account(): void
