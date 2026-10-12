@@ -11,6 +11,7 @@ use App\Http\Controllers\AgencyOperationsController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\FavoriteController;
+use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\InquiryController;
 use App\Http\Controllers\ReviewController;
 use App\Models\Agency;
@@ -113,11 +114,15 @@ Route::view('/for-agencies', 'for-agencies')->name('for-agencies');
 Route::get('/terms', fn () => view('static-page', ['pageTitle' => __('messages.terms_of_use'), 'pageIntro' => __('messages.terms_intro'), 'pageBody' => __('messages.terms_body')]))->name('terms');
 Route::get('/privacy', fn () => view('static-page', ['pageTitle' => __('messages.privacy_policy'), 'pageIntro' => __('messages.privacy_intro'), 'pageBody' => __('messages.privacy_body')]))->name('privacy');
 Route::get('/accessibility', fn () => view('static-page', ['pageTitle' => __('messages.accessibility'), 'pageIntro' => __('messages.accessibility_intro'), 'pageBody' => __('messages.accessibility_body')]))->name('accessibility');
+Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('google.redirect');
+Route::get('/auth/google/agency', [GoogleAuthController::class, 'agencyRedirect'])->name('google.agency.redirect');
+Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->name('google.callback');
 Route::view('/login', 'auth.login')->name('login');
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login')->name('login.store');
 Route::view('/register', 'auth.account-type')->name('register');
-Route::view('/register/agency', 'auth.register')->name('register.agency');
+Route::get('/register/agency', [GoogleAuthController::class, 'showAgencyRegistration'])->name('register.agency');
 Route::post('/register/agency', [AuthController::class, 'registerAgency'])->middleware('throttle:register')->name('register.agency.store');
+Route::post('/register/agency/google', [GoogleAuthController::class, 'completeAgencyRegistration'])->middleware('throttle:register')->name('google.agency.complete');
 Route::view('/register/traveler', 'auth.traveler-register')->name('register.traveler');
 Route::post('/register/traveler', [AuthController::class, 'registerTraveler'])->middleware('throttle:register')->name('register.traveler.store');
 Route::view('/forgot-password', 'auth.forgot-password')->name('password.request');
@@ -226,6 +231,7 @@ Route::get('/account/bookings', [BookingController::class, 'index'])->middleware
 Route::post('/account/bookings', [BookingController::class, 'storeFromAccount'])->middleware('auth')->name('account.bookings.store');
 Route::view('/settings', 'auth.settings')->middleware('auth')->name('settings');
 Route::put('/settings/profile', [AuthController::class, 'updateProfile'])->middleware('auth')->name('settings.profile');
+Route::put('/settings/password', [AuthController::class, 'updatePassword'])->middleware('auth')->name('settings.password');
 Route::post('/settings/profile-photo', [AuthController::class, 'updateProfilePhoto'])->middleware('auth')->name('settings.profile-photo');
 Route::get('/account/saved', function () {
     /** @var User $user */

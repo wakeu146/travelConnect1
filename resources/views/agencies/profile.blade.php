@@ -222,6 +222,22 @@
                     </button>
                 </div>
             </form>
+            <section class="agency-panel mt-8 max-w-2xl rounded-2xl border p-6 shadow-sm">
+                <h2 class="text-lg font-bold">{{ __('messages.update_password') }}</h2>
+                @if (session('password_status'))
+                    <p class="mt-3 text-sm font-semibold text-[#2f9e7a]">{{ session('password_status') }}</p>
+                @endif
+                @if ($errors->has('password'))
+                    <p class="mt-3 text-sm font-semibold text-[#b42318]">{{ $errors->first('password') }}</p>
+                @endif
+                <form method="POST" action="{{ route('settings.password', ['lang' => app()->getLocale()]) }}" class="mt-5 grid gap-5">
+                    @csrf
+                    @method('PUT')
+                    <label class="grid gap-2 text-sm font-semibold text-[#173042]" for="password">{{ __('messages.new_password') }}<input id="password" type="password" name="password" autocomplete="new-password" minlength="8" required class="w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm font-normal outline-none focus:border-[#e76f51]"></label>
+                    <label class="grid gap-2 text-sm font-semibold text-[#173042]" for="password_confirmation">{{ __('messages.confirm_password') }}<input id="password_confirmation" type="password" name="password_confirmation" autocomplete="new-password" minlength="8" required class="w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm font-normal outline-none focus:border-[#e76f51]"></label>
+                    <button type="submit" class="inline-flex w-fit items-center justify-center rounded-xl bg-[#173042] px-5 py-3 text-sm font-bold text-white hover:bg-[#0f2431]">{{ __('messages.save_new_password') }}</button>
+                </form>
+            </section>
             <form id="agency-document-upload" method="POST" action="{{ route('agency.documents.store', ['lang' => app()->getLocale()]) }}" enctype="multipart/form-data" class="hidden">@csrf</form>
             @if ($latestVerificationDocument ?? false)
                 <form id="agency-document-update" method="POST" action="{{ route('agency.documents.update', ['document' => $latestVerificationDocument->id, 'lang' => app()->getLocale()]) }}" enctype="multipart/form-data" class="hidden">@csrf @method('PUT')</form>

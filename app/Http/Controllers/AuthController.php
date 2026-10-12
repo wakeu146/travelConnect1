@@ -57,6 +57,17 @@ class AuthController extends Controller
         return back()->with('status', 'Profile information updated.');
     }
 
+    public function updatePassword(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $request->user()->update(['password' => $data['password']]);
+
+        return back()->with('password_status', __('messages.password_updated_successfully'));
+    }
+
     public function registerTraveler(Request $request): RedirectResponse
     {
         $data = $request->validate([

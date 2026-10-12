@@ -6,105 +6,48 @@ This README is also the continuation handoff for future AI agents. Read the curr
 
 ## Current features
 
-- Traveler registration, login, logout, and profile photo upload
-- Traveler dashboard with live saved-agency, inquiry, and review data
-- Traveler "My bookings" section with owner-scoped reservations, status/payment summaries, and in-page booking details
-- In-profile booking dialog for published agency packages, with capacity-checked checkout and localized validation/success dialogs
-- Verified agency directory with popular-agency ranking
-- Search by agency name, description, destination, or service with case-insensitive partial matching
-- Default directory shows the three most popular verified agencies
-- Country searches return every matching verified agency
-- Save and unsave agencies with persistent database state
-- Saved Agencies page with real agency images, ratings, and all destinations
-- Agency detail pages with multiple destinations, trust signals, ratings, and reviews
-- Real inquiry submission to agency owners and unread-activity notification counts
-- Traveler reviews require a completed booking and are limited to one review per booking
-- Agency-owned travel experience galleries backed by the database
-- Agency package, departure, booking, customer, review, payment-status, and analytics workspace
-- Traveler-facing agency profiles show only published packages with at least one active departure after today
-- Past departures expire automatically and are hidden from traveler profile and booking flows
-- Agency availability totals separate current reservations from completed travelers
-- Public agency profiles keep agency email and phone private
-- Dashboard brand marks are static and do not navigate when clicked
-- Package destinations are selected from the owning agency's configured countries and validated server-side
-- Owner-scoped icon deletion for saved agencies, packages and package images, eligible verification documents, closed inquiries, notifications, and agency travel experiences
-- Local traveler-experience images stored under `public/images/traveler_experience`
-- Traveler review submission with 1-5 rating, comment validation, and pending moderation
-- English/French locale switching using the `?lang=en` or `?lang=fr` query parameter
-- Responsive account shell with mobile navigation, notification bell, and persistent light/dark theme
+* Traveler registration, login, logout, and profile photo upload
+* Traveler dashboard with live saved-agency, inquiry, and review data
+* Traveler "My bookings" section with owner-scoped reservations, status/payment summaries, and in-page booking details
+* In-profile booking dialog for published agency packages, with capacity-checked checkout and localized validation/success dialogs
+* Verified agency directory with popular-agency ranking
+* Search by agency name, description, destination, or service with case-insensitive partial matching
+* Default directory shows the three most popular verified agencies
+* Country searches return every matching verified agency
+* Save and unsave agencies with persistent database state
+* Saved Agencies page with real agency images, ratings, and all destinations
+* Agency detail pages with multiple destinations, trust signals, ratings, and reviews
+* Real inquiry submission to agency owners and unread-activity notification counts
+* Traveler reviews require a completed booking and are limited to one review per booking
+* Agency-owned travel experience galleries backed by the database
+* Agency package, departure, booking, customer, review, payment-status, and analytics workspace
+* Traveler-facing agency profiles show only published packages with at least one active departure after today
+* Past departures expire automatically and are hidden from traveler profile and booking flows
+* Agency availability totals separate current reservations from completed travelers
+* Public agency profiles keep agency email and phone private
+* Dashboard brand marks are static and do not navigate when clicked
+* Package destinations are selected from the owning agency's configured countries and validated server-side
+* Owner-scoped icon deletion for saved agencies, packages and package images, eligible verification documents, closed inquiries, notifications, and agency travel experiences
+* Local traveler-experience images stored under `public/images/traveler\_experience`
+* Traveler review submission with 1-5 rating, comment validation, and pending moderation
+* English/French locale switching using the `?lang=en` or `?lang=fr` query parameter
+* Responsive account shell with mobile navigation, notification bell, and persistent light/dark theme
 
 ## Technology
 
-- PHP 8.3+
-- Laravel 13
-- MySQL (configured through `.env`)
-- Blade views
-- Tailwind CSS 4
-- Vite
-- PHPUnit
-
-## Admin authentication and security
-
-Admins are existing `users` records with the `admin` role. They use the shared email/password login form; there is no web-based admin creation, Google sign-in, magic-link login, or API-token login. The `role` attribute is not mass assignable.
-
-### Login and second factors
-
-- A correct admin password starts a pending login but does not authenticate the session. The session is authenticated and its ID regenerated only after second-factor verification.
-- Admins without authenticator enrollment receive a six-digit email code. Codes are stored hashed, expire after 60 seconds, allow at most five attempts, and email resend is rate limited.
-- After email verification, an unenrolled admin is offered authenticator enrollment. Enrollment is optional; skipping continues to the dashboard for that session, and setup is offered again after a later email-code login.
-- TOTP enrollment uses a locally rendered QR code. The secret is encrypted at rest. Once enrolled, login requires an authenticator code; email-code fallback is not available. TOTP time-step reuse is rejected.
-- Ten hashed recovery codes are shown once after enrollment. Each code can be used once. If the admin loses the authenticator and recovery codes, use `admin:reset` to clear enrollment and recover through email verification.
-- Authenticator codes cannot be resent. Email-code users have a resend action; TOTP users can use one unused recovery code instead.
-- The password-recovery and admin TOTP verification screens both show a localized “Back to log in” link. The link uses the application's dark `#173042` text and underline color, has no icon, and points to the shared login route. The TOTP verification form, recovery-code behavior, and authentication flow remain unchanged.
-
-### Password, session, and device protections
-
-- Five failed admin password attempts in a rolling 15-minute window temporarily lock the account for 15 minutes. The admin receives a security email; attempts during lockout are rejected even if the password is correct. Login failures keep the same generic credential error.
-- Admin remember-me is ignored. The remember token is rotated when an admin login starts.
-- Admin routes require a fully verified session and enforce a 20-minute idle timeout by default.
-- After a complete login, the application issues a random trusted-device cookie (`HttpOnly`, `SameSite=Lax`, `Secure` in production) and stores only the token hash. The default cookie lifetime is 90 days.
-- Alerts are sent for an accepted password from an unrecognized device, a successful login from a new device/IP, and a burst of failed attempts. Login events record the email, IP, user agent, outcome, failed step, and device hash.
-- Login-event retention defaults to 180 days. `admin:prune-login-events` runs daily at 01:00.
-- `TRUSTED_PROXIES` configures which proxies may supply forwarded client IP headers. Set it to the actual proxy IPs/CIDRs in production; do not trust arbitrary forwarded headers.
-
-### Admin commands and configuration
-
-Create the initial admin interactively; the password is entered through a hidden prompt and must be at least 12 characters:
-
-```powershell
-php artisan admin:create
-```
-
-Reset an existing admin's email and password interactively:
-
-```powershell
-php artisan admin:reset
-```
-
-Reset rotates the remember token and session version, removes pending login challenges, TOTP enrollment/recovery hashes and trusted devices, invalidates database-backed sessions, and writes an audit log entry. Never pass admin passwords as command-line arguments or commit credentials.
-
-Relevant environment settings are listed in `.env.example`, including `ADMIN_LOGIN_CODE_EXPIRES_MINUTES`, `ADMIN_LOGIN_CODE_MAX_ATTEMPTS`, `ADMIN_PASSWORD_LOCKOUT_ATTEMPTS`, `ADMIN_PASSWORD_LOCKOUT_MINUTES`, `ADMIN_IDLE_TIMEOUT_MINUTES`, `ADMIN_TRUSTED_DEVICE_DAYS`, and `ADMIN_LOGIN_EVENT_RETENTION_DAYS`. Configure a real mail transport for deployed environments; the example uses the `log` mailer. Keep `APP_KEY` stable and backed up: it encrypts TOTP secrets.
-
-Admin routes are registered from `routes/admin.php` under `/admin`. The dashboard remains a placeholder; no admin moderation, verification queue, user management, or reporting features are implemented.
-
-The additive migrations are `2026_10_06_094104_create_admin_security_tables.php` and `2026_10_06_115313_create_admin_totp_credentials_table.php`. They add admin security tables and a defaulted session-version column; they do not delete traveler, agency, or booking data. Review pending migrations before deploying: this repository also has older unrelated migrations that should not be applied blindly.
-
-Implementation entry points are `routes/admin.php`, `app/Http/Controllers/Admin`, `app/Services/ConfiguredAdminSecondFactor.php`, `app/Services/TotpAdminSecondFactor.php`, `app/Services/EmailAdminSecondFactor.php`, `app/Models/AdminTotpCredential.php`, and `resources/views/admin/auth`. Focused verification commands:
-
-Latest verification on 2026-10-06: the full suite passed 140 tests with 939 assertions; Composer audit was clean; Blade caching and the production asset build succeeded. `php artisan route:list` is still blocked by the unrelated missing `TravelerConversationController` reference noted below.
-
-```powershell
-php artisan test --compact tests/Feature/AdminConsoleCommandsTest.php tests/Feature/AdminTotpAuthenticationTest.php tests/Feature/AgencyDashboardTest.php tests/Feature/PasswordRecoveryTest.php
-php artisan view:cache
-composer audit --locked
-npm run build
-```
+* PHP 8.3+
+* Laravel 13
+* MySQL (configured through `.env`)
+* Blade views
+* Tailwind CSS 4
+* Vite
+* PHPUnit
 
 ## Current implementation state
 
 TravelConnect is an active Laravel marketplace with separate traveler and agency workspaces. The main discovery, booking, inquiry, verification, and review flows use database-backed records and role-scoped routes. Treat the current dashboard and booking behavior below as the continuation baseline.
 
-### Marketplace implementation baseline
+### Recent implementation baseline
 
 The following focused checks passed during the departure-expiry, booking-review, and dashboard updates:
 
@@ -115,31 +58,31 @@ php artisan schedule:list --no-interaction
 vendor/bin/pint --dirty --format agent
 ```
 
-These results describe the earlier marketplace/departure work and are retained as historical context. For the current full-suite result, run `php artisan test --compact` after your changes.
+All listed commands passed. The affected feature suites reported 101 passing tests, the final traveler-dashboard run reported 46 passing tests, and the complete suite reported 118 passing tests with 659 assertions. Blade caching and the production asset build also passed.
 
 ### Active session handoff
 
-- **Agency workspace:** `GET /agency/dashboard` uses the `x-agency-shell` and links to package, availability, booking, customer, review, payment, analytics, profile, and inquiry management. The overview keeps compact summaries; detailed work belongs in each dedicated section.
-- **Agency packages:** agencies can create, edit, publish, archive, and soft-delete packages. Package destinations are a required selection from the countries linked to that agency; server-side validation rejects destinations outside that list. Public agency profiles show only published packages with active departures after today; packages with no upcoming departures are hidden.
-- **Traveler bookings:** `GET /account/bookings` is the traveler-only “My bookings” page. It scopes records to the signed-in user and shows reference, package, agency, departure, status, travelers, total, and payment state. “View booking” opens a details dialog; pending and confirmed records retain the existing cancel action. Departures dated today or earlier are hidden and rejected by the booking service.
-- **Booking from an agency profile:** package booking opens in a centered, square-cornered dialog on the profile and posts to the existing capacity-checked booking endpoint. Validation errors return to the same profile, preserve locale and entered values, and reopen the dialog. Successful submissions return to the profile and show a confirmation dialog with the booking reference. The database schema was not changed for this modal flow.
-- **Agency profile media and verification:** owners can edit company/contact details, destinations, services, logo, cover, and verification documents. Render uploaded agency media through `Agency::logoUrl()` and `Agency::coverImageUrl()` so updated assets refresh correctly.
-- **Inquiries:** the lifecycle is open -> responded -> closed. Agency owners can reply, close, and delete only their own already-closed inquiries. Travelers receive database notifications for agency replies and closure events.
-- **Notifications and safe deletion:** both dashboards show unread notification counts; the traveler activity page shows the latest 20 notifications and includes an icon-only delete action scoped to the authenticated user's notifications. Other safe deletion controls exist for saved agencies, packages, package images, editable verification documents, closed inquiries, and an agency's own published travel experiences. Transactional bookings and traveler reviews are not hard-deleted.
-- **Search, reviews, and localization:** agency discovery performs case-insensitive partial matching by agency, description, service, and destination. A traveler can review each completed booking once; older reviews without a booking association do not block reviews for new completed bookings. Reviews remain pending until agency approval. `?lang=en` and `?lang=fr` are preserved on dashboard navigation and form actions.
-- **Departure expiry and capacity:** active departures dated today or earlier transition to `expired`. A daily scheduled task runs at 00:05, and the agency availability page catches up any missed expirations when opened. Traveler-facing profile and booking queries exclude dates on or before today even if the scheduler has not run. Availability statistics show pending, confirmed, completed travelers, remaining capacity, and occupancy; completed travelers are historical and do not reserve current seats.
-- **Booking reviews:** completed booking details include a review form. The endpoint checks that the booking belongs to the signed-in traveler and agency, is completed, and has not already been reviewed. Existing unlinked reviews are preserved.
-- **Public contact and payment:** public agency profiles do not display agency email or phone and direct booking requests through TravelConnect. Online payment processing is not integrated; booking totals are recorded, but actual payment collection requires a provider integration.
-- **Dashboard branding:** traveler and agency dashboard logos are static brand marks, not navigation links.
-- **Theme and layout:** traveler and agency shells share the same professional palette and navigation behavior. The traveler theme toggle updates both the shell and body so surfaces, text, borders, fields, and dialogs switch together. Mobile traveler search sits below the top utility row.
-- **Preserved data foundation:** `AgencyExperience`, `TravelRequest`, notification storage, and agency logo/cover columns remain in use. Do not remove these models or migrations during dashboard work.
+* **Agency workspace:** `GET /agency/dashboard` uses the `x-agency-shell` and links to package, availability, booking, customer, review, payment, analytics, profile, and inquiry management. The overview keeps compact summaries; detailed work belongs in each dedicated section.
+* **Agency packages:** agencies can create, edit, publish, archive, and soft-delete packages. Package destinations are a required selection from the countries linked to that agency; server-side validation rejects destinations outside that list. Public agency profiles show only published packages with active departures after today; packages with no upcoming departures are hidden.
+* **Traveler bookings:** `GET /account/bookings` is the traveler-only “My bookings” page. It scopes records to the signed-in user and shows reference, package, agency, departure, status, travelers, total, and payment state. “View booking” opens a details dialog; pending and confirmed records retain the existing cancel action. Departures dated today or earlier are hidden and rejected by the booking service.
+* **Booking from an agency profile:** package booking opens in a centered, square-cornered dialog on the profile and posts to the existing capacity-checked booking endpoint. Validation errors return to the same profile, preserve locale and entered values, and reopen the dialog. Successful submissions return to the profile and show a confirmation dialog with the booking reference. The database schema was not changed for this modal flow.
+* **Agency profile media and verification:** owners can edit company/contact details, destinations, services, logo, cover, and verification documents. Render uploaded agency media through `Agency::logoUrl()` and `Agency::coverImageUrl()` so updated assets refresh correctly.
+* **Inquiries:** the lifecycle is open -> responded -> closed. Agency owners can reply, close, and delete only their own already-closed inquiries. Travelers receive database notifications for agency replies and closure events.
+* **Notifications and safe deletion:** both dashboards show unread notification counts; the traveler activity page shows the latest 20 notifications and includes an icon-only delete action scoped to the authenticated user's notifications. Other safe deletion controls exist for saved agencies, packages, package images, editable verification documents, closed inquiries, and an agency's own published travel experiences. Transactional bookings and traveler reviews are not hard-deleted.
+* **Search, reviews, and localization:** agency discovery performs case-insensitive partial matching by agency, description, service, and destination. A traveler can review each completed booking once; older reviews without a booking association do not block reviews for new completed bookings. Reviews remain pending until agency approval. `?lang=en` and `?lang=fr` are preserved on dashboard navigation and form actions.
+* **Departure expiry and capacity:** active departures dated today or earlier transition to `expired`. A daily scheduled task runs at 00:05, and the agency availability page catches up any missed expirations when opened. Traveler-facing profile and booking queries exclude dates on or before today even if the scheduler has not run. Availability statistics show pending, confirmed, completed travelers, remaining capacity, and occupancy; completed travelers are historical and do not reserve current seats.
+* **Booking reviews:** completed booking details include a review form. The endpoint checks that the booking belongs to the signed-in traveler and agency, is completed, and has not already been reviewed. Existing unlinked reviews are preserved.
+* **Public contact and payment:** public agency profiles do not display agency email or phone and direct booking requests through TravelConnect. Online payment processing is not integrated; booking totals are recorded, but actual payment collection requires a provider integration.
+* **Dashboard branding:** traveler and agency dashboard logos are static brand marks, not navigation links.
+* **Theme and layout:** traveler and agency shells share the same professional palette and navigation behavior. The traveler theme toggle updates both the shell and body so surfaces, text, borders, fields, and dialogs switch together. Mobile traveler search sits below the top utility row.
+* **Preserved data foundation:** `AgencyExperience`, `TravelRequest`, notification storage, and agency logo/cover columns remain in use. Do not remove these models or migrations during dashboard work.
 
 The data foundation was intentionally preserved for future work:
 
-- `AgencyExperience` model and `agency_experiences` table
-- Agency media columns: `logo_path` and `cover_image_path`
-- Notifications table migration
-- `TravelRequest` model, factory, and migration
+* `AgencyExperience` model and `agency\_experiences` table
+* Agency media columns: `logo\_path` and `cover\_image\_path`
+* Notifications table migration
+* `TravelRequest` model, factory, and migration
 
 Do not delete these preserved models or migrations when rebuilding the agency workspace.
 
@@ -180,7 +123,7 @@ npm run build
 Start the application:
 
 ```powershell
-php artisan serve --host=127.0.0.1 --port=8000
+php artisan serve --host=localhost --port=8000
 ```
 
 Open `http://127.0.0.1:8000`.
@@ -230,30 +173,30 @@ npm run build
 
 ## Application structure
 
-- `app/Models`: User, Agency, AgencyExperience, Favorite, Review, Inquiry, TravelRequest, and related models
-- `app/Http/Controllers`: authentication, favorite, review, and agency dashboard overview actions
-- `app/Enums`: user roles, verification states, review states, document states, and document types
-- `app/Http/Middleware/SetLocale.php`: validates and stores the active locale
-- `app/Http/Middleware/EnsureAgencyOwner.php`: protects agency-owner routes and verifies an owned agency record
-- `app/Policies/AgencyPolicy.php`: authorizes agency dashboard ownership
-- `routes/web.php`: web routes and current agency directory data
-- `resources/views/components/account-shell.blade.php`: authenticated navigation shell, theme toggle, and header search
-- `resources/views/components/agency-shell.blade.php`: agency navigation, locale-aware links, theme, and loading behavior
-- `resources/views/components/agency-card.blade.php`: reusable agency card
-- `resources/views/auth`: traveler dashboard, saved agencies, activity, and settings pages
-- `resources/views/agencies`: active dashboard, package, availability, booking, payment, profile, review, and analytics views
-- `resources/views/agency-show.blade.php`: agency profile and review experience
-- `resources/css/app.css`: theme, responsive, and account UI rules
-- `resources/js/app.js`: locale-preserving navigation, favorites, carousels, and UI interactions
-- `database/migrations`: database schema
-- `database/seeders/DatabaseSeeder.php`: local demo agencies, travelers, reviews, and inquiries
-- `lang/en/messages.php` and `lang/fr/messages.php`: translated UI strings
+* `app/Models`: User, Agency, AgencyExperience, Favorite, Review, Inquiry, TravelRequest, and related models
+* `app/Http/Controllers`: authentication, favorite, review, and agency dashboard overview actions
+* `app/Enums`: user roles, verification states, review states, document states, and document types
+* `app/Http/Middleware/SetLocale.php`: validates and stores the active locale
+* `app/Http/Middleware/EnsureAgencyOwner.php`: protects agency-owner routes and verifies an owned agency record
+* `app/Policies/AgencyPolicy.php`: authorizes agency dashboard ownership
+* `routes/web.php`: web routes and current agency directory data
+* `resources/views/components/account-shell.blade.php`: authenticated navigation shell, theme toggle, and header search
+* `resources/views/components/agency-shell.blade.php`: agency navigation, locale-aware links, theme, and loading behavior
+* `resources/views/components/agency-card.blade.php`: reusable agency card
+* `resources/views/auth`: traveler dashboard, saved agencies, activity, and settings pages
+* `resources/views/agencies`: active dashboard, package, availability, booking, payment, profile, review, and analytics views
+* `resources/views/agency-show.blade.php`: agency profile and review experience
+* `resources/css/app.css`: theme, responsive, and account UI rules
+* `resources/js/app.js`: locale-preserving navigation, favorites, carousels, and UI interactions
+* `database/migrations`: database schema
+* `database/seeders/DatabaseSeeder.php`: local demo agencies, travelers, reviews, and inquiries
+* `lang/en/messages.php` and `lang/fr/messages.php`: translated UI strings
 
 Role-specific view convention:
 
-- `auth/` is currently used for authentication and the existing small dashboard because that is the stable legacy structure.
-- Agency-only views live in the dedicated `agencies/` view folder.
-- Keep traveler-only dashboard views in a dedicated `traveler/` folder only as part of a deliberate migration, updating every route and test reference together.
+* `auth/` is currently used for authentication and the existing small dashboard because that is the stable legacy structure.
+* Agency-only views live in the dedicated `agencies/` view folder.
+* Keep traveler-only dashboard views in a dedicated `traveler/` folder only as part of a deliberate migration, updating every route and test reference together.
 
 ## Route map
 
@@ -261,7 +204,7 @@ Public routes include `/`, `/how-it-works`, `/for-agencies`, `/terms`, `/privacy
 
 Authenticated traveler routes include `/dashboard`, `/account/discover`, `/account/saved`, `/account/activity`, `/account/bookings`, `/agencies/{slug}`, `POST /agencies/{slug}/favorite`, `POST /agencies/{slug}/reviews`, and `DELETE /account/notifications/{notification}`. Package booking uses `GET /packages/{package}/book`, `POST /packages/{package}/book`, `GET /bookings/{booking}`, and `GET /bookings/{booking}/confirmation`.
 
-Authentication routes include login, registration, password recovery, verification-code reset, and logout. Admin login verification, TOTP setup/confirmation, and admin logout are under `/admin`; TOTP routes require an authenticated, second-factor-verified admin session.
+Authentication routes include login, registration, password recovery, verification-code reset, and logout.
 
 The active agency dashboard is `GET /agency/dashboard` (`agency.dashboard`), protected by `auth` and `agency-owner`. Agency mutations, experience deletion, and booking transitions must remain scoped to the authenticated owner, with validation and feature tests.
 
@@ -295,13 +238,13 @@ Delete icons appear only where an existing, ownership-safe delete action is avai
 
 ### Agency travel experiences
 
-Agency profiles load their gallery through the `Agency::experiences()` relationship. Each `AgencyExperience` record contains `agency_id`, `image_path`, `destination`, `caption`, `alt_text`, and `published_at`.
+Agency profiles load their gallery through the `Agency::experiences()` relationship. Each `AgencyExperience` record contains `agency\_id`, `image\_path`, `destination`, `caption`, `alt\_text`, and `published\_at`.
 
-Gallery images use local paths such as `images/traveler_experience/p1.jpeg`; do not replace them with Unsplash URLs. Existing demo agencies use different rotating image sets from `p1.jpeg` through `p7.jpeg`, and each image displays its destination/country.
+Gallery images use local paths such as `images/traveler\_experience/p1.jpeg`; do not replace them with Unsplash URLs. Existing demo agencies use different rotating image sets from `p1.jpeg` through `p7.jpeg`, and each image displays its destination/country.
 
-The gallery is agency-specific. Do not place a generic experience feed on the traveler dashboard. Future agency posting forms must save the selected agency, uploaded image, destination, caption, and alt text to `agency_experiences`.
+The gallery is agency-specific. Do not place a generic experience feed on the traveler dashboard. Future agency posting forms must save the selected agency, uploaded image, destination, caption, and alt text to `agency\_experiences`.
 
-An agency owner can remove an experience only from their own public profile. The delete action removes both the `agency_experiences` row and its uploaded public-disk image. Cross-agency deletion must remain forbidden.
+An agency owner can remove an experience only from their own public profile. The delete action removes both the `agency\_experiences` row and its uploaded public-disk image. Cross-agency deletion must remain forbidden.
 
 ### Agency dashboard overview
 
@@ -331,14 +274,11 @@ Factory-created user passwords default to `password` for local testing. Never us
 
 ## Remaining work before final polish
 
-1. Fix the `TravelerConversationController` reference used in `routes/web.php`; currently `php artisan route:list` fails while reflecting that controller. TOTP routes themselves are registered and feature tested.
-2. Decide whether admin TOTP enrollment should remain optional or become mandatory. Currently an unenrolled admin can skip setup for a session and is prompted again after a later email-code login.
-3. Run a real mail/TOTP/recovery-code smoke test in a production-like environment before deployment.
-4. Add pagination to the activity notification feed, which currently shows the latest 20 notifications, and ensure review moderation/admin events produce notifications.
-5. Continue simplifying labels, help text, and empty states for users with limited computer experience.
-6. Select a payment provider and define reconciliation/payout rules before adding payout functionality; current booking payments are status tracking only.
-7. Add browser-level coverage for locale switching, profile-media replacement, booking dialogs, delete actions, and mobile navigation if a browser test tool is introduced.
-8. Keep booking transitions, cancellation, payment filters, and currency totals covered by focused feature tests.
+1. Add pagination to the activity notification feed, which currently shows the latest 20 notifications, and ensure review moderation/admin events produce notifications.
+2. Continue simplifying labels, help text, and empty states for users with limited computer experience.
+3. Select a payment provider and define reconciliation/payout rules before adding payout functionality; current booking payments are status tracking only.
+4. Add browser-level coverage for locale switching, profile-media replacement, booking dialogs, delete actions, and mobile navigation if a browser test tool is introduced.
+5. Keep booking transitions, cancellation, payment filters, and currency totals covered by focused feature tests.
 
 ## Continuing-project rules
 
@@ -356,11 +296,11 @@ Factory-created user passwords default to `password` for local testing. Never us
 
 Before editing:
 
-- Read this README and `AGENTS.md`.
-- Run `git status --short` and preserve unrelated user changes.
-- Check the active route and view name before moving any Blade file.
-- Preserve the existing traveler dashboard output.
-- Use local images from `public/images`, especially `public/images/traveler_experience`.
+* Read this README and `AGENTS.md`.
+* Run `git status --short` and preserve unrelated user changes.
+* Check the active route and view name before moving any Blade file.
+* Preserve the existing traveler dashboard output.
+* Use local images from `public/images`, especially `public/images/traveler\_experience`.
 
 After editing:
 
@@ -376,3 +316,75 @@ Check the relevant page manually at `http://127.0.0.1:8000` when a local server 
 ## Security notes
 
 `.env`, dependencies, compiled assets, storage links, and local credentials are ignored by Git. Configure secrets only through environment variables and do not commit real credentials.
+
+## Google authentication
+
+TravelConnect supports Google OAuth through Laravel Socialite as an alternative to the application's normal email/password authentication. Google provides a stable account identifier and profile information (such as the user's name and email); it does **not** provide the user's Google password to TravelConnect. Never try to retrieve or store a Google password.
+
+### Where it is included
+
+* **Shared login page (`/login`):** “Sign in with Google” starts the Google OAuth flow. An account that is already linked by its Google provider ID authenticates as that same TravelConnect user. Admin accounts must use password-based sign-in and complete the configured two-step verification.
+* **Traveler signup page:** “Sign up with Google” provides a shorter signup path. A new Google-created traveler account is assigned the traveler role by the server, and its Google provider ID is stored in `users.google_id`.
+* **Agency signup page:** Agency Google signup has a dedicated onboarding flow. It returns the Google-provided name and email to the agency form, where the user enters the agency name and a **TravelConnect password**. The owner and associated `Agency` record are created together only after the form is submitted successfully. The account role is assigned server-side; existing users are not silently converted to agency owners.
+
+The agency flow is separate from traveler signup. Its pending Google identity is kept in the session for a limited time and is not accepted from user-submitted identity fields.
+
+### How it works
+
+1. The user chooses Google signup or sign-in from the relevant page.
+2. Laravel Socialite redirects the browser to Google.
+3. Google returns the browser to the configured callback URI. Laravel validates the OAuth state/session and exchanges the authorization response for the Google identity.
+4. The application uses Google's stable provider ID (`google_id`) to identify an already-linked account. Email conflicts must be handled safely; do not create duplicate accounts, overwrite passwords, overwrite another user's Google ID, or silently change account roles.
+5. For a new traveler, the application creates a traveler record and completes the Google sign-in flow. For agency signup, the application must collect the required agency information and a TravelConnect password before creating the agency-owner account and its associated agency record.
+6. Where both sign-in methods are supported for the same linked account, Google sign-in and the normal email/password form authenticate the same TravelConnect user. A user-created TravelConnect password is separate from the Google account password.
+
+### Advantages
+
+* Reduces the amount of information a user must type during initial signup.
+* Lets users return through Google without needing to remember a separate password, where their account is linked.
+* Provides a stable provider identifier for recognizing the same Google account.
+* Keeps traveler and agency onboarding requirements distinct while reusing Google's identity verification flow.
+* Avoids collecting or handling users' Google account passwords.
+
+### Dependencies and project configuration
+
+The following must be available for Google authentication to work correctly:
+
+* **Composer dependency:** `laravel/socialite` must be included in `composer.json` and `composer.lock`; install project dependencies with `composer install` after cloning, or use directly `composer require laravel/socialite` if the project was already cloned
+* **Service configuration:** `config/services.php` must map the Google service to the following environment variables:
+
+```php
+  'google' => [
+      'client_id' => env('GOOGLE_CLIENT_ID'),
+      'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+      'redirect' => env('GOOGLE_REDIRECT_URI'),
+  ],
+  ```
+
+* **Environment variables:** Configure these locally in `.env` (and use blank placeholders, not real credentials, in any committed example file):
+
+```dotenv
+  GOOGLE_CLIENT_ID=your-google-oauth-client-id
+  GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
+  GOOGLE_REDIRECT_URI=http://localhost:8000/auth/google/callback
+  ```
+
+  Never commit real client secrets or paste them into logs, issues, or source control. After changing environment configuration, run `php artisan config:clear`.
+
+* **Google Cloud OAuth client:** Create a Web application OAuth client. For local development with the example `APP_URL`, register the exact redirect URI `http://localhost:8000/auth/google/callback` and the authorized origin `http://localhost:8000`. The redirect URI must exactly match `GOOGLE_REDIRECT_URI` in Laravel. For deployment, configure the real HTTPS domain and its callback URI in both Google Cloud and the deployment environment.
+* **Database schema:** The `users` table needs the nullable, unique `google_id` column. The project migration that adds it must be applied with `php artisan migrate` on each environment. Existing email/password users can keep `google_id` as `NULL` until their account is linked.
+* **Session/state support:** Laravel's session must persist between the redirect to Google and the callback. Do not disable Socialite's OAuth state verification or use `stateless()` as a workaround for session problems.
+* **PHP HTTPS certificate trust:** PHP/cURL must be able to validate Google's HTTPS certificate. On Windows/XAMPP, configure `curl.cainfo` (and, where needed, `openssl.cafile`) in the `php.ini` used by the PHP process to point to a valid CA certificate bundle. Do not disable SSL certificate verification.
+* **Agency data requirements:** Agency signup must use the existing agency validation rules and create the owner and its associated `Agency` record using the project's existing relationship and required fields. The agency name must be collected before creation; the submitted TravelConnect password must be hashed using the existing `User` model conventions.
+
+### Local verification
+
+After configuring the environment and Google Cloud client:
+
+```powershell
+php artisan config:clear
+php artisan migrate
+php artisan serve --host=127.0.0.1 --port=8000
+```
+
+Then test the traveler Google signup, linked-account Google sign-in, normal email/password sign-in, and the agency Google onboarding flow separately. Confirm that administrator accounts still require password-based sign-in and two-step verification. Confirm that user records are saved to the database configured by `DB_DATABASE` in `.env`. Run the project's authentication feature tests and `php artisan test` before merging or deploying.
