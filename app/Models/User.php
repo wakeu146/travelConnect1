@@ -42,6 +42,11 @@ class User extends Authenticatable
         return $this->hasMany(AdminLoginEvent::class);
     }
 
+    public function adminActivities(): HasMany
+    {
+        return $this->hasMany(AdminUserActivity::class);
+    }
+
     public function adminLoginChallenges(): HasMany
     {
         return $this->hasMany(AdminLoginChallenge::class);

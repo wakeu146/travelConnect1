@@ -23,6 +23,7 @@
         </div>
     </div>
     {{ $slot }}
+    <x-scroll-to-top />
     <script>
         const loader = document.getElementById('page-loader');
 

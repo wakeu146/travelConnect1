@@ -85,6 +85,7 @@ class AdminTotpAuthenticationTest extends TestCase
 
         $this->get(route('admin.login.verify'))
             ->assertOk()
+            ->assertSee('data-scroll-to-top', false)
             ->assertSee('placeholder="'.__('messages.admin_totp_code_placeholder').'"', false)
             ->assertSee(__('messages.admin_totp_recovery_hint'))
             ->assertSee(__('messages.back_to_log_in'))

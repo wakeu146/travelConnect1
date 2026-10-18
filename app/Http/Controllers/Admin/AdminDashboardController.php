@@ -76,6 +76,27 @@ class AdminDashboardController extends Controller
     }
 
     /**
+     * Render a Users module page inside the existing administrator dashboard shell.
+     *
+     * @param  array<string, mixed>  $usersPageData
+     */
+    public function renderUsersPage(
+        Request $request,
+        string $page,
+        array $usersPageData,
+        ?string $pageTitle = null,
+    ): View {
+        return $this->renderDashboard(
+            $request,
+            'platform_management',
+            $page,
+            'users',
+            usersPageData: $usersPageData,
+            pageTitleOverride: $pageTitle,
+        );
+    }
+
+    /**
      * @return array<string, array{icon: string, groups: array<int, array<string, mixed>>}>
      */
     private function sections(): array
@@ -91,12 +112,14 @@ class AdminDashboardController extends Controller
         ?array $overview = null,
         ?LengthAwarePaginator $alerts = null,
         ?array $alertDetail = null,
+        ?array $usersPageData = null,
+        ?string $pageTitleOverride = null,
     ): View {
         $sections = $this->sections();
         $sectionTitle = __("messages.admin_nav.sections.{$section}");
-        $pageTitle = $page
+        $pageTitle = $pageTitleOverride ?? ($page
             ? __("messages.admin_nav.pages.{$page}")
-            : $sectionTitle;
+            : $sectionTitle);
         $breadcrumbs = $page
             ? array_filter([
                 $sectionTitle,
@@ -118,6 +141,7 @@ class AdminDashboardController extends Controller
             'overview' => $overview,
             'alerts' => $alerts,
             'alertDetail' => $alertDetail,
+            'usersPageData' => $usersPageData,
             'adminNotifications' => $request->user()
                 ->notifications()
                 ->where('type', AdminTravelerIssueReceived::class)
@@ -152,7 +176,9 @@ class AdminDashboardController extends Controller
                 foreach ($group['pages'] ?? [$group['page']] as $page) {
                     $items[] = [
                         'label' => __("messages.admin_nav.pages.{$page}"),
-                        'url' => route('admin.dashboard.page', ['page' => $page, 'lang' => $locale]),
+                        'url' => isset(config('admin_dashboard.page_routes')[$page])
+                            ? route(config("admin_dashboard.page_routes.{$page}"), ['lang' => $locale])
+                            : route('admin.dashboard.page', ['page' => $page, 'lang' => $locale]),
                     ];
                 }
             }

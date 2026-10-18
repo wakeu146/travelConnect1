@@ -672,8 +672,13 @@ class TravelerDashboardTest extends TestCase
         $response = $this->get(route('home'));
 
         $response->assertOk();
+        $response->assertSee('data-scroll-to-top', false);
         $response->assertSee(__('messages.explore_destinations'));
         $response->assertDontSee('Atlas Horizon Voyages');
+
+        $this->get(route('login'))
+            ->assertOk()
+            ->assertSee('data-scroll-to-top', false);
     }
 
     public function test_guests_cannot_open_agency_discovery(): void

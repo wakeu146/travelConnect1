@@ -75,7 +75,8 @@ class AdminDashboardControllerTest extends TestCase
                 ->assertSee(__('messages.admin_nav.switch_language_to_english'))
                 ->assertSee(__('messages.admin_nav.switch_language_to_french'))
                 ->assertSee('data-admin-locale="en"', false)
-                ->assertSee('data-admin-locale="fr"', false);
+                ->assertSee('data-admin-locale="fr"', false)
+                ->assertSee('data-scroll-to-top', false);
 
             if ($sectionKey === 'main') {
                 $sectionResponse->assertSee('data-admin-overview', false);

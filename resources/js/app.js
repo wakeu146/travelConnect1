@@ -85,6 +85,46 @@ const applyLocaleToLinks = () => {
 applyLocaleToLinks();
 document.addEventListener('DOMContentLoaded', applyLocaleToLinks);
 
+const scrollToTopButtons = document.querySelectorAll('[data-scroll-to-top]');
+if (scrollToTopButtons.length > 0) {
+	const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+	let scrollVisibilityScheduled = false;
+
+	const updateScrollToTopButtons = () => {
+		const isVisible = window.scrollY > 320;
+
+		scrollToTopButtons.forEach((button) => {
+			button.classList.toggle('pointer-events-none', !isVisible);
+			button.classList.toggle('translate-y-3', !isVisible);
+			button.classList.toggle('opacity-0', !isVisible);
+			button.classList.toggle('visible', isVisible);
+			button.classList.toggle('invisible', !isVisible);
+			button.setAttribute('aria-hidden', String(!isVisible));
+			button.tabIndex = isVisible ? 0 : -1;
+		});
+	};
+
+	window.addEventListener('scroll', () => {
+		if (scrollVisibilityScheduled) return;
+		scrollVisibilityScheduled = true;
+		window.requestAnimationFrame(() => {
+			updateScrollToTopButtons();
+			scrollVisibilityScheduled = false;
+		});
+	}, { passive: true });
+
+	scrollToTopButtons.forEach((button) => {
+		button.addEventListener('click', () => {
+			window.scrollTo({
+				top: 0,
+				behavior: reducedMotion.matches ? 'auto' : 'smooth',
+			});
+		});
+	});
+
+	updateScrollToTopButtons();
+}
+
 window.addEventListener('pageshow', (event) => {
 	if (!event.persisted) return;
 
