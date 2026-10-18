@@ -17,6 +17,17 @@
                 </div>
             @endif
 
+            @if ($errors->any())
+                <div class="agency-state-danger mb-6 rounded-xl border px-4 py-3 text-sm" role="alert" aria-labelledby="agency-profile-errors-title">
+                    <h2 id="agency-profile-errors-title" class="font-bold">{{ __('messages.profile_validation_errors_title') }}</h2>
+                    <ul class="mt-2 list-disc space-y-1 pl-5">
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
             <form method="POST" action="{{ route('agency.settings.update', ['lang' => app()->getLocale()]) }}" enctype="multipart/form-data" class="grid gap-8 lg:grid-cols-[1.2fr_.8fr]">
                 @csrf
                 @method('PUT')
@@ -40,11 +51,11 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.phone') }}</label>
-                                <input name="phone" value="{{ old('phone', $agency->owner->phone) }}" placeholder="+237 6xx xxx xxx" pattern="^\+237\s?[0-9\s-]{9,15}$" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm outline-none focus:border-[#e76f51]">
+                                <input name="phone" value="{{ old('phone', $agency->owner->phone) }}" placeholder="+237 6xx xxx xxx" pattern="^\+237\s?(\d[\s-]?){8}\d$" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm outline-none focus:border-[#e76f51]">
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.agency_phone') }}</label>
-                                <input name="agency_phone" value="{{ old('agency_phone', $agency->phone) }}" placeholder="+237 6xx xxx xxx" pattern="^\+237\s?[0-9\s-]{9,15}$" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm outline-none focus:border-[#e76f51]">
+                                <input name="agency_phone" value="{{ old('agency_phone', $agency->phone) }}" placeholder="+237 6xx xxx xxx" pattern="^\+237\s?(\d[\s-]?){8}\d$" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm outline-none focus:border-[#e76f51]">
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.agency_email') }}</label>
@@ -70,23 +81,31 @@
                     </div>
 
                     <div class="agency-panel rounded-2xl border p-6 shadow-sm">
-                        <h2 class="text-lg font-bold">{{ __('messages.destinations') }}</h2>
-                        <div class="mt-4">
-                            <input type="search" list="destination-country-list" data-destination-filter placeholder="{{ __('messages.search_destination_or_agency') }}" class="mb-3 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-2.5 text-sm outline-none focus:border-[#e76f51]">
-                            <datalist id="destination-country-list">
+                        @php
+                            $selectedCountryIds = collect(old('countries', $agency->countries->modelKeys()))
+                                ->map(fn ($countryId) => (int) $countryId)
+                                ->all();
+                        @endphp
+                        <details data-destination-picker class="group">
+                            <summary class="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
+                                <span>
+                                    <span class="block text-lg font-bold">{{ __('messages.destinations') }}</span>
+                                    <span data-destination-selected-count class="agency-text-subtle mt-1 block text-sm">{{ __('messages.destinations_selected', ['count' => count($selectedCountryIds)]) }}</span>
+                                </span>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5 shrink-0 transition-transform group-open:rotate-180" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                            </summary>
+                            <div class="mt-4">
+                                <input type="search" data-destination-filter placeholder="{{ __('messages.search_destination_or_agency') }}" class="mb-3 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-2.5 text-sm outline-none focus:border-[#e76f51]">
+                            </div>
+                            <div class="mt-2 grid max-h-72 gap-3 overflow-y-auto sm:grid-cols-2" data-destination-list>
                                 @foreach ($countries->sortBy('name') as $country)
-                                    <option value="{{ $country->name }}"></option>
+                                    <label class="agency-panel-muted destination-option flex items-center gap-3 rounded-xl border border-[#dbe3e5] px-3 py-2 text-sm" data-destination-name="{{ strtolower($country->name) }}">
+                                        <input type="checkbox" name="countries[]" value="{{ $country->id }}" {{ in_array($country->id, $selectedCountryIds, true) ? 'checked' : '' }}>
+                                        <span>{{ $country->name }}</span>
+                                    </label>
                                 @endforeach
-                            </datalist>
-                        </div>
-                        <div class="mt-2 grid gap-3 sm:grid-cols-2" data-destination-list>
-                            @foreach ($countries->sortBy('name') as $country)
-                                <label class="agency-panel-muted destination-option flex items-center gap-3 rounded-xl border border-[#dbe3e5] px-3 py-2 text-sm" data-destination-name="{{ strtolower($country->name) }}">
-                                    <input type="checkbox" name="countries[]" value="{{ $country->id }}" {{ $agency->countries->contains($country->id) ? 'checked' : '' }}>
-                                    <span>{{ $country->name }}</span>
-                                </label>
-                            @endforeach
-                        </div>
+                            </div>
+                        </details>
                     </div>
 
                     <div class="agency-panel rounded-2xl border p-6 shadow-sm">
@@ -134,8 +153,6 @@
                     <div class="agency-panel rounded-2xl border p-6 shadow-sm">
                         <h2 class="text-lg font-bold">{{ __('messages.verification_documents') }}</h2>
                         <p class="mt-2 text-xs leading-5 text-[#607985]">{{ __('messages.verification_help_text') }}</p>
-
-                        @php $latestVerificationDocument = $agency->documents->sortByDesc('uploaded_at')->first(); @endphp
 
                         @if ($latestVerificationDocument)
                             <div class="mt-4 rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] p-4">
@@ -254,6 +271,8 @@
             const filterInput = document.querySelector('[data-destination-filter]');
             const list = document.querySelector('[data-destination-list]');
             if (!filterInput || !list) return;
+            const selectedCount = document.querySelector('[data-destination-selected-count]');
+            const selectedCountLabel = @json(__('messages.destinations_selected', ['count' => ':count']));
 
             const normalizeText = (value = '') => value
                 .normalize('NFD')
@@ -273,6 +292,12 @@
             filterInput.addEventListener('input', applyDestinationFilter);
             filterInput.addEventListener('keyup', applyDestinationFilter);
             filterInput.addEventListener('search', applyDestinationFilter);
+            list.addEventListener('change', () => {
+                const count = list.querySelectorAll('input[type="checkbox"]:checked').length;
+                if (selectedCount) {
+                    selectedCount.textContent = selectedCountLabel.replace(':count', String(count));
+                }
+            });
             filterInput.addEventListener('focus', () => {
                 const listItems = [...list.querySelectorAll('.destination-option')].sort((a, b) => {
                     const left = (a.dataset.destinationName || a.textContent).toLowerCase();

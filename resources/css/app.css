@@ -745,6 +745,12 @@ body.dashboard-dark [data-account-shell] {
     color: var(--agency-accent);
 }
 
+[data-agency-shell] .agency-sidebar-logout button:hover,
+[data-agency-shell] .agency-sidebar-logout button:focus-visible {
+    background-color: var(--agency-hover) !important;
+    color: var(--agency-accent) !important;
+}
+
 [data-agency-shell] .agency-divider {
     border-color: var(--agency-divider) !important;
 }

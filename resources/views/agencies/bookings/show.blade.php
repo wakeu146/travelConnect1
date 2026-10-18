@@ -89,6 +89,7 @@
                 @if ($capacitySnapshot)
                     <section class="mt-6 border-t border-[#e7eceb] pt-5" aria-labelledby="booking-capacity-title">
                         <h3 id="booking-capacity-title" class="text-xs font-bold uppercase tracking-[.16em] text-[#607985]">{{ __('messages.departure_capacity_context') }}</h3>
+                        <p class="agency-text-subtle mt-2 text-sm">{{ __('messages.departure_capacity_reservation_hint') }}</p>
                         <dl class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
                             <div class="agency-panel-muted rounded-xl p-3"><dt class="text-xs text-[#607985]">{{ __('messages.capacity') }}</dt><dd class="mt-1 text-lg font-bold">{{ $capacitySnapshot['capacity'] }}</dd></div>
                             <div class="agency-panel-muted rounded-xl p-3"><dt class="text-xs text-[#607985]">{{ __('messages.confirmed_travelers') }}</dt><dd class="mt-1 text-lg font-bold">{{ $capacitySnapshot['confirmed_travelers'] }}</dd></div>

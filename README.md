@@ -60,6 +60,17 @@ vendor/bin/pint --dirty --format agent
 
 All listed commands passed. The affected feature suites reported 101 passing tests, the final traveler-dashboard run reported 46 passing tests, and the complete suite reported 118 passing tests with 659 assertions. Blade caching and the production asset build also passed.
 
+### Bug-fix handoff (2026-10-18)
+
+The `Fixing-System-Bugs` branch contains these focused bug fixes:
+
+* **Agency package verification:** unverified agencies are told why package creation is unavailable, and the server rejects both package creation and duplication unless the agency is verified.
+* **Agency profile and localization:** profile validation errors are displayed in the selected language, French is retained after saving, and the latest verification document is passed to the profile view. Agency phone numbers are restricted to Cameroon’s `+237` country code and nine digits. The destination checklist is collapsed by default and retains selections after validation errors.
+* **Agency logout theme:** the sidebar logout hover/focus styling uses the agency theme colors instead of turning into an all-white block in dark mode.
+* **Booking capacity display:** the booking detail page calculates capacity on each page load. Active pending and confirmed bookings both reserve seats; confirming a booking moves its count between those categories without changing total occupancy or remaining seats. The page now explains this in English and French, with a feature test asserting the rendered values.
+
+Focused package, profile, phone-validation, and booking tests passed during this work; the three booking-capacity/lifecycle tests were rerun together immediately before this handoff. The inquiry messaging/reply error reported earlier is **not fixed** in this branch and remains for a later bug-fix session. Capacity figures are refreshed on page load, not automatically while the detail page stays open.
+
 ### Active session handoff
 
 * **Agency workspace:** `GET /agency/dashboard` uses the `x-agency-shell` and links to package, availability, booking, customer, review, payment, analytics, profile, and inquiry management. The overview keeps compact summaries; detailed work belongs in each dedicated section.

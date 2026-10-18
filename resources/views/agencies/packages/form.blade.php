@@ -17,6 +17,16 @@
                 </div>
             @endif
 
+            @if (! $canCreatePackage)
+                <div class="agency-state-warning mb-6 rounded-xl border px-4 py-3 text-sm font-medium" role="alert">
+                    {{ $errors->first('verification') ?: __('messages.agency_must_be_verified_to_create_packages') }}
+                </div>
+            @elseif ($errors->has('verification'))
+                <div class="agency-state-danger mb-6 rounded-xl border px-4 py-3 text-sm font-medium" role="alert">
+                    {{ $errors->first('verification') }}
+                </div>
+            @endif
+
             <form method="POST" action="{{ $package ? route('agency.packages.update', ['package' => $package->id, 'lang' => app()->getLocale()]) : route('agency.packages.store', ['lang' => app()->getLocale()]) }}" class="space-y-6">
                 @csrf
                 @if ($package)
@@ -75,9 +85,9 @@
                 </div>
 
                 <div class="flex gap-3">
-                    <button type="submit" @disabled($destinations->isEmpty()) class="inline-flex items-center justify-center rounded-xl bg-[#e76f51] px-5 py-3 text-sm font-bold text-white hover:bg-[#d95f42] disabled:cursor-not-allowed disabled:opacity-50">{{ $package ? __('messages.save_changes') : __('messages.create_package') }}</button>
+                    <button type="submit" @disabled($destinations->isEmpty() || (! $package && ! $canCreatePackage)) class="inline-flex items-center justify-center rounded-xl bg-[#e76f51] px-5 py-3 text-sm font-bold text-white hover:bg-[#d95f42] disabled:cursor-not-allowed disabled:opacity-50">{{ $package ? __('messages.save_changes') : __('messages.create_package') }}</button>
                     @if ($package)
-                        <button type="submit" form="duplicate-package-form" class="agency-button-secondary inline-flex items-center justify-center rounded-xl border px-5 py-3 text-sm font-semibold">{{ __('messages.duplicate_package') }}</button>
+                        <button type="submit" form="duplicate-package-form" @disabled(! $canCreatePackage) class="agency-button-secondary inline-flex items-center justify-center rounded-xl border px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">{{ __('messages.duplicate_package') }}</button>
                         <button type="button" onclick='if (confirm(@json(__('messages.delete_package_confirm')))) document.getElementById("delete-package-form").submit();' class="delete-icon-button" aria-label="{{ __('messages.delete_package_action') }}" title="{{ __('messages.delete_package_action') }}">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 14h12l1-14M9 7V4h6v3"/></svg>
                         </button>
