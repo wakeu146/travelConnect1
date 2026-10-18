@@ -287,3 +287,137 @@ document.querySelectorAll('[data-destination-carousel]').forEach((carousel) => {
 	start();
 });
 
+document.querySelectorAll('[data-admin-shell]').forEach((shell) => {
+	const sidebar = shell.querySelector('#admin-sidebar');
+	const sidebarToggle = shell.querySelector('[data-admin-sidebar-toggle]');
+	const sidebarClose = shell.querySelector('[data-admin-sidebar-close]');
+	const backdrop = shell.querySelector('[data-admin-backdrop]');
+	const themeToggle = shell.querySelector('[data-admin-theme-toggle]');
+	const localeButtons = shell.querySelectorAll('[data-admin-locale]');
+	const searchInput = shell.querySelector('[data-admin-search]');
+	const searchResults = shell.querySelector('[data-admin-search-results]');
+	const searchForm = shell.querySelector('[data-admin-search-form]');
+	const searchItems = Array.from(shell.querySelectorAll('[data-admin-search-index] a'))
+		.map((link) => ({ label: link.textContent.trim(), url: link.href }));
+	const themeKey = 'travelconnect-dashboard-theme';
+	const localeValues = ['en', 'fr'];
+
+	const closeSidebar = (restoreFocus = false) => {
+		if (!sidebar || window.innerWidth >= 1024) return;
+		sidebar.classList.add('hidden');
+		backdrop?.classList.add('hidden');
+		sidebarToggle?.setAttribute('aria-expanded', 'false');
+		document.body.classList.remove('overflow-hidden');
+		if (restoreFocus) sidebarToggle?.focus();
+	};
+
+	sidebarToggle?.addEventListener('click', () => {
+		const isOpen = sidebarToggle.getAttribute('aria-expanded') === 'true';
+		if (isOpen) {
+			closeSidebar();
+			return;
+		}
+		sidebar?.classList.remove('hidden');
+		backdrop?.classList.remove('hidden');
+		sidebarToggle.setAttribute('aria-expanded', 'true');
+		document.body.classList.add('overflow-hidden');
+		sidebarClose?.focus();
+	});
+	sidebarClose?.addEventListener('click', () => closeSidebar(true));
+	backdrop?.addEventListener('click', () => closeSidebar(true));
+	sidebar?.querySelectorAll('a').forEach((link) => link.addEventListener('click', () => closeSidebar()));
+
+	const applyTheme = (theme) => {
+		const isDark = theme === 'dark';
+		shell.dataset.adminTheme = isDark ? 'dark' : 'light';
+		themeToggle?.setAttribute('aria-pressed', String(isDark));
+		shell.querySelector('[data-theme-light-icon]')?.classList.toggle('hidden', isDark);
+		shell.querySelector('[data-theme-dark-icon]')?.classList.toggle('hidden', !isDark);
+	};
+
+	applyTheme(localStorage.getItem(themeKey) === 'dark' ? 'dark' : 'light');
+	themeToggle?.addEventListener('click', () => {
+		const theme = shell.dataset.adminTheme === 'dark' ? 'light' : 'dark';
+		localStorage.setItem(themeKey, theme);
+		applyTheme(theme);
+	});
+
+	localeButtons.forEach((button) => {
+		button.addEventListener('click', () => {
+			if (!localeValues.includes(button.dataset.adminLocale)) return;
+			const nextUrl = new URL(window.location.href);
+			nextUrl.searchParams.set('lang', button.dataset.adminLocale);
+			window.location.assign(nextUrl.toString());
+		});
+	});
+
+	const closePopovers = (except = null) => {
+		shell.querySelectorAll('[data-admin-popover-toggle]').forEach((toggle) => {
+			if (toggle === except) return;
+			const popover = shell.querySelector(`#${CSS.escape(toggle.dataset.adminPopoverToggle)}`);
+			popover?.classList.add('hidden');
+			toggle.setAttribute('aria-expanded', 'false');
+		});
+	};
+
+	shell.querySelectorAll('[data-admin-popover-toggle]').forEach((toggle) => {
+		toggle.addEventListener('click', () => {
+			const popover = shell.querySelector(`#${CSS.escape(toggle.dataset.adminPopoverToggle)}`);
+			const isOpen = toggle.getAttribute('aria-expanded') === 'true';
+			closePopovers(toggle);
+			popover?.classList.toggle('hidden', isOpen);
+			toggle.setAttribute('aria-expanded', String(!isOpen));
+		});
+	});
+
+	const closeSearch = () => {
+		searchResults?.classList.add('hidden');
+		searchInput?.setAttribute('aria-expanded', 'false');
+	};
+
+	const renderSearchResults = () => {
+		if (!searchInput || !searchResults) return;
+		const query = searchInput.value.trim().toLocaleLowerCase();
+		searchResults.replaceChildren();
+		if (!query) {
+			closeSearch();
+			return;
+		}
+
+		const matches = searchItems
+			.filter((item) => item.label.toLocaleLowerCase().includes(query))
+			.slice(0, 8);
+
+		if (matches.length === 0) {
+			const empty = document.createElement('p');
+			empty.className = 'px-3 py-2 text-sm admin-muted';
+			empty.textContent = shell.dataset.searchEmpty;
+			searchResults.append(empty);
+		} else {
+			matches.forEach((item) => {
+				const link = document.createElement('a');
+				link.href = item.url;
+				link.className = 'admin-nav-link block rounded-lg px-3 py-2 text-sm font-medium';
+				link.textContent = item.label;
+				searchResults.append(link);
+			});
+		}
+
+		searchResults.classList.remove('hidden');
+		searchInput.setAttribute('aria-expanded', 'true');
+	};
+
+	searchInput?.addEventListener('input', renderSearchResults);
+	searchInput?.addEventListener('focus', renderSearchResults);
+	searchForm?.addEventListener('submit', (event) => event.preventDefault());
+	document.addEventListener('click', (event) => {
+		if (!event.target.closest('[data-admin-search-form]')) closeSearch();
+		if (!event.target.closest('[data-admin-popover-toggle], [data-admin-popover]')) closePopovers();
+	});
+	document.addEventListener('keydown', (event) => {
+		if (event.key !== 'Escape') return;
+		closeSearch();
+		closePopovers();
+		if (sidebarToggle?.getAttribute('aria-expanded') === 'true') closeSidebar(true);
+	});
+});

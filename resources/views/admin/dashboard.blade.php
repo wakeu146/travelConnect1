@@ -1,17 +1,39 @@
-@extends('admin.layouts.app')
+@extends('admin.layouts.dashboard')
 
-@section('title', __('messages.admin_dashboard'))
+@section('title', $pageTitle.' | '.__('messages.admin_dashboard'))
 
-@section('content')
-    <main class="mx-auto flex min-h-screen max-w-5xl flex-col justify-center px-6 py-12">
-        <section class="border border-[#dbe3e5] bg-white p-8 shadow-sm sm:p-12">
-            <p class="text-xs font-bold uppercase tracking-[.18em] text-[#e76f51]">{{ __('messages.admin_dashboard') }}</p>
-            <h1 class="mt-4 font-serif text-3xl">{{ __('messages.admin_dashboard_coming_soon') }}</h1>
-            <p class="mt-3 text-sm text-[#607985]">{{ $admin->name }}</p>
-            <form action="{{ route('admin.logout', ['lang' => app()->getLocale()]) }}" method="POST" class="mt-8">
-                @csrf
-                <button type="submit" class="rounded-xl bg-[#173042] px-5 py-3 text-sm font-bold text-white hover:bg-[#26495d]">{{ __('messages.logout') }}</button>
-            </form>
+@section('dashboard-content')
+    <div class="mx-auto grid w-full max-w-6xl gap-8">
+        <header class="grid gap-4">
+            <nav aria-label="{{ __('messages.admin_nav.breadcrumb') }}">
+                <ol class="flex flex-wrap items-center gap-2 text-xs font-semibold">
+                    @foreach ($breadcrumbs as $index => $breadcrumb)
+                        @if (! $loop->first)
+                            <li aria-hidden="true"><x-admin.icon name="chevron_right" class="h-3.5 w-3.5 admin-muted" /></li>
+                        @endif
+                        <li @if ($loop->last) aria-current="page" class="admin-heading" @else class="admin-muted" @endif>{{ $breadcrumb }}</li>
+                    @endforeach
+                </ol>
+            </nav>
+            <div class="flex flex-wrap items-end justify-between gap-4">
+                <div class="grid gap-2">
+                    <p class="text-xs font-bold uppercase tracking-[.16em] admin-accent">{{ $sectionTitle }}</p>
+                    <h1 class="font-serif text-3xl tracking-tight sm:text-4xl admin-heading">{{ $pageTitle }}</h1>
+                </div>
+                <span class="admin-badge inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold">
+                    {{ __('messages.admin_nav.super_admin_workspace') }}
+                </span>
+            </div>
+        </header>
+
+        <section class="admin-empty-state grid justify-items-center gap-4 border p-8 text-center sm:p-12" aria-labelledby="admin-placeholder-title">
+            <span class="admin-empty-icon flex h-12 w-12 items-center justify-center rounded-xl">
+                <x-admin.icon name="file" class="h-6 w-6" />
+            </span>
+            <div class="grid max-w-lg gap-2">
+                <h2 id="admin-placeholder-title" class="text-lg font-bold admin-heading">{{ __('messages.admin_nav.page_in_preparation') }}</h2>
+                <p class="text-sm leading-6 admin-muted">{{ __('messages.admin_nav.page_placeholder_description') }}</p>
+            </div>
         </section>
-    </main>
+    </div>
 @endsection

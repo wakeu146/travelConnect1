@@ -12,6 +12,14 @@ Route::get('/dashboard', AdminDashboardController::class)
     ->middleware(['auth', EnsureAdminSession::class])
     ->name('dashboard');
 
+Route::get('/dashboard/sections/{section}', [AdminDashboardController::class, 'section'])
+    ->middleware(['auth', EnsureAdminSession::class])
+    ->name('dashboard.section');
+
+Route::get('/dashboard/pages/{page}', [AdminDashboardController::class, 'page'])
+    ->middleware(['auth', EnsureAdminSession::class])
+    ->name('dashboard.page');
+
 Route::post('/logout', [AuthController::class, 'logout'])
     ->middleware(['auth', EnsureAdminSession::class])
     ->name('logout');
