@@ -85,6 +85,14 @@ const applyLocaleToLinks = () => {
 applyLocaleToLinks();
 document.addEventListener('DOMContentLoaded', applyLocaleToLinks);
 
+window.addEventListener('pageshow', (event) => {
+	if (!event.persisted) return;
+
+	if (document.querySelector('[data-account-shell], [data-agency-shell]')) {
+		window.location.reload();
+	}
+});
+
 const previewObjectUrls = new WeakMap();
 document.addEventListener('change', (event) => {
 	const input = event.target.closest('[data-image-preview-input]');
@@ -286,4 +294,3 @@ document.querySelectorAll('[data-destination-carousel]').forEach((carousel) => {
 	render();
 	start();
 });
-

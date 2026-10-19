@@ -71,6 +71,20 @@ The `Fixing-System-Bugs` branch contains these focused bug fixes:
 
 Focused package, profile, phone-validation, and booking tests passed during this work; the three booking-capacity/lifecycle tests were rerun together immediately before this handoff. The inquiry messaging/reply error reported earlier is **not fixed** in this branch and remains for a later bug-fix session. Capacity figures are refreshed on page load, not automatically while the detail page stays open.
 
+### Remembered-session dashboard fix (2026-10-19)
+
+**Reported behavior:** after signing in as an agency owner with “Remember me,” reopening the browser could show the traveler-style `/dashboard` page with the agency owner's name and email. The owner also saw traveler navigation while viewing a public agency profile, and opening the site root did not return them to the agency workspace.
+
+**Root causes and changes:**
+
+* The authenticated `/dashboard` route rendered a generic fallback for every non-traveler role instead of routing agency owners to their own dashboard. It now redirects agency owners to `/agency/dashboard` and admins to `/admin/dashboard`.
+* The `/` route always rendered the public homepage. It now routes an authenticated visitor to the dashboard matching their account role.
+* The public agency profile uses the shared account shell. That shell now selects the agency workspace navigation for agency-owner sessions, avoiding traveler links on an agency owner's view of a public profile.
+* Authenticated dashboards and agency profile responses now send `private, no-store, no-cache` headers. When a browser restores an authenticated workspace from its back-forward cache, the page reloads to check the current session and role.
+* Local URLs are standardized on `http://127.0.0.1:8000` because browsers treat `localhost` and `127.0.0.1` as separate hosts with separate session and remember-me cookies. Google OAuth's local callback and origin must use the same host.
+
+**Verification:** all 42 `AgencyDashboardTest` tests passed, plus 2 selected traveler dashboard tests. The frontend production build and `git diff --check` passed. One separate older traveler agency-profile test has a departure fixture dated before the current date and fails its package-visibility assertion; that fixture needs a future date before it can validate the intended behavior. The browser's own startup preference may still restore multiple tabs; the application redirects each restored page to the correct signed-in workspace but does not control which tabs the browser opens.
+
 ### Active session handoff
 
 * **Agency workspace:** `GET /agency/dashboard` uses the `x-agency-shell` and links to package, availability, booking, customer, review, payment, analytics, profile, and inquiry management. The overview keeps compact summaries; detailed work belongs in each dedicated section.
@@ -134,10 +148,10 @@ npm run build
 Start the application:
 
 ```powershell
-php artisan serve --host=localhost --port=8000
+php artisan serve --host=127.0.0.1 --port=8000
 ```
 
-Open `http://127.0.0.1:8000`.
+Always use `http://127.0.0.1:8000` for local development and sign-in. Do not alternate between `localhost` and `127.0.0.1`; the browser stores separate session and remember-me cookies for those hosts.
 
 ## Development commands
 
@@ -377,12 +391,12 @@ The following must be available for Google authentication to work correctly:
 ```dotenv
   GOOGLE_CLIENT_ID=your-google-oauth-client-id
   GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
-  GOOGLE_REDIRECT_URI=http://localhost:8000/auth/google/callback
+  GOOGLE_REDIRECT_URI=http://127.0.0.1:8000/auth/google/callback
   ```
 
   Never commit real client secrets or paste them into logs, issues, or source control. After changing environment configuration, run `php artisan config:clear`.
 
-* **Google Cloud OAuth client:** Create a Web application OAuth client. For local development with the example `APP_URL`, register the exact redirect URI `http://localhost:8000/auth/google/callback` and the authorized origin `http://localhost:8000`. The redirect URI must exactly match `GOOGLE_REDIRECT_URI` in Laravel. For deployment, configure the real HTTPS domain and its callback URI in both Google Cloud and the deployment environment.
+* **Google Cloud OAuth client:** Create a Web application OAuth client. For local development with the example `APP_URL`, register the exact redirect URI `http://127.0.0.1:8000/auth/google/callback` and the authorized origin `http://127.0.0.1:8000`. The redirect URI must exactly match `GOOGLE_REDIRECT_URI` in Laravel. For deployment, configure the real HTTPS domain and its callback URI in both Google Cloud and the deployment environment.
 * **Database schema:** The `users` table needs the nullable, unique `google_id` column. The project migration that adds it must be applied with `php artisan migrate` on each environment. Existing email/password users can keep `google_id` as `NULL` until their account is linked.
 * **Session/state support:** Laravel's session must persist between the redirect to Google and the callback. Do not disable Socialite's OAuth state verification or use `stateless()` as a workaround for session problems.
 * **PHP HTTPS certificate trust:** PHP/cURL must be able to validate Google's HTTPS certificate. On Windows/XAMPP, configure `curl.cainfo` (and, where needed, `openssl.cafile`) in the `php.ini` used by the PHP process to point to a valid CA certificate bundle. Do not disable SSL certificate verification.

@@ -1,4 +1,7 @@
 @props(['title' => 'TravelConnect'])
+@if (auth()->user()?->isAgencyOwner())
+    <x-agency-shell :title="$title">{{ $slot }}</x-agency-shell>
+@else
 <x-auth-layout :title="$title">
     <div data-account-shell class="dashboard-shell min-h-screen bg-[#f7f8f6] text-[#173042] transition-colors duration-300">
         <aside data-account-sidebar class="fixed inset-y-0 left-0 z-50 flex w-72 -translate-x-full flex-col border-r border-[#e4e9e7] bg-white px-5 py-6 shadow-xl transition-transform duration-300 lg:translate-x-0 lg:shadow-none">
@@ -38,3 +41,4 @@
             const profileTrigger = document.querySelector('[data-profile-trigger]'); const profileDropdown = document.querySelector('[data-profile-dropdown]'); profileTrigger?.addEventListener('click', () => { const open = profileTrigger.getAttribute('aria-expanded') === 'true'; profileTrigger.setAttribute('aria-expanded', String(!open)); profileDropdown?.classList.toggle('hidden', open); }); document.addEventListener('click', (event) => { if (!event.target.closest('[data-profile-menu]')) { profileTrigger?.setAttribute('aria-expanded', 'false'); profileDropdown?.classList.add('hidden'); } });
     </script>
 </x-auth-layout>
+@endif
