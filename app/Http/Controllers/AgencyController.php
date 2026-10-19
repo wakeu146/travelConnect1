@@ -6,6 +6,7 @@ use App\Enums\DocumentStatus;
 use App\Enums\DocumentType;
 use App\Enums\InquiryStatus;
 use App\Enums\PackageStatus;
+use App\Enums\VerificationStatus;
 use App\Models\Agency;
 use App\Models\AgencyDocument;
 use App\Models\AgencyExperience;
@@ -97,11 +98,13 @@ class AgencyController extends Controller
     public function profile(): View
     {
         $agency = $this->currentAgency();
+        $agency->load(['owner', 'countries', 'services', 'documents']);
 
         return view('agencies.profile', [
-            'agency' => $agency->load(['owner', 'countries', 'services', 'documents']),
+            'agency' => $agency,
             'countries' => Country::orderBy('name')->get(),
             'services' => Service::orderBy('name')->get(),
+            'latestVerificationDocument' => $agency->documents->sortByDesc('uploaded_at')->first(),
         ]);
     }
 
@@ -200,12 +203,12 @@ class AgencyController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:191', 'unique:users,email,'.$agency->owner->id],
-            'phone' => ['nullable', 'string', 'max:30', 'regex:/^\+237\s?[0-9\s-]{9,15}$/'],
+            'phone' => ['nullable', 'string', 'max:30', 'regex:/^\+237\s?(?:\d[\s-]?){8}\d$/'],
             'company_name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'license_number' => ['nullable', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:255'],
-            'agency_phone' => ['nullable', 'string', 'max:30', 'regex:/^\+237\s?[0-9\s-]{9,15}$/'],
+            'agency_phone' => ['nullable', 'string', 'max:30', 'regex:/^\+237\s?(?:\d[\s-]?){8}\d$/'],
             'agency_email' => ['nullable', 'email', 'max:191'],
             'website' => ['nullable', 'url', 'max:255'],
             'countries' => ['nullable', 'array'],
@@ -216,6 +219,9 @@ class AgencyController extends Controller
             'cover_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:4096'],
             'remove_logo' => ['nullable', 'boolean'],
             'remove_cover_image' => ['nullable', 'boolean'],
+        ], [
+            'phone.regex' => __('messages.cameroon_phone_invalid'),
+            'agency_phone.regex' => __('messages.cameroon_phone_invalid'),
         ]);
 
         $normalizeCameroonPhone = static function (?string $value): ?string {
@@ -224,7 +230,7 @@ class AgencyController extends Controller
             }
 
             $digits = preg_replace('/\D+/', '', $value);
-            if (! preg_match('/^237\d{9,10}$/', $digits)) {
+            if (! preg_match('/^237\d{9}$/', $digits)) {
                 return $value;
             }
 
@@ -291,7 +297,8 @@ class AgencyController extends Controller
         $currentPaths = array_filter([$agency->logo_path, $agency->cover_image_path]);
         $disk->delete(array_diff($oldPaths, $currentPaths));
 
-        return redirect()->route('agency.profile')->with('status', __('messages.agency_profile_updated'));
+        return redirect()->route('agency.profile', ['lang' => app()->getLocale()])
+            ->with('status', __('messages.agency_profile_updated'));
     }
 
     public function storeDocument(Request $request): RedirectResponse
@@ -417,12 +424,19 @@ class AgencyController extends Controller
             'agency' => $agency,
             'destinations' => $agency->countries()->orderBy('countries.name')->pluck('countries.name'),
             'package' => null,
+            'canCreatePackage' => $agency->verification_status === VerificationStatus::VERIFIED,
         ]);
     }
 
     public function storePackage(Request $request): RedirectResponse
     {
         $agency = $this->currentAgency();
+
+        if ($agency->verification_status !== VerificationStatus::VERIFIED) {
+            return back()
+                ->withErrors(['verification' => __('messages.agency_must_be_verified_to_create_packages')])
+                ->withInput();
+        }
 
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -472,6 +486,7 @@ class AgencyController extends Controller
             'package' => $package->load(['images'])
                 ->loadCount(['bookings', 'availabilities as upcoming_departures_count' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>', today()->toDateString())])
                 ->loadSum('bookings as travelers_booked', 'traveler_count'),
+            'canCreatePackage' => $agency->verification_status === VerificationStatus::VERIFIED,
         ]);
     }
 
@@ -529,6 +544,13 @@ class AgencyController extends Controller
     {
         $this->authorize('update', $package);
         $this->ensurePackageOwnership($package);
+        $agency = $package->agency;
+
+        if ($agency->verification_status !== VerificationStatus::VERIFIED) {
+            return back()
+                ->withErrors(['verification' => __('messages.agency_must_be_verified_to_create_packages')]);
+        }
+
         $package->load(['images']);
         $copiedImagePaths = [];
 
