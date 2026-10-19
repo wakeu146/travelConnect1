@@ -14,6 +14,7 @@ use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\InquiryController;
 use App\Http\Controllers\ReviewController;
+use App\Http\Middleware\PreventAuthenticatedWorkspaceCaching;
 use App\Models\Agency;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
@@ -21,8 +22,22 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 
 Route::get('/', function () {
+    if (Auth::check()) {
+        $user = Auth::user();
+
+        if ($user->isAgencyOwner()) {
+            return redirect()->route('agency.dashboard', ['lang' => app()->getLocale()]);
+        }
+
+        if ($user->isAdmin()) {
+            return redirect()->route('admin.dashboard');
+        }
+
+        return redirect()->route('dashboard', ['lang' => app()->getLocale()]);
+    }
+
     return view('public-home');
-})->name('home');
+})->middleware(PreventAuthenticatedWorkspaceCaching::class)->name('home');
 
 Route::get('/discover', [AgencyDiscoveryController::class, 'index'])->middleware('auth')->name('discover');
 Route::get('/account/discover', [AgencyDiscoveryController::class, 'index'])->middleware('auth')->name('account.discover');
@@ -102,7 +117,7 @@ Route::get('/agencies/{slug}', function (string $slug) {
         : collect();
 
     return view('agency-show', ['agency' => $agencyData, 'agencyModel' => $agencyModel, 'packages' => $agencyModel?->packages ?? collect(), 'isSaved' => $agencyModel && $user->favoriteAgencies()->whereKey($agencyModel->id)->exists(), 'publishedReviews' => $publishedReviews, 'publishedReviewCount' => $publishedReviewCount, 'visibleReviewCount' => $visibleReviewCount, 'visibleRating' => $visibleRating, 'ratingCounts' => $ratingCounts, 'pendingReview' => $pendingReview, 'eligibleReviewBookings' => $eligibleReviewBookings]);
-})->middleware('auth')->name('agency.show');
+})->middleware(['auth', PreventAuthenticatedWorkspaceCaching::class])->name('agency.show');
 Route::post('/agencies/{slug}/inquiries', [InquiryController::class, 'store'])->middleware('auth')->name('inquiries.store');
 Route::post('/agencies/{slug}/reviews', [ReviewController::class, 'store'])->middleware('auth')->name('reviews.store');
 Route::post('/agencies/{slug}/favorite', [FavoriteController::class, 'toggle'])->middleware('auth')->name('favorites.toggle');
@@ -132,7 +147,7 @@ Route::post('/verify-reset-code', [AuthController::class, 'verifyResetCode'])->m
 Route::get('/reset-password', [AuthController::class, 'showResetForm'])->name('password.reset');
 Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:password.reset')->name('password.update');
 Route::view('/login-successful', 'auth.success')->middleware('auth')->name('auth.success');
-Route::middleware(['auth', 'agency-owner'])->prefix('agency')->name('agency.')->group(function () {
+Route::middleware(['auth', 'agency-owner', PreventAuthenticatedWorkspaceCaching::class])->prefix('agency')->name('agency.')->group(function () {
     Route::get('/dashboard', [AgencyController::class, 'dashboard'])->name('dashboard');
     Route::get('/profile', [AgencyController::class, 'profile'])->name('profile');
     Route::put('/profile', [AgencyController::class, 'updateProfile'])->name('settings.update');
@@ -200,8 +215,12 @@ Route::get('/dashboard', function () {
     /** @var User $user */
     $user = Auth::user();
 
-    if (! $user->isTraveler()) {
-        return view('auth.dashboard');
+    if ($user->isAgencyOwner()) {
+        return redirect()->route('agency.dashboard', ['lang' => app()->getLocale()]);
+    }
+
+    if ($user->isAdmin()) {
+        return redirect()->route('admin.dashboard');
     }
 
     return view('auth.dashboard-overview', [
@@ -226,7 +245,7 @@ Route::get('/dashboard', function () {
             ->limit(3)
             ->get(),
     ]);
-})->middleware('auth')->name('dashboard');
+})->middleware(['auth', PreventAuthenticatedWorkspaceCaching::class])->name('dashboard');
 Route::get('/account/bookings', [BookingController::class, 'index'])->middleware('auth')->name('account.bookings');
 Route::post('/account/bookings', [BookingController::class, 'storeFromAccount'])->middleware('auth')->name('account.bookings.store');
 Route::view('/settings', 'auth.settings')->middleware('auth')->name('settings');

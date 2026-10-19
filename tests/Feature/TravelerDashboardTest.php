@@ -36,6 +36,7 @@ class TravelerDashboardTest extends TestCase
         $response = $this->actingAs($traveler)->get(route('dashboard'));
 
         $response->assertOk()
+            ->assertHeader('Cache-Control', 'max-age=0, must-revalidate, no-cache, no-store, private')
             ->assertSee(
                 'href="'.route('account.bookings', ['lang' => 'en']).'" class="text-sm font-bold text-[#e76f51]">'.__('messages.view_all').'</a>',
                 false,

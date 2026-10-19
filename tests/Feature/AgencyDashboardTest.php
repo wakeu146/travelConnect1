@@ -48,10 +48,56 @@ class AgencyDashboardTest extends TestCase
         $response = $this->post(route('login.store'), [
             'email' => $agency->owner->email,
             'password' => 'password',
+            'remember' => '1',
         ]);
 
         $response->assertRedirect(route('auth.success'));
-        $response->assertSessionHas('success_redirect', route('agency.dashboard'));
+        $response->assertSessionHas('success_redirect', route('agency.dashboard'))
+            ->assertCookie(auth()->guard()->getRecallerName());
+    }
+
+    public function test_an_agency_owner_visiting_the_traveler_dashboard_is_redirected_to_their_workspace(): void
+    {
+        $agency = Agency::factory()->create();
+
+        $response = $this->actingAs($agency->owner)->get(route('dashboard'));
+
+        $response->assertRedirect(route('agency.dashboard', ['lang' => 'en']));
+    }
+
+    public function test_a_remembered_agency_owner_opening_the_site_root_is_sent_to_their_workspace(): void
+    {
+        $agency = Agency::factory()->create();
+
+        $response = $this->actingAs($agency->owner)->get(route('home'));
+
+        $response->assertRedirect(route('agency.dashboard', ['lang' => 'en']));
+    }
+
+    public function test_an_agency_dashboard_response_is_not_cached_by_the_browser(): void
+    {
+        $agency = Agency::factory()->create();
+
+        $response = $this->actingAs($agency->owner)->get(route('agency.dashboard'));
+
+        $response->assertHeader('Cache-Control', 'max-age=0, must-revalidate, no-cache, no-store, private');
+        $response->assertHeader('Pragma', 'no-cache');
+    }
+
+    public function test_an_agency_owner_sees_the_agency_shell_on_public_agency_profiles(): void
+    {
+        $agency = Agency::factory()->create(['company_name' => 'Wakeu Emmanuel Travel']);
+
+        $response = $this->actingAs($agency->owner)->get(route('agency.show', [
+            'slug' => Str::slug($agency->company_name),
+        ]));
+
+        $response->assertOk()
+            ->assertSee('data-agency-shell', false)
+            ->assertDontSee('data-account-shell', false)
+            ->assertSee(route('agency.dashboard', ['lang' => 'en']))
+            ->assertDontSee(route('account.saved', ['lang' => 'en']))
+            ->assertHeader('Cache-Control', 'max-age=0, must-revalidate, no-cache, no-store, private');
     }
 
     public function test_admin_is_not_authenticated_until_email_code_is_verified(): void
@@ -443,6 +489,7 @@ class AgencyDashboardTest extends TestCase
         $response = $this->actingAs($agency->owner)->get(route('agency.dashboard'));
 
         $response->assertOk();
+        $response->assertHeader('Cache-Control', 'max-age=0, must-revalidate, no-cache, no-store, private');
         $response->assertSee('North Star Travel');
         $response->assertSee(__('messages.agency_dashboard_intro'));
         $response->assertSee('Open inquiries');
@@ -744,6 +791,61 @@ class AgencyDashboardTest extends TestCase
         $this->assertSame('This new agency profile can now be completed.', $agency->fresh()->description);
     }
 
+    public function test_an_agency_owner_can_update_their_profile_in_french(): void
+    {
+        $agency = Agency::factory()->create(['verification_status' => 'pending']);
+        $country = Country::factory()->create(['name' => 'Cameroon']);
+
+        $response = $this->actingAs($agency->owner)
+            ->put(route('agency.settings.update', ['lang' => 'fr']), [
+                'name' => $agency->owner->name,
+                'email' => $agency->owner->email,
+                'phone' => '+237 600 000 000',
+                'company_name' => 'Voyages du Cameroun',
+                'description' => 'Des voyages préparés avec soin.',
+                'agency_phone' => '+237 699 000 000',
+                'countries' => [$country->id],
+            ]);
+
+        $response->assertRedirect(route('agency.profile', ['lang' => 'fr']))
+            ->assertSessionHas('status', __('messages.agency_profile_updated', [], 'fr'));
+        $this->assertDatabaseHas('agencies', [
+            'id' => $agency->id,
+            'company_name' => 'Voyages du Cameroun',
+            'phone' => '+237 699 000 000',
+        ]);
+        $this->assertDatabaseHas('agency_country', [
+            'agency_id' => $agency->id,
+            'country_id' => $country->id,
+        ]);
+    }
+
+    public function test_french_profile_validation_errors_are_visible_and_keep_selected_destinations(): void
+    {
+        $agency = Agency::factory()->create(['company_name' => 'Original Agency']);
+        $country = Country::factory()->create(['name' => 'Cameroon']);
+
+        $response = $this->followingRedirects()->actingAs($agency->owner)
+            ->from(route('agency.profile', ['lang' => 'fr']))
+            ->put(route('agency.settings.update', ['lang' => 'fr']), [
+                'name' => $agency->owner->name,
+                'email' => $agency->owner->email,
+                'phone' => '+237 600 000 0000',
+                'company_name' => 'Updated Agency',
+                'agency_phone' => '+237 699 000 000',
+                'countries' => [$country->id],
+            ]);
+
+        $response->assertSee(__('messages.profile_validation_errors_title', [], 'fr'))
+            ->assertSee(__('messages.cameroon_phone_invalid', [], 'fr'))
+            ->assertSee('<details data-destination-picker', false)
+            ->assertSee('name="countries[]" value="'.$country->id.'" checked', false);
+        $this->assertDatabaseHas('agencies', [
+            'id' => $agency->id,
+            'company_name' => 'Original Agency',
+        ]);
+    }
+
     public function test_an_agency_owner_can_upload_a_document_and_publish_an_experience(): void
     {
         Storage::fake('public');
@@ -852,9 +954,10 @@ class AgencyDashboardTest extends TestCase
             'name' => $agency->owner->name,
             'email' => $agency->owner->email,
             'company_name' => $agency->company_name,
+            'phone' => '+237 600 000 0000',
             'agency_phone' => '699000000',
         ]);
-        $invalid->assertSessionHasErrors('agency_phone');
+        $invalid->assertSessionHasErrors(['phone', 'agency_phone']);
 
         $valid = $this->actingAs($agency->owner)->put(route('agency.settings.update'), [
             'name' => $agency->owner->name,
@@ -862,7 +965,7 @@ class AgencyDashboardTest extends TestCase
             'company_name' => $agency->company_name,
             'agency_phone' => '+237 699 000 000',
         ]);
-        $valid->assertRedirect(route('agency.profile'));
+        $valid->assertRedirect(route('agency.profile', ['lang' => 'en']));
         $this->assertSame('+237 699 000 000', $agency->refresh()->phone);
     }
 

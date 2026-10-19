@@ -58,9 +58,60 @@ class AgencyPackageManagementTest extends TestCase
             ->assertDontSee('<option value="Japan"', false);
     }
 
+    public function test_unverified_agency_sees_notice_and_cannot_create_package(): void
+    {
+        $agency = Agency::factory()->create(['verification_status' => 'pending']);
+        $destination = Country::factory()->create(['name' => 'Japan']);
+        $agency->countries()->attach($destination);
+        $message = __('messages.agency_must_be_verified_to_create_packages', [], 'en');
+
+        $this->actingAs($agency->owner)
+            ->get(route('agency.packages.create', ['lang' => 'en']))
+            ->assertSee($message)
+            ->assertSee('<button type="submit" disabled', false);
+
+        $response = $this->actingAs($agency->owner)->from(route('agency.packages.create', ['lang' => 'en']))
+            ->post(route('agency.packages.store', ['lang' => 'en']), [
+                'title' => 'Japan Discovery',
+                'summary' => 'A thoughtful journey through Japan',
+                'destination' => 'Japan',
+                'price_from' => 900,
+                'duration_days' => 8,
+                'status' => PackageStatus::DRAFT->value,
+            ]);
+
+        $response->assertRedirect(route('agency.packages.create', ['lang' => 'en']))
+            ->assertSessionHasErrors([
+                'verification' => $message,
+            ]);
+        $this->assertDatabaseMissing('packages', ['agency_id' => $agency->id, 'title' => 'Japan Discovery']);
+    }
+
+    public function test_unverified_agency_cannot_duplicate_an_existing_package(): void
+    {
+        $agency = Agency::factory()->create(['verification_status' => 'pending']);
+        $package = Package::factory()->create(['agency_id' => $agency->id]);
+        $message = __('messages.agency_must_be_verified_to_create_packages', [], 'en');
+
+        $this->actingAs($agency->owner)
+            ->get(route('agency.packages.edit', ['package' => $package->id, 'lang' => 'en']))
+            ->assertSee($message)
+            ->assertSee('form="duplicate-package-form" disabled', false);
+
+        $response = $this->actingAs($agency->owner)
+            ->from(route('agency.packages.edit', ['package' => $package->id, 'lang' => 'en']))
+            ->post(route('agency.packages.duplicate', ['package' => $package->id, 'lang' => 'en']));
+
+        $response->assertRedirect(route('agency.packages.edit', ['package' => $package->id, 'lang' => 'en']))
+            ->assertSessionHasErrors([
+                'verification' => $message,
+            ]);
+        $this->assertSame(1, $agency->packages()->count());
+    }
+
     public function test_agency_cannot_create_package_for_a_destination_it_does_not_serve(): void
     {
-        $agency = Agency::factory()->create();
+        $agency = Agency::factory()->create(['verification_status' => 'verified']);
         Country::factory()->create(['name' => 'Japan']);
 
         $response = $this->actingAs($agency->owner)->post(route('agency.packages.store'), [
@@ -101,7 +152,7 @@ class AgencyPackageManagementTest extends TestCase
 
     public function test_package_can_be_created_updated_and_soft_deleted(): void
     {
-        $agency = Agency::factory()->create();
+        $agency = Agency::factory()->create(['verification_status' => 'verified']);
         $destination = Country::factory()->create(['name' => 'Switzerland']);
         $agency->countries()->attach($destination);
 
@@ -146,7 +197,7 @@ class AgencyPackageManagementTest extends TestCase
     public function test_package_duplication_copies_content_and_images_but_not_departures_or_bookings(): void
     {
         Storage::fake('public');
-        $agency = Agency::factory()->create();
+        $agency = Agency::factory()->create(['verification_status' => 'verified']);
         $package = Package::factory()->create(['agency_id' => $agency->id, 'title' => 'Coastal Passage', 'status' => PackageStatus::PUBLISHED]);
         $imagePath = UploadedFile::fake()->image('coast.jpg')->store('package-images', 'public');
         $package->images()->create(['path' => $imagePath, 'caption' => 'Coast', 'is_primary' => true, 'sort_order' => 1]);
@@ -267,8 +318,8 @@ class AgencyPackageManagementTest extends TestCase
             'description' => 'Updated copy',
             'license_number' => 'LIC-123',
             'address' => 'Paris',
-            'phone' => '+33 1 00 00 00 00',
-            'agency_phone' => '+33 1 00 00 00 01',
+            'phone' => '+237 600 000 000',
+            'agency_phone' => '+237 699 000 001',
             'agency_email' => 'agency@example.com',
             'website' => 'https://example.com',
         ])->assertRedirect();

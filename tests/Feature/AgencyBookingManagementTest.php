@@ -157,6 +157,14 @@ class AgencyBookingManagementTest extends TestCase
             'booking_reference' => 'TC-2026-000100',
             'expires_at' => now()->addHour(),
         ]);
+        $this->createBooking(
+            $agency,
+            $package,
+            $availability,
+            User::factory()->create(['role' => 'traveler']),
+            'TC-2026-000101',
+            ['traveler_count' => 3, 'total_amount' => 3600],
+        );
 
         $this->actingAs($agency->owner)
             ->patch(route('agency.bookings.confirm', ['booking' => $booking->id]))
@@ -166,6 +174,22 @@ class AgencyBookingManagementTest extends TestCase
         $this->assertSame('confirmed', $booking->status->value);
         $this->assertSame(PaymentStatus::PAID, $booking->payment_status);
         $this->assertSame(1, $traveler->notifications()->whereJsonContains('data->type', 'booking')->count());
+
+        $this->actingAs($agency->owner)
+            ->get(route('agency.bookings.show', ['booking' => $booking->id]))
+            ->assertSeeTextInOrder([
+                __('messages.capacity'),
+                '10',
+                __('messages.confirmed_travelers'),
+                '1',
+                __('messages.pending_travelers'),
+                '3',
+                __('messages.remaining_capacity'),
+                '6',
+                __('messages.occupancy'),
+                '40%',
+            ])
+            ->assertSeeText(__('messages.departure_capacity_reservation_hint'));
 
         $this->actingAs($agency->owner)
             ->patch(route('agency.bookings.complete', ['booking' => $booking->id]))
