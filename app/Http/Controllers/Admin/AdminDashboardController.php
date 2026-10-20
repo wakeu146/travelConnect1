@@ -3,14 +3,18 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Services\AdminAlertQueue;
+use App\Services\AdminOverviewData;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class AdminDashboardController extends Controller
 {
-    public function __invoke(Request $request): View
+    public function __invoke(Request $request, AdminOverviewData $overviewData): View
     {
-        return $this->renderDashboard($request, 'main', 'overview');
+        return $this->renderDashboard($request, 'main', 'overview', overview: $overviewData->get());
     }
 
     public function section(Request $request, string $section): View
@@ -21,19 +25,47 @@ class AdminDashboardController extends Controller
         return $this->renderDashboard($request, $section);
     }
 
-    public function page(Request $request, string $page): View
-    {
+    public function page(
+        Request $request,
+        string $page,
+        AdminOverviewData $overviewData,
+        AdminAlertQueue $alertQueue,
+    ): View {
         $sections = $this->sections();
 
         foreach ($sections as $sectionKey => $section) {
             foreach ($section['groups'] as $group) {
                 $pages = $group['pages'] ?? [$group['page']];
                 if (in_array($page, $pages, true)) {
+                    $alerts = null;
+                    $alertDetail = null;
+
+                    if ($page === 'alerts') {
+                        $filterOptions = $alertQueue->filterOptions();
+                        $filters = $request->validate([
+                            'search' => ['nullable', 'string', 'max:120'],
+                            'status' => ['nullable', Rule::in(['all', ...$filterOptions['statuses']])],
+                            'severity' => ['nullable', Rule::in(['all', ...$filterOptions['severities']])],
+                            'category' => ['nullable', Rule::in(['all', ...$filterOptions['categories']])],
+                            'source' => ['required_with:source_id', Rule::in(array_keys($alertQueue->sourceDefinitions()))],
+                            'source_id' => ['required_with:source', 'integer', 'min:1'],
+                        ]);
+
+                        if (isset($filters['source'])) {
+                            $alertDetail = $alertQueue->detail($filters['source'], (int) $filters['source_id']);
+                        } else {
+                            $alerts = $alertQueue->listing($filters);
+                        }
+                    }
+
                     return $this->renderDashboard(
                         $request,
                         $sectionKey,
                         $page,
                         $group['label'] ?? null,
+                        $page === 'overview' ? $overviewData->get() : null,
+                        $alerts,
+                        $alertDetail,
                     );
                 }
             }
@@ -55,6 +87,9 @@ class AdminDashboardController extends Controller
         string $section,
         ?string $page = null,
         ?string $module = null,
+        ?array $overview = null,
+        ?LengthAwarePaginator $alerts = null,
+        ?array $alertDetail = null,
     ): View {
         $sections = $this->sections();
         $sectionTitle = __("messages.admin_nav.sections.{$section}");
@@ -79,6 +114,9 @@ class AdminDashboardController extends Controller
             'pageTitle' => $pageTitle,
             'breadcrumbs' => $breadcrumbs,
             'navigationSearchItems' => $this->navigationSearchItems($sections),
+            'overview' => $overview,
+            'alerts' => $alerts,
+            'alertDetail' => $alertDetail,
         ]);
     }
 

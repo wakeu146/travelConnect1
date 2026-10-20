@@ -162,7 +162,7 @@ class AgencyDashboardTest extends TestCase
         ]);
     }
 
-    public function test_admin_email_code_verification_authenticates_and_opens_placeholder_dashboard(): void
+    public function test_admin_email_code_verification_authenticates_and_opens_overview_dashboard(): void
     {
         $admin = User::factory()->withRole(UserRole::ADMIN)->create([
             'email' => 'admin-verified@example.com',
@@ -194,7 +194,8 @@ class AgencyDashboardTest extends TestCase
 
         $this->get(route('admin.dashboard', ['lang' => 'en']))
             ->assertOk()
-            ->assertSee(__('messages.admin_dashboard_coming_soon'))
+            ->assertSee('data-admin-overview', false)
+            ->assertSee(__('messages.admin_overview.title'))
             ->assertSee($admin->name)
             ->assertSee(route('admin.logout', ['lang' => 'en']));
     }

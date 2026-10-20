@@ -32,6 +32,9 @@ This README is also the continuation handoff for future AI agents. Read the curr
 * Traveler review submission with 1-5 rating, comment validation, and pending moderation
 * English/French locale switching using the `?lang=en` or `?lang=fr` query parameter
 * Responsive account shell with mobile navigation, notification bell, and persistent light/dark theme
+* Admin dashboard with a real-record platform overview, current status summaries, attention queue, and recent activity
+* Admin Alerts queue for pending agency verification, flagged reviews, failed payments, failed jobs, and suspicious admin login events
+* Admin alert search, filters, pagination, record details, bilingual reason summaries, and audited acknowledge/resolve actions
 
 ## Technology
 
@@ -70,6 +73,19 @@ The `Fixing-System-Bugs` branch contains these focused bug fixes:
 * **Booking capacity display:** the booking detail page calculates capacity on each page load. Active pending and confirmed bookings both reserve seats; confirming a booking moves its count between those categories without changing total occupancy or remaining seats. The page now explains this in English and French, with a feature test asserting the rendered values.
 
 Focused package, profile, phone-validation, and booking tests passed during this work; the three booking-capacity/lifecycle tests were rerun together immediately before this handoff. The inquiry messaging/reply error reported earlier is **not fixed** in this branch and remains for a later bug-fix session. Capacity figures are refreshed on page load, not automatically while the detail page stays open.
+
+### Admin dashboard Overview and Alerts (2026-10-20)
+
+The admin dashboard's **Main → Overview** and **Main → Alerts** pages now use current application records instead of placeholder panels.
+
+* **Overview:** shows registered travelers, agencies by verification status, published packages, bookings by status, recent activity, and a prioritized attention list for pending verification, bookings, inquiries, reviews, and travel requests. Historical charts remain in Business & Insights → App Analysis.
+* **Alerts queue:** brings together pending agency verifications, flagged reviews, failed payment transactions, failed queue jobs, and failed or blocked admin login events. Admins can search and filter by status, severity, and category, then open each source record for context and its available reason.
+* **Alert actions:** acknowledge and resolve are available from the opened record. They update only the alert state; each successful transition is recorded with the acting admin and timestamp. They do not approve or otherwise mutate the underlying agency, review, payment, job, or login-event record.
+* **Source coverage:** complaints, booking disputes, and integration errors are not shown as alerts because this application does not yet have dedicated tracked records for those categories.
+* **Localization and appearance:** Overview and Alerts labels are available in English and French. The Overview uses square-cornered panels and the existing admin theme colors.
+* **Database:** the `admin_alerts` and `admin_alert_actions` tables are created by their migrations. Run `php artisan migrate` after updating an environment before using alert status actions there.
+
+**Verification:** the focused admin Overview and Alerts feature tests passed (11 tests, 560 assertions), as did the admin sign-in-to-Overview feature test (1 test, 16 assertions). `npm run build`, Pint, and `git diff --check` passed.
 
 ### Remembered-session dashboard fix (2026-10-19)
 
@@ -232,6 +248,8 @@ Authenticated traveler routes include `/dashboard`, `/account/discover`, `/accou
 Authentication routes include login, registration, password recovery, verification-code reset, and logout.
 
 The active agency dashboard is `GET /agency/dashboard` (`agency.dashboard`), protected by `auth` and `agency-owner`. Agency mutations, experience deletion, and booking transitions must remain scoped to the authenticated owner, with validation and feature tests.
+
+The admin dashboard is `GET /admin/dashboard` (`admin.dashboard`) and its configured pages use `GET /admin/dashboard/pages/{page}` (`admin.dashboard.page`). These routes and the alert acknowledge/resolve POST routes require `auth` and `EnsureAdminSession`. Apply pending database migrations before using the admin Alerts page.
 
 ## Important behavior
 

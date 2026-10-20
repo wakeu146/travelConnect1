@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AdminAlertsController;
 use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\AdminLoginVerificationController;
 use App\Http\Controllers\Admin\AdminTotpEnrollmentController;
@@ -19,6 +20,16 @@ Route::get('/dashboard/sections/{section}', [AdminDashboardController::class, 's
 Route::get('/dashboard/pages/{page}', [AdminDashboardController::class, 'page'])
     ->middleware(['auth', EnsureAdminSession::class])
     ->name('dashboard.page');
+
+Route::post('/dashboard/alerts/{source}/{sourceId}/acknowledge', [AdminAlertsController::class, 'acknowledge'])
+    ->whereNumber('sourceId')
+    ->middleware(['auth', EnsureAdminSession::class])
+    ->name('alerts.acknowledge');
+
+Route::post('/dashboard/alerts/{source}/{sourceId}/resolve', [AdminAlertsController::class, 'resolve'])
+    ->whereNumber('sourceId')
+    ->middleware(['auth', EnsureAdminSession::class])
+    ->name('alerts.resolve');
 
 Route::post('/logout', [AuthController::class, 'logout'])
     ->middleware(['auth', EnsureAdminSession::class])

@@ -26,14 +26,20 @@
             </div>
         </header>
 
-        <section class="admin-empty-state grid justify-items-center gap-4 border p-8 text-center sm:p-12" aria-labelledby="admin-placeholder-title">
-            <span class="admin-empty-icon flex h-12 w-12 items-center justify-center rounded-xl">
-                <x-admin.icon name="file" class="h-6 w-6" />
-            </span>
-            <div class="grid max-w-lg gap-2">
-                <h2 id="admin-placeholder-title" class="text-lg font-bold admin-heading">{{ __('messages.admin_nav.page_in_preparation') }}</h2>
-                <p class="text-sm leading-6 admin-muted">{{ __('messages.admin_nav.page_placeholder_description') }}</p>
-            </div>
-        </section>
+        @if ($activePage === 'overview')
+            @include('admin.pages.overview.index')
+        @elseif ($activePage === 'alerts')
+            @include('admin.pages.alerts.index')
+        @else
+            <section class="admin-empty-state grid justify-items-center gap-4 border p-8 text-center sm:p-12" aria-labelledby="admin-placeholder-title">
+                <span class="admin-empty-icon flex h-12 w-12 items-center justify-center rounded-xl">
+                    <x-admin.icon name="file" class="h-6 w-6" />
+                </span>
+                <div class="grid max-w-lg gap-2">
+                    <h2 id="admin-placeholder-title" class="text-lg font-bold admin-heading">{{ __('messages.admin_nav.page_in_preparation') }}</h2>
+                    <p class="text-sm leading-6 admin-muted">{{ __('messages.admin_nav.page_placeholder_description') }}</p>
+                </div>
+            </section>
+        @endif
     </div>
 @endsection
