@@ -541,8 +541,10 @@ class AgencyDashboardTest extends TestCase
         $response->assertSee('data-agency-search', false);
         $response->assertSee('data-agency-search-submit', false);
         $response->assertSee('data-agency-language-switcher class="flex shrink-0', false);
-        $response->assertSee('>EN</a>', false);
-        $response->assertSee('>FR</a>', false);
+        $response->assertSee('EN</a>', false);
+        $response->assertSee('FR</a>', false);
+        $response->assertSee('<rect width="60" height="30" fill="#17356b" />', false);
+        $response->assertSee('<rect width="10" height="20" fill="#002395" />', false);
         $response->assertSee('title="'.__('messages.overview').'"', false);
         $response->assertDontSee('data-agency-theme class=', false);
     }

@@ -1013,6 +1013,20 @@ input:not([type='checkbox']):not([type='radio']) {
     color: #bfd0d3;
 }
 
+.dashboard-dark [data-account-language-switcher] [data-lang-button]:hover {
+    background-color: var(--account-hover) !important;
+    color: var(--account-text) !important;
+}
+
+.dashboard-dark [data-account-language-switcher] [data-lang-button][class~="bg-[#173042]"] {
+    background-color: var(--account-action-neutral) !important;
+    color: var(--account-bg) !important;
+}
+
+.dashboard-dark [data-account-language-switcher] [data-lang-button][class~="bg-[#173042]"]:hover {
+    background-color: var(--account-action-neutral-hover) !important;
+}
+
 .dashboard-dark [data-account-shell] [class~="border-[#e4e9e7]"],
 .dashboard-dark [data-account-shell] [class~="border-[#e7eceb]"],
 .dashboard-dark [data-account-shell] [class~="border-[#d7e0e1]"] {

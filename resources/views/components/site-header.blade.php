@@ -1,12 +1,5 @@
 @props(['overlay' => false])
 
-<head>
-    {{-- Flag Icons --}}
-    <link rel="stylesheet"
-        href="https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.3.2/css/flag-icons.min.css">
-
-</head>
-
 <header
     class="sticky top-0 z-30 border-b border-[#dbe3e5] bg-white text-[#173042] shadow-[0_2px_12px_rgba(23,48,66,.06)]">
 
@@ -177,12 +170,13 @@
                     data-lang-button
                     data-lang="en"
                     data-translate-lang="en"
-                    class="flex h-8 w-9 items-center justify-center rounded-lg transition
+                    class="flex h-8 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-bold transition
                     {{ request('lang', 'en') === 'en'
-                        ? 'bg-[#173042] shadow-sm'
-                        : 'hover:bg-[#f1f6f4]' }}">
+                        ? 'bg-[#173042] text-white shadow-sm'
+                        : 'text-[#607985] hover:bg-[#f1f6f4]' }}">
 
-                    <span class="fi fi-gb rounded-sm"></span>
+                    <x-language-flag locale="en" />
+                    <span>EN</span>
                 </a>
 
                 <a
@@ -192,12 +186,13 @@
                     data-lang-button
                     data-lang="fr"
                     data-translate-lang="fr"
-                    class="flex h-8 w-9 items-center justify-center rounded-lg transition
+                    class="flex h-8 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-bold transition
                     {{ request('lang') === 'fr'
-                        ? 'bg-[#173042] shadow-sm'
-                        : 'hover:bg-[#f1f6f4]' }}">
+                        ? 'bg-[#173042] text-white shadow-sm'
+                        : 'text-[#607985] hover:bg-[#f1f6f4]' }}">
 
-                    <span class="fi fi-fr rounded-sm"></span>
+                    <x-language-flag locale="fr" />
+                    <span>FR</span>
                 </a>
 
                 <div id="google_translate_element" class="hidden"></div>
@@ -536,7 +531,7 @@
                                 ? 'border-[#173042] bg-[#173042] text-white shadow-sm'
                                 : 'border-[#dbe3e5] bg-white text-[#607985] hover:border-[#173042] hover:text-[#173042]' }}">
 
-                            <span class="fi fi-gb rounded-sm"></span>
+                            <x-language-flag locale="en" />
 
                             <span class="text-xs font-semibold">
                                 {{ __('messages.english') }}
@@ -554,7 +549,7 @@
                                 ? 'border-[#173042] bg-[#173042] text-white shadow-sm'
                                 : 'border-[#dbe3e5] bg-white text-[#607985] hover:border-[#173042] hover:text-[#173042]' }}">
 
-                            <span class="fi fi-fr rounded-sm"></span>
+                            <x-language-flag locale="fr" />
 
                             <span class="text-xs font-semibold">
                                 {{ __('messages.french') }}
