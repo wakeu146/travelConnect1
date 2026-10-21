@@ -38,7 +38,18 @@ class AdminDashboardController extends Controller
         AdminOverviewData $overviewData,
         AdminAlertQueue $alertQueue,
         AdminAgencyManagementService $agencyManagement,
-    ): View {
+    ): View|RedirectResponse {
+        $pageRoute = config("admin_dashboard.page_routes.{$page}");
+        if ($pageRoute !== null) {
+            $query = $request->query();
+            unset($query['lang']);
+
+            return redirect()->route($pageRoute, [
+                'lang' => app()->getLocale(),
+                ...$query,
+            ]);
+        }
+
         $sections = $this->sections();
 
         foreach ($sections as $sectionKey => $section) {

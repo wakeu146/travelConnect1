@@ -33,6 +33,7 @@ This README is also the continuation handoff for future AI agents. Read the curr
 * English/French locale switching using the `?lang=en` or `?lang=fr` query parameter
 * Responsive account shell with mobile navigation, notification bell, and persistent light/dark theme
 * Admin dashboard with a real-record platform overview, current status summaries, attention queue, and recent activity
+* Admin User directory with role/status filters, category tabs, profile photos, direct account deletion, and audited single/bulk account actions
 * Admin Alerts queue for overdue agency verification, flagged reviews, traveler complaints and booking disputes, failed jobs, suspicious login bursts, and Google/email integration errors
 * Traveler-owned complaint and booking-dispute intake with private case tracking and English/French status labels
 * Admin alert search, category/severity/status filters, pagination, source details, bilingual reason summaries, and audited acknowledge/resolve actions that move traveler cases through review
@@ -88,6 +89,17 @@ The admin dashboard's **Main → Overview** and **Main → Alerts** pages now us
 * **Database:** the `admin_alerts`, `admin_alert_actions`, `traveler_issues`, and `integration_failures` tables are created by migrations. Run `php artisan migrate` after updating an environment before using these workflows.
 
 **Verification:** focused admin Overview, Alerts, traveler-issue, Google OAuth, and email-factor feature tests cover the expanded case and alert workflows.
+
+### Admin User management (2026-10-21)
+
+The Platform Management User directory supports browsing users by account category, filtering and searching, viewing profile and account history, and direct single or bulk actions.
+
+* **Deactivation:** this soft-deletes the account, preserving its account and related history for administrators. Deactivated accounts are excluded from normal active-user queries and cannot authenticate.
+* **Existing sign-ins:** when the database session driver is configured, deactivation deletes the user's persisted sessions and rotates their remember-me token. An already-open session is therefore ended when the browser makes its next request. User deactivation is rejected if the configured session driver is not database-backed.
+* **Account actions:** deactivation, restoration, session revocation, and permanent deletion are audited. Deactivation also sends a security email; administrator accounts are protected from user-management actions.
+* **Directory appearance:** active and deactivated status cells use the same soft green/red status treatment as the Agency directory. CSV export is not available in User management.
+
+The User directory is available at `/admin/users` and its category pages are registered under the `admin.users.*` route names. Apply database migrations before using the administrator activity history.
 
 ### Remembered-session dashboard fix (2026-10-19)
 
@@ -251,7 +263,7 @@ Authentication routes include login, registration, password recovery, verificati
 
 The active agency dashboard is `GET /agency/dashboard` (`agency.dashboard`), protected by `auth` and `agency-owner`. Agency mutations, experience deletion, and booking transitions must remain scoped to the authenticated owner, with validation and feature tests.
 
-The admin dashboard is `GET /admin/dashboard` (`admin.dashboard`) and its configured pages use `GET /admin/dashboard/pages/{page}` (`admin.dashboard.page`). These routes and the alert acknowledge/resolve POST routes require `auth` and `EnsureAdminSession`. Apply pending database migrations before using the admin Alerts page.
+The admin dashboard is `GET /admin/dashboard` (`admin.dashboard`) and its configured pages use `GET /admin/dashboard/pages/{page}` (`admin.dashboard.page`). User management is under `/admin/users` (`admin.users.*`); account actions require a verified administrator session and database-backed sessions for deactivation/revocation. These routes and the alert acknowledge/resolve POST routes require `auth` and `EnsureAdminSession`. Apply pending database migrations before using admin activity history or Alerts.
 
 ## Important behavior
 

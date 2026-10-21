@@ -7,9 +7,12 @@
                 $pages = $group['pages'] ?? [$group['page']];
                 $entryPage = $pages[0];
                 $groupKey = $group['label'] ?? $group['page'];
+                $pageRoute = config("admin_dashboard.page_routes.{$entryPage}");
                 $entryUrl = $entryPage === 'overview'
                     ? route('admin.dashboard', ['lang' => app()->getLocale()])
-                    : route('admin.dashboard.page', ['page' => $entryPage, 'lang' => app()->getLocale()]);
+                    : ($pageRoute
+                        ? route($pageRoute, ['lang' => app()->getLocale()])
+                        : route('admin.dashboard.page', ['page' => $entryPage, 'lang' => app()->getLocale()]));
             @endphp
             <a href="{{ $entryUrl }}" class="admin-empty-state group grid min-h-48 content-between gap-6 border p-5 transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600 dark:hover:border-slate-600" data-admin-section-card="{{ $groupKey }}">
                 <span class="grid gap-4">

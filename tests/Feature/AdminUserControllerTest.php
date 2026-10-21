@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Contracts\AdminSecondFactor;
 use App\Enums\UserRole;
 use App\Mail\AdminAccountSecurityMail;
+use App\Mail\AgencyModerationMail;
+use App\Models\AdminLoginEvent;
 use App\Models\AdminUserActivity;
 use App\Models\Agency;
 use App\Models\User;
@@ -12,6 +14,7 @@ use App\Notifications\PasswordResetCode;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Mockery;
@@ -41,6 +44,128 @@ class AdminUserControllerTest extends TestCase
         $this->actingAs($traveler)
             ->get(route('admin.users.index'))
             ->assertForbidden();
+    }
+
+    public function test_user_list_offers_direct_deletion_without_a_csv_export_route(): void
+    {
+        $this->verifiedAdmin();
+        $traveler = User::factory()->create([
+            'name' => 'Delete from list',
+            'profile_photo_path' => 'profile-photos/delete-from-list.jpg',
+        ]);
+
+        $this->get(route('admin.users.index', ['lang' => 'en']))
+            ->assertSee(route('admin.users.destroy', ['userId' => $traveler->id, 'lang' => 'en']), false)
+            ->assertSee('name="_method" value="DELETE"', false)
+            ->assertSee(asset('storage/profile-photos/delete-from-list.jpg'), false)
+            ->assertSee(__('messages.admin_users.profile_photo_alt', ['name' => $traveler->name]))
+            ->assertSee(__('messages.admin_users.apply_to_selected'))
+            ->assertSee('aria-label="'.__('messages.admin_users.tabs').'"', false)
+            ->assertSee(route('admin.users.travelers', ['lang' => 'en']), false)
+            ->assertSee(route('admin.users.agency-owners', ['lang' => 'en']), false)
+            ->assertSee(route('admin.users.administrators', ['lang' => 'en']), false)
+            ->assertSee(route('admin.users.suspended', ['lang' => 'en']), false)
+            ->assertSee('aria-current="page"', false)
+            ->assertSee(__('messages.admin_users.delete_user'))
+            ->assertSee(__('messages.admin_users.delete_selected'))
+            ->assertDontSee('name="reason"', false)
+            ->assertDontSee('Export CSV')
+            ->assertSee('data-user-status-cell="active"', false)
+            ->assertSee('bg-emerald-50/80 dark:bg-emerald-950/30');
+
+        $this->assertFalse(app('router')->has('admin.users.export'));
+    }
+
+    public function test_administrator_can_permanently_delete_a_user_and_keep_the_list_context(): void
+    {
+        $this->verifiedAdmin();
+        $traveler = User::factory()->create(['name' => 'Delete this traveler']);
+        $filters = [
+            'return_page' => 'travelers',
+            'list_page' => 2,
+            'search' => 'Delete this',
+            'role' => UserRole::TRAVELER->value,
+            'status' => 'active',
+            'from' => '2026-01-01',
+            'to' => '2026-01-31',
+        ];
+
+        $this->delete(route('admin.users.destroy', [
+            'userId' => $traveler->id,
+            'lang' => 'en',
+        ]), $filters)
+            ->assertRedirect(route('admin.users.travelers', [
+                'lang' => 'en',
+                'search' => 'Delete this',
+                'role' => UserRole::TRAVELER->value,
+                'status' => 'active',
+                'from' => '2026-01-01',
+                'to' => '2026-01-31',
+                'page' => 2,
+            ]))
+            ->assertSessionHas('status', __('messages.admin_users.permanently_deleted'));
+
+        $this->assertDatabaseMissing('users', ['id' => $traveler->id]);
+    }
+
+    public function test_permanently_deleting_an_agency_owner_also_removes_their_agency(): void
+    {
+        $this->verifiedAdmin();
+        $agency = Agency::factory()->create(['company_name' => 'Agency to remove']);
+        $owner = $agency->owner;
+        Mail::fake();
+
+        $this->delete(route('admin.users.destroy', [
+            'userId' => $owner->id,
+            'lang' => 'en',
+        ]), ['return_page' => 'agency_owners'])
+            ->assertRedirect(route('admin.users.agency-owners', ['lang' => 'en']))
+            ->assertSessionHas('status', __('messages.admin_users.permanently_deleted'));
+
+        $this->assertDatabaseMissing('users', ['id' => $owner->id]);
+        $this->assertDatabaseMissing('agencies', ['id' => $agency->id]);
+        Mail::assertSent(
+            AgencyModerationMail::class,
+            fn (AgencyModerationMail $mail): bool => $mail->hasTo($owner->email)
+                && $mail->agencyName === $agency->company_name,
+        );
+    }
+
+    public function test_administrator_accounts_cannot_be_permanently_deleted(): void
+    {
+        $this->verifiedAdmin();
+        $targetAdmin = User::factory()->withRole(UserRole::ADMIN)->create();
+
+        $this->get(route('admin.users.administrators', ['lang' => 'en']))
+            ->assertDontSee('data-user-delete-form', false);
+
+        $this->delete(route('admin.users.destroy', [
+            'userId' => $targetAdmin->id,
+            'lang' => 'en',
+        ]), ['return_page' => 'administrators'])
+            ->assertForbidden();
+
+        $this->assertModelExists($targetAdmin);
+    }
+
+    public function test_non_administrator_cannot_permanently_delete_a_user(): void
+    {
+        $actor = User::factory()->create();
+        $target = User::factory()->create();
+
+        $this->actingAs($actor)
+            ->delete(route('admin.users.destroy', [
+                'userId' => $target->id,
+                'lang' => 'en',
+            ]), ['return_page' => 'all_users'])
+            ->assertForbidden();
+        $this->post(route('admin.users.bulk', ['lang' => 'en']), [
+            'user_ids' => [$target->id],
+            'operation' => 'permanently_delete',
+            'list' => 'all_users',
+        ])->assertForbidden();
+
+        $this->assertModelExists($target);
     }
 
     public function test_traveler_list_keeps_its_server_side_role_restriction(): void
@@ -85,6 +210,7 @@ class AdminUserControllerTest extends TestCase
         $this->get(route('admin.dashboard.section', ['section' => 'platform_management', 'lang' => 'fr']))
             ->assertSee(__('messages.admin_nav.sections.platform_management', [], 'fr'))
             ->assertSee('data-admin-section-card="users"', false)
+            ->assertSee(route('admin.users.index', ['lang' => 'fr']), false)
             ->assertSee('data-admin-section-card="agencies"', false)
             ->assertDontSee(__('messages.admin_nav.page_in_preparation', [], 'fr'));
     }
@@ -169,7 +295,9 @@ class AdminUserControllerTest extends TestCase
         $this->get(route('admin.users.suspended', ['lang' => 'en']))
             ->assertSee($deactivatedUser->name)
             ->assertDontSee($activeUser->name)
-            ->assertSee(__('messages.admin_users.statuses.deactivated'));
+            ->assertSee(__('messages.admin_users.statuses.deactivated'))
+            ->assertSee('data-user-status-cell="deactivated"', false)
+            ->assertSee('bg-rose-50/80 dark:bg-rose-950/30');
 
         $this->get(route('admin.users.show', [
             'userId' => $deactivatedUser->id,
@@ -187,6 +315,70 @@ class AdminUserControllerTest extends TestCase
             ->assertDontSee('remember_token')
             ->assertDontSee($deactivatedUser->getRememberToken())
             ->assertDontSee($deactivatedUser->getAuthPassword());
+    }
+
+    public function test_user_profile_uses_agency_profile_layout_and_displays_the_users_photo_and_information(): void
+    {
+        $this->verifiedAdmin();
+        $traveler = User::factory()->create([
+            'name' => 'Profile Layout Traveler',
+            'email' => 'profile-layout@example.test',
+            'phone' => '+237 600 123 456',
+            'profile_photo_path' => 'profile-photos/profile-layout.jpg',
+            'email_verified_at' => '2026-06-15 10:30:00',
+        ]);
+
+        $this->get(route('admin.users.show', [
+            'userId' => $traveler->id,
+            'lang' => 'en',
+        ]))
+            ->assertSee('data-admin-user-profile', false)
+            ->assertDontSee('data-user-cover', false)
+            ->assertSee('data-user-profile-photo', false)
+            ->assertSee(asset('storage/profile-photos/profile-layout.jpg'), false)
+            ->assertSee(__('messages.admin_users.profile_photo_alt', ['name' => $traveler->name]))
+            ->assertSee(__('messages.admin_users.account_information'))
+            ->assertSee(__('messages.admin_users.account_status_information'))
+            ->assertSee('<details class="grid gap-3">', false)
+            ->assertSee(__('messages.admin_users.private_note_placeholder'))
+            ->assertDontSee('name="reason"', false)
+            ->assertSee($traveler->email)
+            ->assertSee($traveler->phone)
+            ->assertSee(__('messages.admin_users.email_verified'))
+            ->assertSee(__('messages.admin_users.traveler_activity'));
+    }
+
+    public function test_admin_login_history_displays_localized_outcome_and_step_labels(): void
+    {
+        $this->verifiedAdmin();
+        $administrator = User::factory()->withRole(UserRole::ADMIN)->create([
+            'name' => 'Login History Admin',
+        ]);
+        AdminLoginEvent::query()->create([
+            'user_id' => $administrator->id,
+            'email' => $administrator->email,
+            'outcome' => 'factor_required',
+            'failed_step' => 'totp',
+            'created_at' => now(),
+        ]);
+        AdminLoginEvent::query()->create([
+            'user_id' => $administrator->id,
+            'email' => $administrator->email,
+            'outcome' => 'blocked',
+            'failed_step' => 'idle_timeout',
+            'created_at' => now()->subMinute(),
+        ]);
+
+        $this->get(route('admin.users.show', [
+            'userId' => $administrator->id,
+            'lang' => 'fr',
+        ]))
+            ->assertSee(__('messages.admin_users.login_outcomes.factor_required', [], 'fr'))
+            ->assertSee(__('messages.admin_users.login_steps.totp', [], 'fr'))
+            ->assertSee(__('messages.admin_users.login_outcomes.blocked', [], 'fr'))
+            ->assertSee(__('messages.admin_users.login_steps.idle_timeout', [], 'fr'))
+            ->assertDontSee('factor_required')
+            ->assertDontSee('idle_timeout');
     }
 
     public function test_pagination_preserves_the_search_query(): void
@@ -213,7 +405,7 @@ class AdminUserControllerTest extends TestCase
             ]));
     }
 
-    public function test_deactivation_revokes_database_sessions_and_records_the_reason_and_actor(): void
+    public function test_deactivation_revokes_database_sessions_and_records_an_automatic_reason_and_actor(): void
     {
         config(['session.driver' => 'database']);
         $admin = $this->verifiedAdmin();
@@ -231,7 +423,7 @@ class AdminUserControllerTest extends TestCase
         $response = $this->post(route('admin.users.deactivate', [
             'userId' => $traveler->id,
             'lang' => 'en',
-        ]), ['reason' => 'Repeated policy violations']);
+        ]));
 
         $response->assertRedirect(route('admin.users.show', [
             'userId' => $traveler->id,
@@ -244,7 +436,7 @@ class AdminUserControllerTest extends TestCase
             'actor_id' => $admin->id,
             'action' => 'deactivated',
             'outcome' => 'success',
-            'reason' => 'Repeated policy violations',
+            'reason' => __('messages.admin_users.automatic_reasons.deactivated', ['name' => $traveler->name]),
         ]);
         Mail::assertSent(AdminAccountSecurityMail::class, fn (AdminAccountSecurityMail $mail): bool => $mail->hasTo($traveler->email)
             && $mail->action === 'account_deactivated');
@@ -268,7 +460,7 @@ class AdminUserControllerTest extends TestCase
         $response = $this->post(route('admin.users.revoke-sessions', [
             'userId' => $traveler->id,
             'lang' => 'en',
-        ]), ['reason' => 'Unexpected sign-in activity']);
+        ]));
 
         $response->assertRedirect(route('admin.users.show', [
             'userId' => $traveler->id,
@@ -281,11 +473,63 @@ class AdminUserControllerTest extends TestCase
             'actor_id' => $admin->id,
             'action' => 'sessions_revoked',
             'outcome' => 'success',
-            'reason' => 'Unexpected sign-in activity',
+            'reason' => __('messages.admin_users.automatic_reasons.sessions_revoked', ['name' => $traveler->name]),
         ]);
         $this->assertNotSame('original-remember-token', $traveler->refresh()->getRememberToken());
         Mail::assertSent(AdminAccountSecurityMail::class, fn (AdminAccountSecurityMail $mail): bool => $mail->hasTo($traveler->email)
             && $mail->action === 'sessions_revoked');
+    }
+
+    public function test_account_actions_generate_reasons_from_the_action_and_user_name(): void
+    {
+        config(['session.driver' => 'database']);
+        $admin = $this->verifiedAdmin();
+        $traveler = User::factory()->create(['remember_token' => 'original-remember-token']);
+        Mail::fake();
+        DB::table('sessions')->insert([
+            'id' => 'traveler-session-without-reason',
+            'user_id' => $traveler->id,
+            'ip_address' => '192.0.2.15',
+            'user_agent' => 'Feature test',
+            'payload' => '',
+            'last_activity' => now()->timestamp,
+        ]);
+
+        $this->post(route('admin.users.revoke-sessions', [
+            'userId' => $traveler->id,
+            'lang' => 'en',
+        ]))
+            ->assertRedirect(route('admin.users.show', ['userId' => $traveler->id, 'lang' => 'en']));
+        $this->assertDatabaseHas('admin_user_activities', [
+            'user_id' => $traveler->id,
+            'actor_id' => $admin->id,
+            'action' => 'sessions_revoked',
+            'reason' => __('messages.admin_users.automatic_reasons.sessions_revoked', ['name' => $traveler->name]),
+        ]);
+
+        $this->post(route('admin.users.deactivate', [
+            'userId' => $traveler->id,
+            'lang' => 'en',
+        ]))
+            ->assertRedirect(route('admin.users.show', ['userId' => $traveler->id, 'lang' => 'en']));
+        $this->assertDatabaseHas('admin_user_activities', [
+            'user_id' => $traveler->id,
+            'actor_id' => $admin->id,
+            'action' => 'deactivated',
+            'reason' => __('messages.admin_users.automatic_reasons.deactivated', ['name' => $traveler->name]),
+        ]);
+
+        $this->post(route('admin.users.restore', [
+            'userId' => $traveler->id,
+            'lang' => 'en',
+        ]))
+            ->assertRedirect(route('admin.users.show', ['userId' => $traveler->id, 'lang' => 'en']));
+        $this->assertDatabaseHas('admin_user_activities', [
+            'user_id' => $traveler->id,
+            'actor_id' => $admin->id,
+            'action' => 'restored',
+            'reason' => __('messages.admin_users.automatic_reasons.restored', ['name' => $traveler->name]),
+        ]);
     }
 
     public function test_administrator_accounts_cannot_be_deactivated(): void
@@ -296,7 +540,7 @@ class AdminUserControllerTest extends TestCase
         $this->post(route('admin.users.deactivate', [
             'userId' => $targetAdmin->id,
             'lang' => 'en',
-        ]), ['reason' => 'Routine account review'])
+        ]))
             ->assertForbidden();
 
         $this->assertModelExists($targetAdmin);
@@ -315,7 +559,7 @@ class AdminUserControllerTest extends TestCase
         $this->post(route('admin.users.deactivate', [
             'userId' => $traveler->id,
             'lang' => 'en',
-        ]), ['reason' => 'Repeated policy violations'])
+        ]))
             ->assertSessionHasErrors('user');
 
         $this->assertModelExists($traveler);
@@ -335,7 +579,7 @@ class AdminUserControllerTest extends TestCase
         $this->post(route('admin.users.revoke-sessions', [
             'userId' => $traveler->id,
             'lang' => 'en',
-        ]), ['reason' => 'Unexpected sign-in activity'])
+        ]))
             ->assertSessionHasErrors('user');
 
         $this->assertModelExists($traveler);
@@ -357,7 +601,6 @@ class AdminUserControllerTest extends TestCase
             'userId' => $traveler->id,
             'lang' => 'en',
         ]), [
-            'reason' => 'Repeated policy violations',
             'from' => '2026-05-01',
             'to' => '2026-04-01',
         ])
@@ -370,7 +613,7 @@ class AdminUserControllerTest extends TestCase
         ]);
     }
 
-    public function test_restoration_preserves_previous_history_and_records_a_new_reason(): void
+    public function test_restoration_preserves_history_and_generates_a_reason_from_the_account_name(): void
     {
         $admin = $this->verifiedAdmin();
         $traveler = User::factory()->create();
@@ -387,7 +630,7 @@ class AdminUserControllerTest extends TestCase
         $response = $this->post(route('admin.users.restore', [
             'userId' => $traveler->id,
             'lang' => 'en',
-        ]), ['reason' => 'Issue was reviewed and resolved']);
+        ]));
 
         $response->assertRedirect(route('admin.users.show', [
             'userId' => $traveler->id,
@@ -403,7 +646,7 @@ class AdminUserControllerTest extends TestCase
             'user_id' => $traveler->id,
             'actor_id' => $admin->id,
             'action' => 'restored',
-            'reason' => 'Issue was reviewed and resolved',
+            'reason' => __('messages.admin_users.automatic_reasons.restored', ['name' => $traveler->name]),
         ]);
         Mail::assertSent(AdminAccountSecurityMail::class, fn (AdminAccountSecurityMail $mail): bool => $mail->hasTo($traveler->email)
             && $mail->action === 'account_restored');
@@ -482,7 +725,6 @@ class AdminUserControllerTest extends TestCase
         $this->post(route('admin.users.bulk', ['lang' => 'en']), [
             'user_ids' => [$firstPageTraveler->id, $secondPageTraveler->id],
             'operation' => 'deactivate',
-            'reason' => 'Bulk policy review',
             'list' => 'travelers',
             'list_page' => 2,
         ])
@@ -494,35 +736,72 @@ class AdminUserControllerTest extends TestCase
 
         $this->assertNotSoftDeleted($firstPageTraveler);
         $this->assertSoftDeleted($secondPageTraveler);
+        $this->assertDatabaseHas('admin_user_activities', [
+            'user_id' => $secondPageTraveler->id,
+            'action' => 'deactivated',
+            'reason' => __('messages.admin_users.automatic_reasons.deactivated', ['name' => $secondPageTraveler->name]),
+        ]);
     }
 
-    public function test_csv_export_protects_spreadsheet_formulas_and_applies_filters(): void
+    public function test_bulk_permanent_deletion_removes_selected_accounts_and_agency_data_and_logs_account_names(): void
     {
         $this->verifiedAdmin();
-        $formulaTraveler = User::factory()->create([
-            'name' => '=SUM(1,1)',
-            'role' => UserRole::TRAVELER,
-        ]);
-        $otherTraveler = User::factory()->create([
-            'name' => 'Not in export',
-            'role' => UserRole::TRAVELER,
-        ]);
-        User::factory()->withRole(UserRole::ADMIN)->create([
-            'name' => 'Administrator not included',
-        ]);
+        $agency = Agency::factory()->create(['company_name' => 'Bulk deletion agency']);
+        $owner = $agency->owner;
+        $traveler = User::factory()->create(['name' => 'Bulk deletion traveler']);
+        Mail::fake();
+        Log::spy();
 
-        $response = $this->get(route('admin.users.export', [
-            'lang' => 'en',
+        $this->post(route('admin.users.bulk', ['lang' => 'en']), [
+            'user_ids' => [$owner->id, $traveler->id],
+            'operation' => 'permanently_delete',
             'list' => 'all_users',
-            'search' => 'SUM',
-        ]));
-        $csv = $response->streamedContent();
+            'list_page' => 1,
+        ])
+            ->assertRedirect(route('admin.users.index', ['lang' => 'en']))
+            ->assertSessionHas('status', __('messages.admin_users.bulk_result', [
+                'processed' => 2,
+                'failed' => 0,
+            ]));
 
-        $response->assertHeader('content-type', 'text/csv; charset=UTF-8');
-        $this->assertStringContainsString("'=SUM(1,1)", $csv);
-        $this->assertStringNotContainsString($otherTraveler->email, $csv);
-        $this->assertStringNotContainsString('Administrator not included', $csv);
-        $this->assertStringContainsString((string) $formulaTraveler->id, $csv);
+        $this->assertDatabaseMissing('users', ['id' => $owner->id]);
+        $this->assertDatabaseMissing('users', ['id' => $traveler->id]);
+        $this->assertDatabaseMissing('agencies', ['id' => $agency->id]);
+        Log::shouldHaveReceived('info')
+            ->with('An administrator permanently deleted a user account.', Mockery::on(
+                fn (array $context): bool => $context['user_id'] === $owner->id
+                    && $context['reason'] === __('messages.admin_users.automatic_reasons.permanently_deleted', ['name' => $owner->name]),
+            ))
+            ->once();
+        Log::shouldHaveReceived('info')
+            ->with('An administrator permanently deleted a user account.', Mockery::on(
+                fn (array $context): bool => $context['user_id'] === $traveler->id
+                    && $context['reason'] === __('messages.admin_users.automatic_reasons.permanently_deleted', ['name' => $traveler->name]),
+            ))
+            ->once();
+        Mail::assertSent(AgencyModerationMail::class, fn (AgencyModerationMail $mail): bool => $mail->hasTo($owner->email));
+    }
+
+    public function test_bulk_permanent_deletion_skips_accounts_outside_the_current_list_and_protects_administrators(): void
+    {
+        $this->verifiedAdmin();
+        $traveler = User::factory()->create();
+        $administrator = User::factory()->withRole(UserRole::ADMIN)->create();
+
+        $this->post(route('admin.users.bulk', ['lang' => 'en']), [
+            'user_ids' => [$traveler->id, $administrator->id],
+            'operation' => 'permanently_delete',
+            'list' => 'travelers',
+            'list_page' => 1,
+        ])
+            ->assertRedirect(route('admin.users.travelers', ['lang' => 'en']))
+            ->assertSessionHas('status', __('messages.admin_users.bulk_result', [
+                'processed' => 1,
+                'failed' => 1,
+            ]));
+
+        $this->assertDatabaseMissing('users', ['id' => $traveler->id]);
+        $this->assertModelExists($administrator);
     }
 
     private function verifiedAdmin(): User

@@ -84,19 +84,25 @@ class AdminAgencyModerationController extends Controller
     }
 
     public function destroy(
+        Request $request,
         Agency $agency,
+        AdminUserManagementService $userManagement,
         AdminAgencyManagementService $agencyManagement,
     ): RedirectResponse {
         $agencyName = $agency->company_name;
 
-        $emailSent = $agencyManagement->permanentlyDelete($agency);
+        $emailSent = $userManagement->permanentlyDelete(
+            $request->user(),
+            $agency->user_id,
+            $agencyManagement,
+        );
 
         $response = redirect()->route('admin.dashboard.page', [
             'page' => 'all_agencies',
             'lang' => app()->getLocale(),
         ])->with('status', __('messages.admin_agencies.permanently_deleted', ['agency' => $agencyName]));
 
-        return $this->withEmailWarning($response, $emailSent);
+        return $this->withEmailWarning($response, $emailSent ?? true);
     }
 
     public function document(Agency $agency, AgencyDocument $document): StreamedResponse

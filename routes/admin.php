@@ -61,7 +61,6 @@ Route::prefix('users')->name('users.')->middleware(['auth', EnsureAdminSession::
     Route::get('/agency-owners', [AdminUserController::class, 'agencyOwners'])->name('agency-owners');
     Route::get('/administrators', [AdminUserController::class, 'administrators'])->name('administrators');
     Route::get('/suspended', [AdminUserController::class, 'suspended'])->name('suspended');
-    Route::get('/export', [AdminUserController::class, 'export'])->name('export');
     Route::post('/bulk', [AdminUserController::class, 'bulk'])
         ->middleware('throttle:admin.users.actions')
         ->name('bulk');
@@ -85,6 +84,10 @@ Route::prefix('users')->name('users.')->middleware(['auth', EnsureAdminSession::
         ->whereNumber('userId')
         ->middleware('throttle:admin.users.actions')
         ->name('password-reset');
+    Route::delete('/{userId}', [AdminUserController::class, 'destroy'])
+        ->whereNumber('userId')
+        ->middleware('throttle:admin.users.actions')
+        ->name('destroy');
     Route::get('/{userId}', [AdminUserController::class, 'show'])->whereNumber('userId')->name('show');
 });
 

@@ -7,6 +7,7 @@
 - Agency reviews, inquiries, and trust-score logs use `RESTRICT` from agencies and users so audit and customer history cannot be accidentally destroyed. Soft-deleting the parent hides it from normal queries while retaining the history.
 - Pivot references to countries and services use `RESTRICT`, preserving reference data while agencies still use it. Agency-side pivot rows cascade when an agency is physically removed.
 - Users and agencies have soft deletes because they are core identity/business records. Documents, countries, services, pivots, reviews, inquiries, favorites, and trust-score logs do not: their parent rules preserve or remove them explicitly, and these records are not independently recoverable entities.
+- User deactivation is a soft delete. The admin workflow also removes that user's rows from the configured database session table and rotates the remember token, ending persisted sign-ins while preserving account history. This admin action requires the database session driver; restoration makes the account available again but does not restore deleted sessions.
 - `agencies.trust_score` is a deliberate denormalized cache of the latest score; `trust_score_logs` remains the historical source for auditability and recalculation.
 - The rating check is added for MySQL connections. SQLite test runs skip that engine-specific `ALTER TABLE`; application validation should still accept only ratings from 1 through 5 there.
 

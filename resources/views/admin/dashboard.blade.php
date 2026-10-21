@@ -40,9 +40,9 @@
             @endif
         @elseif ($usersPageData !== null && in_array($activePage, ['all_users', 'travelers', 'agency_owners', 'administrators', 'suspended_deactivated_accounts'], true))
             @if (! empty($usersPageData['userDetails']))
-                @include('admin.users.show', $usersPageData)
+                @include('admin.pages.users.show', $usersPageData)
             @else
-                @include('admin.users.users', $usersPageData)
+                @include('admin.pages.users.users', $usersPageData)
             @endif
         @else
             <section class="admin-empty-state grid justify-items-center gap-4 border p-8 text-center sm:p-12" aria-labelledby="admin-placeholder-title">

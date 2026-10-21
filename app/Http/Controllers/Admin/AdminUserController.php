@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\AdminAgencyManagementService;
 use App\Services\AdminUserManagementService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,7 +16,6 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class AdminUserController extends Controller
@@ -129,10 +129,48 @@ class AdminUserController extends Controller
         );
     }
 
+    public function destroy(
+        Request $request,
+        int $userId,
+        AdminUserManagementService $management,
+        AdminAgencyManagementService $agencyManagement,
+    ): RedirectResponse {
+        $data = $request->validate([
+            'return_page' => ['required', Rule::in(array_keys(config('admin_dashboard.page_routes')))],
+            'list_page' => ['nullable', 'integer', 'min:1'],
+            'search' => ['nullable', 'string', 'max:120'],
+            'role' => ['nullable', Rule::in(array_map(fn (UserRole $role): string => $role->value, UserRole::cases()))],
+            'status' => ['nullable', Rule::in(['active', 'deactivated'])],
+            'from' => ['nullable', 'date_format:Y-m-d', Rule::when($request->filled('to'), ['before_or_equal:to'])],
+            'to' => ['nullable', 'date_format:Y-m-d', Rule::when($request->filled('from'), ['after_or_equal:from'])],
+        ]);
+
+        $emailSent = $management->permanentlyDelete(
+            $request->user(),
+            $userId,
+            $agencyManagement,
+        );
+        $returnFilters = array_intersect_key($data, array_flip(['search', 'role', 'status', 'from', 'to']));
+
+        if (($data['list_page'] ?? 1) > 1) {
+            $returnFilters['page'] = $data['list_page'];
+        }
+
+        $response = redirect()->route($this->routeForPage($data['return_page']), [
+            'lang' => app()->getLocale(),
+            ...$returnFilters,
+        ])->with('status', __('messages.admin_users.permanently_deleted'));
+
+        if ($emailSent === false) {
+            $response->with('error', __('messages.admin_users.permanently_deleted_email_failed'));
+        }
+
+        return $response;
+    }
+
     public function deactivate(Request $request, int $userId, AdminUserManagementService $management): RedirectResponse
     {
         $data = $request->validate([
-            'reason' => ['required', 'string', 'min:5', 'max:1000'],
             'return_page' => ['nullable', Rule::in(array_keys(config('admin_dashboard.page_routes')))],
             'list_page' => ['nullable', 'integer', 'min:1'],
             'search' => ['nullable', 'string', 'max:120'],
@@ -142,7 +180,7 @@ class AdminUserController extends Controller
             'to' => ['nullable', 'date_format:Y-m-d', Rule::when($request->filled('from'), ['after_or_equal:from'])],
         ]);
 
-        $emailSent = $management->deactivate($request->user(), $userId, trim($data['reason']));
+        $emailSent = $management->deactivate($request->user(), $userId);
 
         return $this->returnToDetails($userId, $data)->with(
             $emailSent ? 'status' : 'error',
@@ -155,7 +193,6 @@ class AdminUserController extends Controller
     public function revokeSessions(Request $request, int $userId, AdminUserManagementService $management): RedirectResponse
     {
         $data = $request->validate([
-            'reason' => ['required', 'string', 'min:5', 'max:1000'],
             'return_page' => ['nullable', Rule::in(array_keys(config('admin_dashboard.page_routes')))],
             'list_page' => ['nullable', 'integer', 'min:1'],
             'search' => ['nullable', 'string', 'max:120'],
@@ -165,7 +202,7 @@ class AdminUserController extends Controller
             'to' => ['nullable', 'date_format:Y-m-d', Rule::when($request->filled('from'), ['after_or_equal:from'])],
         ]);
 
-        $emailSent = $management->revokeSessions($request->user(), $userId, trim($data['reason']));
+        $emailSent = $management->revokeSessions($request->user(), $userId);
 
         return $this->returnToDetails($userId, $data)->with(
             $emailSent ? 'status' : 'error',
@@ -178,7 +215,6 @@ class AdminUserController extends Controller
     public function restore(Request $request, int $userId, AdminUserManagementService $management): RedirectResponse
     {
         $data = $request->validate([
-            'reason' => ['required', 'string', 'min:5', 'max:1000'],
             'return_page' => ['nullable', Rule::in(array_keys(config('admin_dashboard.page_routes')))],
             'list_page' => ['nullable', 'integer', 'min:1'],
             'search' => ['nullable', 'string', 'max:120'],
@@ -188,7 +224,7 @@ class AdminUserController extends Controller
             'to' => ['nullable', 'date_format:Y-m-d', Rule::when($request->filled('from'), ['after_or_equal:from'])],
         ]);
 
-        $emailSent = $management->restore($request->user(), $userId, trim($data['reason']));
+        $emailSent = $management->restore($request->user(), $userId);
 
         return $this->returnToDetails($userId, $data)->with(
             $emailSent ? 'status' : 'error',
@@ -236,13 +272,15 @@ class AdminUserController extends Controller
         );
     }
 
-    public function bulk(Request $request, AdminUserManagementService $management): RedirectResponse
-    {
+    public function bulk(
+        Request $request,
+        AdminUserManagementService $management,
+        AdminAgencyManagementService $agencyManagement,
+    ): RedirectResponse {
         $data = $request->validate([
             'user_ids' => ['required', 'array', 'min:1', 'max:25'],
             'user_ids.*' => ['required', 'integer', 'distinct', 'min:1'],
-            'operation' => ['required', Rule::in(['deactivate', 'restore'])],
-            'reason' => ['required', 'string', 'min:5', 'max:1000'],
+            'operation' => ['required', Rule::in(['deactivate', 'restore', 'permanently_delete'])],
             'list' => ['required', Rule::in(array_keys(config('admin_dashboard.page_routes')))],
             'list_page' => ['nullable', 'integer', 'min:1'],
             'search' => ['nullable', 'string', 'max:120'],
@@ -273,12 +311,20 @@ class AdminUserController extends Controller
             }
 
             try {
-                if ($data['operation'] === 'deactivate') {
-                    if (! $management->deactivate($request->user(), (int) $userId, trim($data['reason']))) {
+                if ($data['operation'] === 'permanently_delete') {
+                    if ($management->permanentlyDelete(
+                        $request->user(),
+                        (int) $userId,
+                        $agencyManagement,
+                    ) === false) {
+                        $emailFailed++;
+                    }
+                } elseif ($data['operation'] === 'deactivate') {
+                    if (! $management->deactivate($request->user(), (int) $userId)) {
                         $emailFailed++;
                     }
                 } else {
-                    if (! $management->restore($request->user(), (int) $userId, trim($data['reason']))) {
+                    if (! $management->restore($request->user(), (int) $userId)) {
                         $emailFailed++;
                     }
                 }
@@ -306,53 +352,6 @@ class AdminUserController extends Controller
         return $response->with($emailFailed > 0 ? 'error' : 'status', $message);
     }
 
-    public function export(Request $request): StreamedResponse
-    {
-        $data = $request->validate([
-            'list' => ['required', Rule::in(array_keys(config('admin_dashboard.page_routes')))],
-            'search' => ['nullable', 'string', 'max:120'],
-            'role' => ['nullable', Rule::in(array_map(fn (UserRole $role): string => $role->value, UserRole::cases()))],
-            'status' => ['nullable', Rule::in(['active', 'deactivated'])],
-            'from' => ['nullable', 'date_format:Y-m-d'],
-            'to' => ['nullable', 'date_format:Y-m-d', Rule::when($request->filled('from'), ['after_or_equal:from'])],
-        ]);
-        $filters = array_intersect_key($data, array_flip(['search', 'role', 'status', 'from', 'to']));
-        if (isset($filters['search'])) {
-            $filters['search'] = trim(preg_replace('/\s+/u', ' ', $filters['search']) ?? $filters['search']);
-        }
-        $users = $this->queryForPage($data['list'], $filters)
-            ->select(['id', 'name', 'email', 'role', 'created_at', 'deleted_at'])
-            ->orderBy('id')
-            ->cursor();
-
-        return response()->streamDownload(function () use ($users): void {
-            $output = fopen('php://output', 'w');
-            fputcsv($output, [
-                __('messages.admin_users.csv_headers.id'),
-                __('messages.admin_users.csv_headers.name'),
-                __('messages.admin_users.csv_headers.email'),
-                __('messages.admin_users.csv_headers.role'),
-                __('messages.admin_users.csv_headers.status'),
-                __('messages.admin_users.csv_headers.registered_at'),
-                __('messages.admin_users.csv_headers.deactivated_at'),
-            ], ',', '"', '');
-
-            foreach ($users as $user) {
-                fputcsv($output, [
-                    $user->id,
-                    $this->safeCsvText($user->name),
-                    $this->safeCsvText($user->email),
-                    $user->role->value,
-                    $user->trashed() ? 'deactivated' : 'active',
-                    $user->created_at?->toIso8601String(),
-                    $user->deleted_at?->toIso8601String(),
-                ], ',', '"', '');
-            }
-
-            fclose($output);
-        }, 'travelconnect-users.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
-    }
-
     private function listing(
         Request $request,
         AdminDashboardController $dashboard,
@@ -363,7 +362,7 @@ class AdminUserController extends Controller
         $filters = $this->validateFilters($request);
 
         $query = $this->queryForPage($page, $filters, $lockedRole, $deactivatedOnly)
-            ->select(['id', 'name', 'email', 'role', 'created_at', 'deleted_at']);
+            ->select(['id', 'name', 'email', 'profile_photo_path', 'role', 'created_at', 'deleted_at']);
 
         if ($page === 'agency_owners') {
             $query->with([
@@ -459,11 +458,6 @@ class AdminUserController extends Controller
             'lang' => app()->getLocale(),
             ...$returnData,
         ]);
-    }
-
-    private function safeCsvText(string $value): string
-    {
-        return preg_match('/^[\s]*[=+\-@\t\r]/u', $value) === 1 ? "'".$value : $value;
     }
 
     private function routeForPage(string $page): string

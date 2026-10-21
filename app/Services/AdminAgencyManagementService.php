@@ -331,28 +331,19 @@ class AdminAgencyManagementService
         ));
     }
 
-    public function permanentlyDelete(Agency $agency): bool
+    /**
+     * @return array<int, string>
+     */
+    public function deleteAgencyForAccountRemoval(Agency $agency): array
     {
-        $agencyName = $agency->company_name;
-        $owner = $agency->owner()->first();
+        return $this->deleteAgency($agency, false, convertOwnerToTraveler: false) ?? [];
+    }
 
-        if (! $this->deleteAgency($agency, false)) {
-            return false;
-        }
-
-        if (! $owner) {
-            return false;
-        }
-
+    public function sendPermanentDeletionEmail(User $owner, Agency $agency): bool
+    {
         $message = __('messages.agency_permanently_deleted_notification', [
-            'agency' => $agencyName,
+            'agency' => $agency->company_name,
         ]);
-        $owner->notify(new AgencyActivityNotification(
-            __('messages.agency_moderation_notification_title'),
-            $message,
-            'agency_permanently_deleted',
-            route('account.activity', ['lang' => app()->getLocale()]),
-        ));
 
         return $this->sendModerationEmail($owner, $agency, 'permanently_deleted', $message);
     }
@@ -382,16 +373,28 @@ class AdminAgencyManagementService
 
     public function deleteExpiredUnsubmittedAgency(Agency $agency, DateTimeInterface $cutoff): bool
     {
-        return $this->deleteAgency($agency, true, $cutoff);
+        $storagePaths = $this->deleteAgency($agency, true, $cutoff);
+
+        if ($storagePaths === null) {
+            return false;
+        }
+
+        $this->deleteAgencyMedia($storagePaths);
+
+        return true;
     }
 
+    /**
+     * @return array<int, string>|null
+     */
     private function deleteAgency(
         Agency $agency,
         bool $deleteOwnerAccount,
         ?DateTimeInterface $cutoff = null,
-    ): bool {
-        $storagePaths = DB::transaction(function () use ($agency, $deleteOwnerAccount, $cutoff): ?array {
-            $agency = Agency::query()->whereKey($agency->id)->lockForUpdate()->firstOrFail();
+        bool $convertOwnerToTraveler = true,
+    ): ?array {
+        $storagePaths = DB::transaction(function () use ($agency, $deleteOwnerAccount, $cutoff, $convertOwnerToTraveler): ?array {
+            $agency = Agency::withTrashed()->whereKey($agency->id)->lockForUpdate()->firstOrFail();
 
             if ($cutoff !== null && (
                 $agency->created_at->gt($cutoff)
@@ -429,17 +432,21 @@ class AdminAgencyManagementService
                 if ($owner && ! $owner->trashed()) {
                     $owner->delete();
                 }
-            } else {
+            } elseif ($convertOwnerToTraveler) {
                 $owner?->forceFill(['role' => UserRole::TRAVELER])->save();
             }
 
             return $storagePaths;
         });
 
-        if ($storagePaths === null) {
-            return false;
-        }
+        return $storagePaths;
+    }
 
+    /**
+     * @param  array<int, string>  $storagePaths
+     */
+    private function deleteAgencyMedia(array $storagePaths): void
+    {
         $disk = Storage::disk('public');
         $existingPaths = array_values(array_filter(
             $storagePaths,
@@ -449,8 +456,6 @@ class AdminAgencyManagementService
         if ($existingPaths !== [] && ! $disk->delete($existingPaths)) {
             throw new \RuntimeException('Agency records were deleted, but some agency media could not be removed.');
         }
-
-        return true;
     }
 
     private function caseStatus(Agency $agency): string
