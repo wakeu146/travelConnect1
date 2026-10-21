@@ -38,6 +38,12 @@
             @else
                 @include('admin.pages.agencies.index', ['directory' => $agencyDirectory])
             @endif
+        @elseif ($usersPageData !== null && in_array($activePage, ['all_users', 'travelers', 'agency_owners', 'administrators', 'suspended_deactivated_accounts'], true))
+            @if (! empty($usersPageData['userDetails']))
+                @include('admin.users.show', $usersPageData)
+            @else
+                @include('admin.users.users', $usersPageData)
+            @endif
         @else
             <section class="admin-empty-state grid justify-items-center gap-4 border p-8 text-center sm:p-12" aria-labelledby="admin-placeholder-title">
                 <span class="admin-empty-icon flex h-12 w-12 items-center justify-center rounded-xl">

@@ -68,7 +68,15 @@ class AdminDashboardControllerTest extends TestCase
                 ? route('admin.dashboard', ['lang' => 'en'])
                 : route('admin.dashboard.section', ['section' => $sectionKey, 'lang' => 'en']);
 
-            $sectionResponse = $this->get($sectionUrl);
+            $sectionResponse = $this->get($sectionUrl)
+                ->assertOk()
+                ->assertSee(__('messages.admin_nav.sections.'.$sectionKey))
+                ->assertSee('aria-current="page"', false)
+                ->assertSee(__('messages.admin_nav.switch_language_to_english'))
+                ->assertSee(__('messages.admin_nav.switch_language_to_french'))
+                ->assertSee('data-admin-locale="en"', false)
+                ->assertSee('data-admin-locale="fr"', false)
+                ->assertSee('data-scroll-to-top', false);
 
             if ($sectionKey === 'main') {
                 $sectionResponse->assertOk()

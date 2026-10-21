@@ -9,5 +9,6 @@
 </head>
 <body class="min-h-screen bg-[#f1f6f4] text-[#173042] antialiased">
     @yield('content')
+    <x-scroll-to-top />
 </body>
 </html>

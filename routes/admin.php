@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\AdminLoginVerificationController;
 use App\Http\Controllers\Admin\AdminNotificationController;
 use App\Http\Controllers\Admin\AdminTotpEnrollmentController;
+use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\AuthController;
 use App\Http\Middleware\EnsureAdminSession;
 use App\Http\Middleware\EnsurePendingAdminLogin;
@@ -53,6 +54,39 @@ Route::get('/dashboard/agencies/{agency}/documents/{document}', [AdminAgencyMode
     ->whereNumber(['agency', 'document'])
     ->scopeBindings()
     ->name('agencies.documents.show');
+
+Route::prefix('users')->name('users.')->middleware(['auth', EnsureAdminSession::class])->group(function (): void {
+    Route::get('/', [AdminUserController::class, 'index'])->name('index');
+    Route::get('/travelers', [AdminUserController::class, 'travelers'])->name('travelers');
+    Route::get('/agency-owners', [AdminUserController::class, 'agencyOwners'])->name('agency-owners');
+    Route::get('/administrators', [AdminUserController::class, 'administrators'])->name('administrators');
+    Route::get('/suspended', [AdminUserController::class, 'suspended'])->name('suspended');
+    Route::get('/export', [AdminUserController::class, 'export'])->name('export');
+    Route::post('/bulk', [AdminUserController::class, 'bulk'])
+        ->middleware('throttle:admin.users.actions')
+        ->name('bulk');
+    Route::post('/{userId}/deactivate', [AdminUserController::class, 'deactivate'])
+        ->whereNumber('userId')
+        ->middleware('throttle:admin.users.actions')
+        ->name('deactivate');
+    Route::post('/{userId}/revoke-sessions', [AdminUserController::class, 'revokeSessions'])
+        ->whereNumber('userId')
+        ->middleware('throttle:admin.users.actions')
+        ->name('revoke-sessions');
+    Route::post('/{userId}/restore', [AdminUserController::class, 'restore'])
+        ->whereNumber('userId')
+        ->middleware('throttle:admin.users.actions')
+        ->name('restore');
+    Route::post('/{userId}/notes', [AdminUserController::class, 'note'])
+        ->whereNumber('userId')
+        ->middleware('throttle:admin.users.actions')
+        ->name('notes.store');
+    Route::post('/{userId}/password-reset', [AdminUserController::class, 'passwordReset'])
+        ->whereNumber('userId')
+        ->middleware('throttle:admin.users.actions')
+        ->name('password-reset');
+    Route::get('/{userId}', [AdminUserController::class, 'show'])->whereNumber('userId')->name('show');
+});
 
 Route::get('/notifications/{notification}', [AdminNotificationController::class, 'open'])
     ->middleware(['auth', EnsureAdminSession::class])

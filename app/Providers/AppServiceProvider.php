@@ -73,5 +73,9 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute(5)->by('admin-resend-ip:'.$request->ip()),
             ];
         });
+        RateLimiter::for('admin.users.actions', fn (Request $request) => [
+            Limit::perMinute(5)->by('admin-user-action:'.$request->user()?->id.'|'.$request->ip()),
+            Limit::perHour(20)->by('admin-user-action-hourly:'.$request->user()?->id),
+        ]);
     }
 }

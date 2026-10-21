@@ -240,7 +240,13 @@
                                 <ul class="ml-5 mt-1 grid gap-0.5 border-l pl-3 admin-border">
                                     @foreach ($group['pages'] as $childPage)
                                         <li>
-                                            <a href="{{ route('admin.dashboard.page', ['page' => $childPage, 'lang' => app()->getLocale()]) }}" @if ($activePage === $childPage) aria-current="page" @endif class="admin-nav-link admin-child-link flex min-h-9 items-center rounded-md px-3 py-2 text-[13px] {{ $activePage === $childPage ? 'is-active' : '' }}">
+                                            @php
+                                                $pageRoute = config("admin_dashboard.page_routes.{$childPage}");
+                                                $pageUrl = $pageRoute
+                                                    ? route($pageRoute, ['lang' => app()->getLocale()])
+                                                    : route('admin.dashboard.page', ['page' => $childPage, 'lang' => app()->getLocale()]);
+                                            @endphp
+                                            <a href="{{ $pageUrl }}" @if ($activePage === $childPage) aria-current="page" @endif class="admin-nav-link admin-child-link flex min-h-9 items-center rounded-md px-3 py-2 text-[13px] {{ $activePage === $childPage ? 'is-active' : '' }}">
                                                 {{ __('messages.admin_nav.pages.'.$childPage) }}
                                             </a>
                                         </li>
@@ -266,9 +272,11 @@
                 <div class="mx-auto grid w-full max-w-5xl grid-cols-6 items-stretch gap-1 px-2 py-2 pb-[max(.5rem,env(safe-area-inset-bottom))] sm:px-4">
                     @foreach ($sections as $sectionKey => $section)
                         @php
-                            $sectionUrl = $sectionKey === 'main'
-                                ? route('admin.dashboard', ['lang' => app()->getLocale()])
-                                : route('admin.dashboard.section', ['section' => $sectionKey, 'lang' => app()->getLocale()]);
+                            $sectionUrl = match ($sectionKey) {
+                                'main' => route('admin.dashboard', ['lang' => app()->getLocale()]),
+                                'platform_management' => route('admin.dashboard.section', ['section' => $sectionKey, 'lang' => app()->getLocale()]),
+                                default => route('admin.dashboard.section', ['section' => $sectionKey, 'lang' => app()->getLocale()]),
+                            };
                         @endphp
                         <a
                             href="{{ $sectionUrl }}"
@@ -291,5 +299,6 @@
             @endforeach
         </div>
     </div>
+    <x-scroll-to-top />
 </body>
 </html>

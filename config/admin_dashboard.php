@@ -1,6 +1,13 @@
 <?php
 
 return [
+    'page_routes' => [
+        'all_users' => 'admin.users.index',
+        'travelers' => 'admin.users.travelers',
+        'agency_owners' => 'admin.users.agency-owners',
+        'administrators' => 'admin.users.administrators',
+        'suspended_deactivated_accounts' => 'admin.users.suspended',
+    ],
     'sections' => [
         'main' => [
             'icon' => 'home',
