@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\UserRole;
+use App\Models\IntegrationFailure;
 use App\Models\User;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
@@ -30,7 +31,9 @@ class GoogleAuthController extends Controller
     {
         try {
             return Socialite::driver('google')->redirect();
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            $this->recordGoogleFailure('sign_in_redirect', $exception);
+
             return $this->redirectToLoginWithError('Google sign-in is temporarily unavailable. Please try again.');
         }
     }
@@ -42,7 +45,8 @@ class GoogleAuthController extends Controller
 
         try {
             return Socialite::driver('google')->redirect();
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            $this->recordGoogleFailure('agency_signup_redirect', $exception);
             $request->session()->forget(self::AGENCY_SIGNUP_INTENT);
 
             return redirect()->route('register.agency')->withErrors([
@@ -150,9 +154,14 @@ class GoogleAuthController extends Controller
             return $this->handleAgencyCallback($request);
         }
 
+        if ($request->query->has('error')) {
+            return $this->redirectToLoginWithError('Google sign-in was cancelled. You can try again or use your password.');
+        }
+
         try {
             $googleUser = Socialite::driver('google')->user();
         } catch (Throwable $exception) {
+            $this->recordGoogleFailure('sign_in_callback', $exception);
             $safeMessage = preg_replace('/https?:\/\/[^\s]+/i', '[URL redacted]', $exception->getMessage());
             $safeMessage = preg_replace(
                 '/\b(code|state|error|access_token|refresh_token|id_token|client_secret|client_id|password|authorization|token)\b([\'"]?\s*[:=]\s*[\'"]?)[^,\s;&\'"]+/i',
@@ -236,7 +245,9 @@ class GoogleAuthController extends Controller
     {
         try {
             $googleUser = Socialite::driver('google')->user();
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            $this->recordGoogleFailure('agency_signup_callback', $exception);
+
             return redirect()->route('register.agency')->withErrors([
                 'email' => 'We could not verify your Google account. Please try again.',
             ]);
@@ -446,5 +457,15 @@ class GoogleAuthController extends Controller
     private function redirectToLoginWithError(string $message): RedirectResponse
     {
         return redirect()->route('login')->withErrors(['email' => $message]);
+    }
+
+    private function recordGoogleFailure(string $operation, Throwable $exception): void
+    {
+        IntegrationFailure::query()->create([
+            'integration' => 'google_oauth',
+            'operation' => $operation,
+            'safe_message' => __('messages.admin_alerts.integration_messages.google_oauth_failure'),
+            'exception_class' => $exception::class,
+        ]);
     }
 }

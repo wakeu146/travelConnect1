@@ -2,17 +2,18 @@
 
 namespace App\Services;
 
-use App\Enums\PaymentTransactionStatus;
 use App\Enums\ReviewStatus;
 use App\Enums\VerificationStatus;
 use App\Models\AdminAlert;
 use App\Models\Agency;
-use App\Models\BookingPaymentTransaction;
+use App\Models\IntegrationFailure;
 use App\Models\Review;
+use App\Models\TravelerIssue;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\Query\JoinClause;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -24,9 +25,11 @@ class AdminAlertQueue
     private const CATEGORIES = [
         'agency_verification',
         'reported_content',
-        'failed_payment',
+        'complaint',
+        'booking_dispute',
         'failed_job',
         'suspicious_activity',
+        'integration_error',
     ];
 
     private const SEVERITIES = ['low', 'medium', 'high', 'critical'];
@@ -96,16 +99,15 @@ class AdminAlertQueue
         $source = match ($sourceType) {
             'agency' => Agency::query()->with('owner:id,name,email')->findOrFail($sourceId),
             'review' => Review::query()->with(['agency:id,company_name', 'user:id,name,email'])->findOrFail($sourceId),
-            'failed_payment' => BookingPaymentTransaction::query()->with('booking:id,booking_reference')->findOrFail($sourceId),
+            'traveler_issue' => TravelerIssue::query()
+                ->with(['traveler:id,name,email', 'booking:id,booking_reference,agency_id', 'booking.agency:id,company_name'])
+                ->findOrFail($sourceId),
+            'integration_failure' => IntegrationFailure::query()->findOrFail($sourceId),
             'failed_job' => DB::table('failed_jobs')
                 ->select(['id', 'uuid', 'connection', 'queue', 'exception', 'failed_at'])
                 ->where('id', $sourceId)
                 ->first() ?? abort(404),
-            'admin_login_event' => DB::table('admin_login_events')
-                ->select(['id', 'user_id', 'email', 'ip_address', 'user_agent', 'outcome', 'failed_step', 'created_at'])
-                ->where('id', $sourceId)
-                ->whereIn('outcome', ['password_failed', 'blocked'])
-                ->first() ?? abort(404),
+            'login_burst' => $this->loginBurstSource($sourceId),
         };
 
         $state = AdminAlert::query()
@@ -117,10 +119,8 @@ class AdminAlertQueue
         return [
             'source_type' => $sourceType,
             'source_id' => $sourceId,
-            'category' => $definition['category'],
-            'severity' => $sourceType === 'admin_login_event' && $source->outcome === 'blocked'
-                ? 'high'
-                : $definition['severity'],
+            'category' => $sourceType === 'traveler_issue' ? $source->type : $definition['category'],
+            'severity' => $definition['severity'],
             'title' => $this->titleFor($sourceType, $source),
             'related_label' => $this->relatedLabelFor($sourceType, $source),
             'created_at' => $this->createdAtFor($sourceType, $source),
@@ -184,6 +184,14 @@ class AdminAlertQueue
                 'status_after' => $nextStatus,
                 'created_at' => $now,
             ]);
+
+            if ($sourceType === 'traveler_issue') {
+                TravelerIssue::query()
+                    ->whereKey($sourceId)
+                    ->lockForUpdate()
+                    ->firstOrFail()
+                    ->update(['status' => $nextStatus === 'resolved' ? 'resolved' : 'in_review']);
+            }
         });
     }
 
@@ -203,19 +211,24 @@ class AdminAlertQueue
                 'severity' => 'high',
                 'management_page' => 'reported_content',
             ],
-            'failed_payment' => [
-                'category' => 'failed_payment',
+            'traveler_issue' => [
+                'category' => 'complaint',
                 'severity' => 'high',
-                'management_page' => 'pending_failed_payments',
+                'management_page' => 'alerts',
+            ],
+            'integration_failure' => [
+                'category' => 'integration_error',
+                'severity' => 'high',
+                'management_page' => 'integrations',
             ],
             'failed_job' => [
                 'category' => 'failed_job',
                 'severity' => 'high',
                 'management_page' => 'system_health',
             ],
-            'admin_login_event' => [
+            'login_burst' => [
                 'category' => 'suspicious_activity',
-                'severity' => 'medium',
+                'severity' => 'high',
                 'management_page' => 'security_events',
             ],
         ];
@@ -242,6 +255,7 @@ class AdminAlertQueue
             ->join('users', 'users.id', '=', 'agencies.user_id')
             ->where('agencies.verification_status', VerificationStatus::PENDING->value)
             ->whereNull('agencies.deleted_at')
+            ->where('agencies.created_at', '<=', now()->subHours(24))
             ->selectRaw("'agency' as source_type, agencies.id as source_id, 'agency_verification' as category, 'medium' as severity, agencies.company_name as title, users.name as related_label, agencies.created_at as created_at");
 
         $reviewQuery = DB::table('reviews')
@@ -249,23 +263,37 @@ class AdminAlertQueue
             ->where('reviews.status', ReviewStatus::FLAGGED->value)
             ->selectRaw("'review' as source_type, reviews.id as source_id, 'reported_content' as category, 'high' as severity, reviews.comment as title, agencies.company_name as related_label, reviews.created_at as created_at");
 
-        $paymentQuery = DB::table('booking_payment_transactions')
-            ->join('bookings', 'bookings.id', '=', 'booking_payment_transactions.booking_id')
-            ->where('booking_payment_transactions.status', PaymentTransactionStatus::FAILED->value)
-            ->selectRaw("'failed_payment' as source_type, booking_payment_transactions.id as source_id, 'failed_payment' as category, 'high' as severity, booking_payment_transactions.payment_reference as title, bookings.booking_reference as related_label, booking_payment_transactions.created_at as created_at");
+        $issueQuery = DB::table('traveler_issues')
+            ->join('users', 'users.id', '=', 'traveler_issues.user_id')
+            ->leftJoin('bookings', 'bookings.id', '=', 'traveler_issues.booking_id')
+            ->whereIn('traveler_issues.type', ['complaint', 'booking_dispute'])
+            ->selectRaw("'traveler_issue' as source_type, traveler_issues.id as source_id, traveler_issues.type as category, 'high' as severity, traveler_issues.subject as title, COALESCE(bookings.booking_reference, users.name) as related_label, traveler_issues.created_at as created_at");
+
+        $integrationQuery = DB::table('integration_failures')
+            ->selectRaw("'integration_failure' as source_type, integration_failures.id as source_id, 'integration_error' as category, 'high' as severity, integration_failures.integration as title, integration_failures.operation as related_label, integration_failures.created_at as created_at");
 
         $failedJobQuery = DB::table('failed_jobs')
             ->selectRaw("'failed_job' as source_type, failed_jobs.id as source_id, 'failed_job' as category, 'high' as severity, failed_jobs.uuid as title, failed_jobs.queue as related_label, failed_jobs.failed_at as created_at");
 
-        $loginEventQuery = DB::table('admin_login_events')
-            ->whereIn('outcome', ['password_failed', 'blocked'])
-            ->selectRaw("'admin_login_event' as source_type, admin_login_events.id as source_id, 'suspicious_activity' as category, CASE WHEN admin_login_events.outcome = 'blocked' THEN 'high' ELSE 'medium' END as severity, admin_login_events.email as title, admin_login_events.ip_address as related_label, admin_login_events.created_at as created_at");
+        $loginBurstQuery = DB::table('admin_login_events')
+            ->selectRaw("'login_burst' as source_type, MAX(id) as source_id, 'suspicious_activity' as category, 'high' as severity, email as title, COALESCE(ip_address, ?) as related_label, MAX(created_at) as created_at", [__('messages.admin_alerts.unknown_ip')])
+            ->where(function (Builder $query): void {
+                $query->where('outcome', 'password_failed')
+                    ->orWhere(function (Builder $blockedQuery): void {
+                        $blockedQuery->where('outcome', 'blocked')
+                            ->where('failed_step', 'password_lockout');
+                    });
+            })
+            ->where('created_at', '>=', now()->subMinutes(10))
+            ->groupBy('email', 'ip_address')
+            ->havingRaw('COUNT(*) >= 5');
 
         return $agencyQuery
             ->unionAll($reviewQuery)
-            ->unionAll($paymentQuery)
+            ->unionAll($issueQuery)
+            ->unionAll($integrationQuery)
             ->unionAll($failedJobQuery)
-            ->unionAll($loginEventQuery);
+            ->unionAll($loginBurstQuery);
     }
 
     private function assertSourceExists(string $sourceType, int $sourceId): void
@@ -274,6 +302,7 @@ class AdminAlertQueue
             'agency' => Agency::query()
                 ->whereKey($sourceId)
                 ->where('verification_status', VerificationStatus::PENDING)
+                ->where('created_at', '<=', now()->subHours(24))
                 ->lockForUpdate()
                 ->firstOrFail(),
             'review' => Review::query()
@@ -281,19 +310,47 @@ class AdminAlertQueue
                 ->where('status', ReviewStatus::FLAGGED)
                 ->lockForUpdate()
                 ->firstOrFail(),
-            'failed_payment' => BookingPaymentTransaction::query()
-                ->whereKey($sourceId)
-                ->where('status', PaymentTransactionStatus::FAILED)
-                ->lockForUpdate()
-                ->firstOrFail(),
+            'traveler_issue' => TravelerIssue::query()->whereKey($sourceId)->lockForUpdate()->firstOrFail(),
+            'integration_failure' => IntegrationFailure::query()->whereKey($sourceId)->lockForUpdate()->firstOrFail(),
             'failed_job' => DB::table('failed_jobs')->where('id', $sourceId)->lockForUpdate()->first() ?? abort(404),
-            'admin_login_event' => DB::table('admin_login_events')
-                ->where('id', $sourceId)
-                ->whereIn('outcome', ['password_failed', 'blocked'])
-                ->lockForUpdate()
-                ->first() ?? abort(404),
+            'login_burst' => $this->loginBurstSource($sourceId),
             default => abort(404),
         };
+    }
+
+    private function loginBurstSource(int $sourceId): object
+    {
+        $source = DB::table('admin_login_events')
+            ->select(['id', 'email', 'ip_address', 'user_agent', 'outcome', 'failed_step', 'created_at'])
+            ->where('id', $sourceId)
+            ->where(function (Builder $query): void {
+                $query->where('outcome', 'password_failed')
+                    ->orWhere(function (Builder $blockedQuery): void {
+                        $blockedQuery->where('outcome', 'blocked')
+                            ->where('failed_step', 'password_lockout');
+                    });
+            })
+            ->first() ?? abort(404);
+
+        $burstQuery = DB::table('admin_login_events')
+            ->where(function (Builder $query): void {
+                $query->where('outcome', 'password_failed')
+                    ->orWhere(function (Builder $blockedQuery): void {
+                        $blockedQuery->where('outcome', 'blocked')
+                            ->where('failed_step', 'password_lockout');
+                    });
+            })
+            ->where('created_at', '>=', Carbon::parse($source->created_at)->subMinutes(10))
+            ->where('created_at', '<=', $source->created_at)
+            ->when($source->email === null, fn (Builder $query) => $query->whereNull('email'), fn (Builder $query) => $query->where('email', $source->email))
+            ->when($source->ip_address === null, fn (Builder $query) => $query->whereNull('ip_address'), fn (Builder $query) => $query->where('ip_address', $source->ip_address));
+
+        $source->failed_attempt_count = $burstQuery->count();
+        $latestEventId = (clone $burstQuery)->max('id');
+
+        abort_unless($source->failed_attempt_count >= 5 && (int) $latestEventId === $sourceId, 404);
+
+        return $source;
     }
 
     private function reasonFor(string $sourceType, mixed $source): string
@@ -301,14 +358,11 @@ class AdminAlertQueue
         return match ($sourceType) {
             'agency' => __('messages.admin_alerts.reasons.agency_verification'),
             'review' => __('messages.admin_alerts.reasons.reported_review'),
-            'failed_payment' => $source->failure_reason
-                ?: __('messages.admin_alerts.reasons.payment_failure_unknown'),
+            'traveler_issue' => $source->description,
+            'integration_failure' => $source->safe_message,
             'failed_job' => $this->failedJobReason((string) $source->exception),
-            'admin_login_event' => __('messages.admin_alerts.reasons.suspicious_activity', [
-                'outcome' => __('messages.admin_alerts.login_outcomes.'.$source->outcome),
-                'step' => $source->failed_step
-                    ? __('messages.admin_alerts.login_steps.'.$source->failed_step)
-                    : __('messages.admin_alerts.login_steps.unknown'),
+            'login_burst' => __('messages.admin_alerts.reasons.login_burst', [
+                'count' => $source->failed_attempt_count,
             ]),
         };
     }
@@ -327,9 +381,10 @@ class AdminAlertQueue
         return match ($sourceType) {
             'agency' => $source->company_name,
             'review' => Str::limit($source->comment, 120),
-            'failed_payment' => $source->payment_reference,
+            'traveler_issue' => $source->subject,
+            'integration_failure' => $source->safe_message,
             'failed_job' => $source->uuid,
-            'admin_login_event' => $source->email,
+            'login_burst' => $source->email,
         };
     }
 
@@ -338,9 +393,10 @@ class AdminAlertQueue
         return match ($sourceType) {
             'agency' => $source->owner?->name ?? $source->owner?->email ?? __('messages.admin_alerts.unknown_account'),
             'review' => $source->agency->company_name,
-            'failed_payment' => $source->booking?->booking_reference ?? __('messages.admin_alerts.unknown_record'),
+            'traveler_issue' => $source->booking?->booking_reference ?? $source->traveler->name,
+            'integration_failure' => $source->operation,
             'failed_job' => $source->queue,
-            'admin_login_event' => $source->ip_address ?? __('messages.admin_alerts.unknown_ip'),
+            'login_burst' => $source->ip_address ?? __('messages.admin_alerts.unknown_ip'),
         };
     }
 
@@ -369,11 +425,19 @@ class AdminAlertQueue
                 ['label' => __('messages.admin_alerts.fields.rating'), 'value' => (string) $source->rating],
                 ['label' => __('messages.admin_alerts.fields.comment'), 'value' => $source->comment],
             ],
-            'failed_payment' => [
-                ['label' => __('messages.admin_alerts.fields.payment_reference'), 'value' => $source->payment_reference],
-                ['label' => __('messages.admin_alerts.fields.booking'), 'value' => $source->booking?->booking_reference ?? __('messages.admin_alerts.unknown_record')],
-                ['label' => __('messages.admin_alerts.fields.amount'), 'value' => $source->currency.' '.number_format((float) $source->amount, 2)],
-                ['label' => __('messages.admin_alerts.fields.failure_reason'), 'value' => $source->failure_reason ?: '—'],
+            'traveler_issue' => [
+                ['label' => __('messages.admin_alerts.fields.issue_type'), 'value' => __('messages.admin_alerts.categories.'.$source->type)],
+                ['label' => __('messages.admin_alerts.fields.traveler'), 'value' => $source->traveler->name],
+                ['label' => __('messages.admin_alerts.fields.email'), 'value' => $source->traveler->email],
+                ['label' => __('messages.admin_alerts.fields.booking'), 'value' => $source->booking?->booking_reference ?? __('messages.admin_alerts.not_linked')],
+                ['label' => __('messages.admin_alerts.fields.agency'), 'value' => $source->booking?->agency?->company_name ?? __('messages.admin_alerts.not_linked')],
+                ['label' => __('messages.admin_alerts.fields.case_status'), 'value' => __('messages.admin_alerts.case_statuses.'.$source->status)],
+            ],
+            'integration_failure' => [
+                ['label' => __('messages.admin_alerts.fields.integration'), 'value' => $source->integration],
+                ['label' => __('messages.admin_alerts.fields.operation'), 'value' => $source->operation],
+                ['label' => __('messages.admin_alerts.fields.error_type'), 'value' => $source->exception_class ?? '—'],
+                ['label' => __('messages.admin_alerts.fields.error_time'), 'value' => $source->created_at->toDateTimeString()],
             ],
             'failed_job' => [
                 ['label' => __('messages.admin_alerts.fields.job_uuid'), 'value' => $source->uuid],
@@ -381,11 +445,11 @@ class AdminAlertQueue
                 ['label' => __('messages.admin_alerts.fields.connection'), 'value' => $source->connection],
                 ['label' => __('messages.admin_alerts.fields.failed_at'), 'value' => (string) $source->failed_at],
             ],
-            'admin_login_event' => [
+            'login_burst' => [
                 ['label' => __('messages.admin_alerts.fields.email'), 'value' => $source->email],
                 ['label' => __('messages.admin_alerts.fields.ip_address'), 'value' => $source->ip_address ?? __('messages.admin_alerts.unknown_ip')],
-                ['label' => __('messages.admin_alerts.fields.outcome'), 'value' => $source->outcome],
-                ['label' => __('messages.admin_alerts.fields.failed_step'), 'value' => $source->failed_step ?? '—'],
+                ['label' => __('messages.admin_alerts.fields.failed_attempts'), 'value' => (string) $source->failed_attempt_count],
+                ['label' => __('messages.admin_alerts.fields.window'), 'value' => __('messages.admin_alerts.ten_minutes')],
                 ['label' => __('messages.admin_alerts.fields.user_agent'), 'value' => Str::limit((string) $source->user_agent, 240) ?: '—'],
             ],
         };

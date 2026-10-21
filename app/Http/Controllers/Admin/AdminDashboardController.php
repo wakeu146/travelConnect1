@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Notifications\AdminTravelerIssueReceived;
 use App\Services\AdminAlertQueue;
 use App\Services\AdminOverviewData;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -117,6 +118,16 @@ class AdminDashboardController extends Controller
             'overview' => $overview,
             'alerts' => $alerts,
             'alertDetail' => $alertDetail,
+            'adminNotifications' => $request->user()
+                ->notifications()
+                ->where('type', AdminTravelerIssueReceived::class)
+                ->latest()
+                ->limit(5)
+                ->get(),
+            'unreadAdminNotificationCount' => $request->user()
+                ->unreadNotifications()
+                ->where('type', AdminTravelerIssueReceived::class)
+                ->count(),
         ]);
     }
 

@@ -13,6 +13,7 @@ use App\Models\Booking;
 use App\Models\Inquiry;
 use App\Models\Package;
 use App\Models\Review;
+use App\Models\TravelerIssue;
 use App\Models\TravelRequest;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -35,6 +36,7 @@ class AdminOverviewData
      *     open_travel_requests: int,
      *     pending_reviews: int,
      *     flagged_reviews: int,
+     *     open_traveler_issues: int,
      *     recent_activity: array<int, array{type: string, title: string, created_at: Carbon}>
      * }
      */
@@ -84,6 +86,7 @@ class AdminOverviewData
             'open_travel_requests' => TravelRequest::open()->count(),
             'pending_reviews' => Review::query()->where('status', ReviewStatus::PENDING->value)->count(),
             'flagged_reviews' => Review::query()->where('status', ReviewStatus::FLAGGED->value)->count(),
+            'open_traveler_issues' => TravelerIssue::query()->where('status', '!=', 'resolved')->count(),
             'recent_activity' => $this->recentActivity(),
         ];
     }
@@ -115,12 +118,16 @@ class AdminOverviewData
         $travelRequests = DB::table((new TravelRequest)->getTable())
             ->selectRaw('? as type, title, created_at, id', ['travel_request']);
 
+        $travelerIssues = DB::table((new TravelerIssue)->getTable())
+            ->selectRaw('? as type, subject as title, created_at, id', ['traveler_issue']);
+
         $activities = $travelers
             ->unionAll($agencies)
             ->unionAll($packages)
             ->unionAll($bookings)
             ->unionAll($inquiries)
-            ->unionAll($travelRequests);
+            ->unionAll($travelRequests)
+            ->unionAll($travelerIssues);
 
         return DB::query()
             ->fromSub($activities, 'recent_activity')
@@ -128,7 +135,7 @@ class AdminOverviewData
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->orderBy('type')
-            ->limit(6)
+            ->limit(8)
             ->get()
             ->map(fn (object $activity): array => [
                 'type' => $activity->type,

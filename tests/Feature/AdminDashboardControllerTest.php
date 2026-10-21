@@ -147,6 +147,11 @@ class AdminDashboardControllerTest extends TestCase
             'comment' => 'A review reported for moderation.',
             'status' => ReviewStatus::FLAGGED,
         ]);
+        $traveler->travelerIssues()->create([
+            'type' => 'complaint',
+            'subject' => 'Traveler support case',
+            'description' => 'A traveler complaint requiring administrator follow-up.',
+        ]);
         TravelRequest::factory()->for($traveler, 'traveler')->create([
             'title' => 'Family trip request',
         ]);
@@ -163,6 +168,7 @@ class AdminDashboardControllerTest extends TestCase
             ->assertSee('data-booking-status-empty', false)
             ->assertSee('data-attention-count="pending-verifications">1</span>', false)
             ->assertSee('data-attention-count="flagged-reviews">1</span>', false)
+            ->assertSee('data-attention-count="open-traveler-issues">1</span>', false)
             ->assertSee('data-attention-count="open-inquiries">1</span>', false)
             ->assertSee('data-attention-count="pending-reviews">1</span>', false)
             ->assertSee('data-attention-count="open-travel-requests">1</span>', false)
@@ -171,12 +177,15 @@ class AdminDashboardControllerTest extends TestCase
             ->assertSee('data-activity-type="package"', false)
             ->assertSee('data-activity-type="inquiry"', false)
             ->assertSee('data-activity-type="travel_request"', false)
+            ->assertSee('data-activity-type="traveler_issue"', false)
             ->assertSee('Alex Traveler')
             ->assertSee('North Star Travel')
             ->assertSee('Island Escape')
             ->assertSee('Safari planning request')
             ->assertSee('Family trip request')
+            ->assertSee('Traveler support case')
             ->assertSee(route('admin.dashboard.page', ['page' => 'pending_verification', 'lang' => 'en']), false)
+            ->assertSee(route('admin.dashboard.page', ['page' => 'alerts', 'lang' => 'en']), false)
             ->assertSee(route('admin.dashboard.page', ['page' => 'traveler_inquiries', 'lang' => 'en']), false)
             ->assertSee(route('admin.dashboard.page', ['page' => 'reviews_ratings', 'lang' => 'en']), false)
             ->assertSee(route('admin.dashboard.page', ['page' => 'reported_content', 'lang' => 'en']), false)

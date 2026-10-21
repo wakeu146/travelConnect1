@@ -15,6 +15,7 @@
                         'booking' => [__('messages.admin_overview.activity_booking'), 'all_bookings', 'calendar'],
                         'inquiry' => [__('messages.admin_overview.activity_inquiry'), 'traveler_inquiries', 'message'],
                         'travel_request' => [__('messages.admin_overview.activity_travel_request'), 'new_requests', 'clipboard'],
+                        'traveler_issue' => [__('messages.admin_overview.activity_traveler_issue'), 'alerts', 'message'],
                     };
                 @endphp
                 <li>

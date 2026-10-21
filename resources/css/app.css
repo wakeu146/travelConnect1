@@ -1647,6 +1647,44 @@ input:not([type='checkbox']):not([type='radio']) {
     color: var(--admin-active-text);
 }
 
+.admin-notification-count {
+    border: 2px solid var(--admin-surface);
+    background: var(--admin-accent);
+    color: #ffffff;
+}
+
+.admin-notification-icon {
+    background: var(--admin-active-bg);
+    color: var(--admin-active-text);
+}
+
+.admin-notification-item {
+    color: var(--admin-muted);
+    transition: background-color 140ms ease;
+}
+
+.admin-notification-item:hover,
+.admin-notification-item.is-unread {
+    background: var(--admin-surface-soft);
+}
+
+.admin-notification-item:hover .admin-heading {
+    color: var(--admin-accent);
+}
+
+.admin-notification-unread-dot {
+    background: var(--admin-accent);
+}
+
+.admin-notification-mark-read {
+    color: var(--admin-accent);
+}
+
+.admin-notification-mark-read:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
 .admin-avatar {
     background: var(--admin-active-bg);
     color: var(--admin-active-text);

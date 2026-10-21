@@ -9,6 +9,14 @@
             'page' => 'reported_content',
         ],
         [
+            'key' => 'open-traveler-issues',
+            'count' => $overview['open_traveler_issues'],
+            'label' => __('messages.admin_overview.open_traveler_issues'),
+            'description' => __('messages.admin_overview.open_traveler_issues_description'),
+            'icon' => 'message',
+            'page' => 'alerts',
+        ],
+        [
             'key' => 'pending-verifications',
             'count' => $overview['pending_verifications'],
             'label' => __('messages.admin_overview.pending_verifications'),

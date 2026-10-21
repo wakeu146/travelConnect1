@@ -11,6 +11,7 @@ use App\Enums\VerificationStatus;
 use App\Models\Agency;
 use App\Models\Booking;
 use App\Models\BookingPaymentTransaction;
+use App\Models\IntegrationFailure;
 use App\Models\Package;
 use App\Models\PackageAvailability;
 use App\Models\Review;
@@ -37,7 +38,10 @@ class AdminAlertsControllerTest extends TestCase
     public function test_verified_admin_sees_real_alerts_and_can_filter_the_queue(): void
     {
         $admin = $this->actAsVerifiedAdmin();
-        $agency = Agency::factory()->create(['company_name' => 'Blue Horizon Travel']);
+        $agency = Agency::factory()->create([
+            'company_name' => 'Blue Horizon Travel',
+            'created_at' => now()->subHours(25),
+        ]);
         $traveler = User::factory()->create();
         Review::factory()->for($agency)->for($traveler)->create([
             'comment' => 'Flagged review that should not match the agency filter.',
@@ -80,20 +84,29 @@ class AdminAlertsControllerTest extends TestCase
             'exception' => 'PRIVATE_EXCEPTION_STACK',
             'failed_at' => now(),
         ]);
-        DB::table('admin_login_events')->insert([
-            'user_id' => $admin->id,
-            'email' => $admin->email,
-            'ip_address' => '192.0.2.10',
-            'outcome' => 'blocked',
-            'failed_step' => 'password_lockout',
-            'created_at' => now(),
+        foreach (range(1, 5) as $attempt) {
+            DB::table('admin_login_events')->insert([
+                'user_id' => $admin->id,
+                'email' => $admin->email,
+                'ip_address' => '192.0.2.10',
+                'outcome' => 'password_failed',
+                'failed_step' => 'password',
+                'created_at' => now()->subSeconds(6 - $attempt),
+            ]);
+        }
+        $integrationFailure = IntegrationFailure::query()->create([
+            'integration' => 'google_oauth',
+            'operation' => 'sign_in_callback',
+            'safe_message' => __('messages.admin_alerts.integration_messages.google_oauth_failure'),
+            'exception_class' => 'RuntimeException',
         ]);
 
         $allAlertsResponse = $this->get(route('admin.dashboard.page', ['page' => 'alerts']));
         $allAlertsResponse->assertSee('Blue Horizon Travel')
-            ->assertSee('payment-ref-test')
             ->assertSee('job-visible-id')
             ->assertSee($admin->email)
+            ->assertSee('google_oauth')
+            ->assertDontSee('payment-ref-test')
             ->assertDontSee('PRIVATE_JOB_PAYLOAD')
             ->assertDontSee('PRIVATE_EXCEPTION_STACK');
 
@@ -103,13 +116,13 @@ class AdminAlertsControllerTest extends TestCase
             'source_id' => $agency->id,
         ]))->assertSee(__('messages.admin_alerts.reasons.agency_verification'));
 
-        $paymentTransaction = BookingPaymentTransaction::query()->firstOrFail();
         $this->get(route('admin.dashboard.page', [
             'page' => 'alerts',
-            'source' => 'failed_payment',
-            'source_id' => $paymentTransaction->id,
+            'source' => 'integration_failure',
+            'source_id' => $integrationFailure->id,
         ]))->assertSee(__('messages.admin_alerts.reason_heading'))
-            ->assertSee('Provider declined payment');
+            ->assertSee(__('messages.admin_alerts.integration_messages.google_oauth_failure'))
+            ->assertSee('RuntimeException');
 
         $response = $this->get(route('admin.dashboard.page', [
             'page' => 'alerts',
@@ -121,16 +134,56 @@ class AdminAlertsControllerTest extends TestCase
             ->assertSee('Blue Horizon Travel')
             ->assertDontSee('Flagged review that should not match');
 
-        $blockedEvent = DB::table('admin_login_events')->where('outcome', 'blocked')->first();
+        $latestEvent = DB::table('admin_login_events')->orderByDesc('id')->first();
         $this->get(route('admin.dashboard.page', [
             'page' => 'alerts',
-            'source' => 'admin_login_event',
-            'source_id' => $blockedEvent->id,
+            'source' => 'login_burst',
+            'source_id' => $latestEvent->id,
         ]))->assertSee('data-alert-severity="high"', false)
-            ->assertSee(__('messages.admin_alerts.reasons.suspicious_activity', [
-                'outcome' => __('messages.admin_alerts.login_outcomes.blocked'),
-                'step' => __('messages.admin_alerts.login_steps.password_lockout'),
+            ->assertSee(__('messages.admin_alerts.reasons.login_burst', [
+                'count' => 5,
             ]));
+    }
+
+    public function test_only_verifications_older_than_twenty_four_hours_appear_as_alerts(): void
+    {
+        $admin = $this->actAsVerifiedAdmin();
+        Agency::factory()->create([
+            'company_name' => 'Overdue verification',
+            'verification_status' => VerificationStatus::PENDING,
+            'created_at' => now()->subHours(25),
+        ]);
+        Agency::factory()->create([
+            'company_name' => 'Recent verification',
+            'verification_status' => VerificationStatus::PENDING,
+            'created_at' => now()->subHours(23),
+        ]);
+        foreach (range(1, 4) as $attempt) {
+            DB::table('admin_login_events')->insert([
+                'user_id' => $admin->id,
+                'email' => 'quiet-account@example.com',
+                'ip_address' => '192.0.2.11',
+                'outcome' => 'password_failed',
+                'failed_step' => 'password',
+                'created_at' => now()->subSeconds(5 - $attempt),
+            ]);
+        }
+        foreach (range(1, 5) as $attempt) {
+            DB::table('admin_login_events')->insert([
+                'user_id' => $admin->id,
+                'email' => 'email-delivery@example.com',
+                'ip_address' => '192.0.2.12',
+                'outcome' => 'blocked',
+                'failed_step' => 'email_delivery',
+                'created_at' => now()->subSeconds(6 - $attempt),
+            ]);
+        }
+
+        $this->get(route('admin.dashboard.page', ['page' => 'alerts']))
+            ->assertSee('Overdue verification')
+            ->assertDontSee('Recent verification')
+            ->assertDontSee('quiet-account@example.com')
+            ->assertDontSee('email-delivery@example.com');
     }
 
     public function test_alert_detail_escapes_source_content_and_does_not_expose_job_payloads(): void
@@ -185,6 +238,7 @@ class AdminAlertsControllerTest extends TestCase
         $admin = $this->actAsVerifiedAdmin();
         $agency = Agency::factory()->create([
             'verification_status' => VerificationStatus::PENDING,
+            'created_at' => now()->subHours(25),
         ]);
 
         $this->post(route('admin.alerts.acknowledge', [
@@ -233,6 +287,58 @@ class AdminAlertsControllerTest extends TestCase
         $this->assertDatabaseHas('agencies', [
             'id' => $agency->id,
             'verification_status' => VerificationStatus::PENDING->value,
+        ]);
+    }
+
+    public function test_acknowledging_and_resolving_a_traveler_issue_updates_its_status_and_audit(): void
+    {
+        $admin = $this->actAsVerifiedAdmin();
+        $traveler = User::factory()->create();
+        $issue = $traveler->travelerIssues()->create([
+            'type' => 'complaint',
+            'subject' => 'Agency did not respond',
+            'description' => 'I have not received any response from the agency.',
+        ]);
+
+        $this->get(route('admin.dashboard.page', [
+            'page' => 'alerts',
+            'source' => 'traveler_issue',
+            'source_id' => $issue->id,
+        ]))->assertSee(__('messages.admin_alerts.categories.complaint'))
+            ->assertSee('I have not received any response from the agency.');
+
+        $this->post(route('admin.alerts.acknowledge', [
+            'source' => 'traveler_issue',
+            'sourceId' => $issue->id,
+        ]))->assertRedirect();
+
+        $this->assertDatabaseHas('traveler_issues', [
+            'id' => $issue->id,
+            'status' => 'in_review',
+        ]);
+        $this->assertDatabaseHas('admin_alert_actions', [
+            'admin_alert_id' => DB::table('admin_alerts')
+                ->where('source_type', 'traveler_issue')
+                ->where('source_id', $issue->id)
+                ->value('id'),
+            'action' => 'acknowledge',
+            'actor_id' => $admin->id,
+        ]);
+
+        $this->post(route('admin.alerts.resolve', [
+            'source' => 'traveler_issue',
+            'sourceId' => $issue->id,
+        ]))->assertRedirect();
+
+        $this->assertDatabaseHas('traveler_issues', [
+            'id' => $issue->id,
+            'status' => 'resolved',
+        ]);
+        $this->assertDatabaseHas('admin_alert_actions', [
+            'action' => 'resolve',
+            'status_before' => 'acknowledged',
+            'status_after' => 'resolved',
+            'actor_id' => $admin->id,
         ]);
     }
 

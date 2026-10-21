@@ -42,7 +42,7 @@
                 <label for="alerts-category" class="text-xs font-semibold admin-heading">{{ __('messages.admin_alerts.category') }}</label>
                 <select id="alerts-category" name="category" class="admin-input min-h-10 w-full min-w-0 border px-3 text-sm">
                     <option value="all">{{ __('messages.admin_alerts.all_categories') }}</option>
-                    @foreach (['agency_verification', 'reported_content', 'failed_payment', 'failed_job', 'suspicious_activity'] as $category)
+                    @foreach (['agency_verification', 'reported_content', 'complaint', 'booking_dispute', 'failed_job', 'suspicious_activity', 'integration_error'] as $category)
                         <option value="{{ $category }}" @selected(request('category', 'all') === $category)>{{ __('messages.admin_alerts.categories.'.$category) }}</option>
                     @endforeach
                 </select>

@@ -92,6 +92,12 @@
                         </section>
                     @endif
                 @endif
+
+                @if (auth()->user()->isTraveler())
+                    <div class="mt-8 border-t border-[#e7eceb] pt-6">
+                        <a href="{{ route('account.issues.create', ['type' => 'booking_dispute', 'booking_id' => $booking->id, 'lang' => app()->getLocale()]) }}" class="inline-flex items-center justify-center rounded-xl border border-[#dbe3e5] px-4 py-2.5 text-sm font-semibold text-[#173042] hover:border-[#e76f51] hover:text-[#e76f51]">{{ __('messages.traveler_issues.report_booking_dispute') }}</a>
+                    </div>
+                @endif
             </div>
         </div>
     </div>

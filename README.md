@@ -33,8 +33,9 @@ This README is also the continuation handoff for future AI agents. Read the curr
 * English/French locale switching using the `?lang=en` or `?lang=fr` query parameter
 * Responsive account shell with mobile navigation, notification bell, and persistent light/dark theme
 * Admin dashboard with a real-record platform overview, current status summaries, attention queue, and recent activity
-* Admin Alerts queue for pending agency verification, flagged reviews, failed payments, failed jobs, and suspicious admin login events
-* Admin alert search, filters, pagination, record details, bilingual reason summaries, and audited acknowledge/resolve actions
+* Admin Alerts queue for overdue agency verification, flagged reviews, traveler complaints and booking disputes, failed jobs, suspicious login bursts, and Google/email integration errors
+* Traveler-owned complaint and booking-dispute intake with private case tracking and English/French status labels
+* Admin alert search, category/severity/status filters, pagination, source details, bilingual reason summaries, and audited acknowledge/resolve actions that move traveler cases through review
 
 ## Technology
 
@@ -78,14 +79,15 @@ Focused package, profile, phone-validation, and booking tests passed during this
 
 The admin dashboard's **Main → Overview** and **Main → Alerts** pages now use current application records instead of placeholder panels.
 
-* **Overview:** shows registered travelers, agencies by verification status, published packages, bookings by status, recent activity, and a prioritized attention list for pending verification, bookings, inquiries, reviews, and travel requests. Historical charts remain in Business & Insights → App Analysis.
-* **Alerts queue:** brings together pending agency verifications, flagged reviews, failed payment transactions, failed queue jobs, and failed or blocked admin login events. Admins can search and filter by status, severity, and category, then open each source record for context and its available reason.
-* **Alert actions:** acknowledge and resolve are available from the opened record. They update only the alert state; each successful transition is recorded with the acting admin and timestamp. They do not approve or otherwise mutate the underlying agency, review, payment, job, or login-event record.
-* **Source coverage:** complaints, booking disputes, and integration errors are not shown as alerts because this application does not yet have dedicated tracked records for those categories.
+* **Overview:** shows registered travelers, agencies by verification status, published packages, bookings by status, recent activity, and a prioritized attention list that includes unresolved traveler complaints and disputes. Historical charts remain in Business & Insights → App Analysis.
+* **Alerts queue:** combines agency verifications pending for at least 24 hours, flagged reviews, traveler complaints and booking disputes, failed jobs, Google/email integration failures, and login bursts of at least five failures for one account and IP in 10 minutes. Payment records are not treated as provider failures because online payment processing is not configured.
+* **Traveler cases:** authenticated travelers can submit a general complaint or a booking dispute linked only to their own booking, then see the case status from their account. Admins review the full case from its alert detail.
+* **Alert actions:** acknowledge and resolve are available from the opened alert detail. Actions are audited with the acting admin and timestamp. For a traveler case, acknowledge moves it to in review and resolve closes it; other sources are not changed.
+* **Integration error safety:** only generic failure explanations and exception class names are saved. OAuth tokens, raw exception messages, and sensitive payloads are not added to the queue.
 * **Localization and appearance:** Overview and Alerts labels are available in English and French. The Overview uses square-cornered panels and the existing admin theme colors.
-* **Database:** the `admin_alerts` and `admin_alert_actions` tables are created by their migrations. Run `php artisan migrate` after updating an environment before using alert status actions there.
+* **Database:** the `admin_alerts`, `admin_alert_actions`, `traveler_issues`, and `integration_failures` tables are created by migrations. Run `php artisan migrate` after updating an environment before using these workflows.
 
-**Verification:** the focused admin Overview and Alerts feature tests passed (11 tests, 560 assertions), as did the admin sign-in-to-Overview feature test (1 test, 16 assertions). `npm run build`, Pint, and `git diff --check` passed.
+**Verification:** focused admin Overview, Alerts, traveler-issue, Google OAuth, and email-factor feature tests cover the expanded case and alert workflows.
 
 ### Remembered-session dashboard fix (2026-10-19)
 

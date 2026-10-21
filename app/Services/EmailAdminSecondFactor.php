@@ -5,9 +5,11 @@ namespace App\Services;
 use App\Contracts\AdminSecondFactor;
 use App\Mail\AdminLoginCodeMail;
 use App\Models\AdminLoginChallenge;
+use App\Models\IntegrationFailure;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Throwable;
 
 class EmailAdminSecondFactor implements AdminSecondFactor
 {
@@ -32,11 +34,22 @@ class EmailAdminSecondFactor implements AdminSecondFactor
             'invalidated_at' => null,
         ])->save();
 
-        Mail::to($admin->email)->send(new AdminLoginCodeMail(
-            $admin->name,
-            $code,
-            (int) config('admin.login_code_expires_minutes'),
-        ));
+        try {
+            Mail::to($admin->email)->send(new AdminLoginCodeMail(
+                $admin->name,
+                $code,
+                (int) config('admin.login_code_expires_minutes'),
+            ));
+        } catch (Throwable $exception) {
+            IntegrationFailure::query()->create([
+                'integration' => 'email',
+                'operation' => 'admin_second_factor_delivery',
+                'safe_message' => __('messages.admin_alerts.integration_messages.email_delivery_failure'),
+                'exception_class' => $exception::class,
+            ]);
+
+            throw $exception;
+        }
 
         return $challenge;
     }

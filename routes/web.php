@@ -14,6 +14,7 @@ use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\InquiryController;
 use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\TravelerIssueController;
 use App\Http\Middleware\PreventAuthenticatedWorkspaceCaching;
 use App\Models\Agency;
 use App\Models\User;
@@ -248,6 +249,12 @@ Route::get('/dashboard', function () {
 })->middleware(['auth', PreventAuthenticatedWorkspaceCaching::class])->name('dashboard');
 Route::get('/account/bookings', [BookingController::class, 'index'])->middleware('auth')->name('account.bookings');
 Route::post('/account/bookings', [BookingController::class, 'storeFromAccount'])->middleware('auth')->name('account.bookings.store');
+Route::middleware(['auth', PreventAuthenticatedWorkspaceCaching::class])->prefix('account/issues')->name('account.issues.')->group(function (): void {
+    Route::get('/', [TravelerIssueController::class, 'index'])->name('index');
+    Route::get('/create', [TravelerIssueController::class, 'create'])->name('create');
+    Route::post('/', [TravelerIssueController::class, 'store'])->middleware('throttle:5,1')->name('store');
+    Route::get('/{issue}', [TravelerIssueController::class, 'show'])->whereNumber('issue')->name('show');
+});
 Route::view('/settings', 'auth.settings')->middleware('auth')->name('settings');
 Route::put('/settings/profile', [AuthController::class, 'updateProfile'])->middleware('auth')->name('settings.profile');
 Route::put('/settings/password', [AuthController::class, 'updatePassword'])->middleware('auth')->name('settings.password');

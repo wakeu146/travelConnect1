@@ -218,6 +218,41 @@ class GoogleAuthControllerTest extends TestCase
         $this->assertSame(1, User::query()->where('email', 'new.person@example.net')->count());
     }
 
+    public function test_google_callback_failure_creates_a_safe_integration_alert(): void
+    {
+        $provider = Mockery::mock(Provider::class);
+        $provider->shouldReceive('user')
+            ->once()
+            ->andThrow(new \RuntimeException('OAuth failed with access_token=secret-value'));
+        Socialite::shouldReceive('driver')
+            ->once()
+            ->with('google')
+            ->andReturn($provider);
+
+        $this->get(route('google.callback'))
+            ->assertRedirect(route('login'))
+            ->assertSessionHasErrors('email');
+
+        $this->assertDatabaseHas('integration_failures', [
+            'integration' => 'google_oauth',
+            'operation' => 'sign_in_callback',
+            'safe_message' => __('messages.admin_alerts.integration_messages.google_oauth_failure'),
+            'exception_class' => \RuntimeException::class,
+        ]);
+        $this->assertDatabaseMissing('integration_failures', [
+            'safe_message' => 'OAuth failed with access_token=secret-value',
+        ]);
+    }
+
+    public function test_google_user_cancellation_does_not_create_an_integration_alert(): void
+    {
+        $this->get(route('google.callback', ['error' => 'access_denied']))
+            ->assertRedirect(route('login'))
+            ->assertSessionHasErrors('email');
+
+        $this->assertDatabaseCount('integration_failures', 0);
+    }
+
     /** @param array<string, mixed> $attributes */
     private function fakeGoogleUser(array $attributes): void
     {

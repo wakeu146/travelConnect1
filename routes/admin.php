@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AdminAlertsController;
 use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\AdminLoginVerificationController;
+use App\Http\Controllers\Admin\AdminNotificationController;
 use App\Http\Controllers\Admin\AdminTotpEnrollmentController;
 use App\Http\Controllers\AuthController;
 use App\Http\Middleware\EnsureAdminSession;
@@ -20,6 +21,14 @@ Route::get('/dashboard/sections/{section}', [AdminDashboardController::class, 's
 Route::get('/dashboard/pages/{page}', [AdminDashboardController::class, 'page'])
     ->middleware(['auth', EnsureAdminSession::class])
     ->name('dashboard.page');
+
+Route::get('/notifications/{notification}', [AdminNotificationController::class, 'open'])
+    ->middleware(['auth', EnsureAdminSession::class])
+    ->name('notifications.open');
+
+Route::patch('/notifications/read-all', [AdminNotificationController::class, 'markAllRead'])
+    ->middleware(['auth', EnsureAdminSession::class])
+    ->name('notifications.read-all');
 
 Route::post('/dashboard/alerts/{source}/{sourceId}/acknowledge', [AdminAlertsController::class, 'acknowledge'])
     ->whereNumber('sourceId')

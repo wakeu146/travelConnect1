@@ -98,24 +98,63 @@
                     <div class="relative">
                         <button
                             type="button"
-                            class="admin-icon-button flex h-9 w-9 items-center justify-center rounded-lg"
+                            class="admin-icon-button relative flex h-9 w-9 items-center justify-center rounded-lg"
                             aria-label="{{ __('messages.admin_nav.notifications') }}"
                             aria-controls="admin-notifications"
                             aria-expanded="false"
                             data-admin-popover-toggle="admin-notifications"
                         >
                             <x-admin.icon name="bell" class="h-4.5 w-4.5" />
-                        </button>
-                        <section id="admin-notifications" class="admin-popover absolute right-0 top-full z-50 mt-2 hidden w-72 rounded-xl border p-5 shadow-xl sm:w-80" aria-label="{{ __('messages.admin_nav.notifications') }}" data-admin-popover>
-                            <div class="grid justify-items-center gap-3 py-3 text-center">
-                                <span class="admin-empty-icon flex h-10 w-10 items-center justify-center rounded-xl">
-                                    <x-admin.icon name="inbox" class="h-5 w-5" />
+                            @if ($unreadAdminNotificationCount > 0)
+                                <span data-admin-notification-count="{{ $unreadAdminNotificationCount }}" class="admin-notification-count absolute -right-1.5 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold" aria-label="{{ __('messages.admin_nav.unread_notification_count', ['count' => $unreadAdminNotificationCount]) }}">
+                                    {{ $unreadAdminNotificationCount > 99 ? '99+' : $unreadAdminNotificationCount }}
                                 </span>
+                            @endif
+                        </button>
+                        <section id="admin-notifications" class="admin-popover absolute right-0 top-full z-50 mt-2 hidden w-[min(22rem,calc(100vw-1.5rem))] rounded-xl border p-3 shadow-xl sm:p-4" aria-label="{{ __('messages.admin_nav.notifications') }}" data-admin-popover>
+                            <div class="flex items-center justify-between gap-3 border-b pb-3 admin-border">
                                 <div class="grid gap-1">
-                                    <h2 class="text-sm font-bold admin-heading">{{ __('messages.admin_nav.notifications_empty') }}</h2>
-                                    <p class="text-xs leading-5 admin-muted">{{ __('messages.admin_nav.notifications_not_connected') }}</p>
+                                    <h2 class="text-sm font-bold admin-heading">{{ __('messages.admin_nav.notifications') }}</h2>
+                                    <p class="text-xs admin-muted">{{ __('messages.admin_nav.unread_notification_count', ['count' => $unreadAdminNotificationCount]) }}</p>
                                 </div>
+                                @if ($unreadAdminNotificationCount > 0)
+                                    <form action="{{ route('admin.notifications.read-all', ['lang' => app()->getLocale()]) }}" method="POST">
+                                        @csrf
+                                        @method('PATCH')
+                                        <button type="submit" class="admin-notification-mark-read text-xs font-semibold">{{ __('messages.admin_nav.mark_all_read') }}</button>
+                                    </form>
+                                @endif
                             </div>
+                            @forelse ($adminNotifications as $notification)
+                                @php
+                                    $notificationData = $notification->data;
+                                @endphp
+                                <a href="{{ route('admin.notifications.open', ['notification' => $notification->id, 'lang' => app()->getLocale()]) }}" class="admin-notification-item flex items-start gap-3 border-b px-2 py-3 last:border-b-0 admin-border {{ is_null($notification->read_at) ? 'is-unread' : '' }}">
+                                    <span class="admin-notification-icon mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg">
+                                        <x-admin.icon name="flag" class="h-4 w-4" />
+                                    </span>
+                                    <span class="grid min-w-0 flex-1 gap-1">
+                                        <span class="flex items-center justify-between gap-2">
+                                            <span class="text-xs font-bold admin-heading">{{ __('messages.admin_nav.traveler_issue_notification_title', ['type' => __('messages.admin_alerts.categories.'.($notificationData['issue_type'] ?? 'complaint'))]) }}</span>
+                                            @if (is_null($notification->read_at))
+                                                <span class="admin-notification-unread-dot h-2 w-2 shrink-0 rounded-full" aria-label="{{ __('messages.admin_nav.unread') }}"></span>
+                                            @endif
+                                        </span>
+                                        <span class="break-words text-xs leading-5 admin-muted">{{ $notificationData['subject'] ?? '' }}</span>
+                                        <span class="text-[10px] admin-muted">{{ $notification->created_at->locale(app()->getLocale())->diffForHumans() }} · {{ __('messages.admin_nav.view_alert') }}</span>
+                                    </span>
+                                </a>
+                            @empty
+                                <div class="grid justify-items-center gap-3 py-5 text-center">
+                                    <span class="admin-empty-icon flex h-10 w-10 items-center justify-center rounded-xl">
+                                        <x-admin.icon name="inbox" class="h-5 w-5" />
+                                    </span>
+                                    <div class="grid gap-1">
+                                        <h3 class="text-sm font-bold admin-heading">{{ __('messages.admin_nav.notifications_empty') }}</h3>
+                                        <p class="text-xs leading-5 admin-muted">{{ __('messages.admin_nav.notifications_empty_description') }}</p>
+                                    </div>
+                                </div>
+                            @endforelse
                         </section>
                     </div>
 
