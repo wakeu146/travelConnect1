@@ -68,19 +68,72 @@ class AdminDashboardControllerTest extends TestCase
                 ? route('admin.dashboard', ['lang' => 'en'])
                 : route('admin.dashboard.section', ['section' => $sectionKey, 'lang' => 'en']);
 
-            $sectionResponse = $this->get($sectionUrl)
-                ->assertOk()
-                ->assertSee(__('messages.admin_nav.sections.'.$sectionKey))
-                ->assertSee('aria-current="page"', false)
-                ->assertSee(__('messages.admin_nav.switch_language_to_english'))
-                ->assertSee(__('messages.admin_nav.switch_language_to_french'))
-                ->assertSee('data-admin-locale="en"', false)
-                ->assertSee('data-admin-locale="fr"', false);
+            $sectionResponse = $this->get($sectionUrl);
 
             if ($sectionKey === 'main') {
-                $sectionResponse->assertSee('data-admin-overview', false);
+                $sectionResponse->assertOk()
+                    ->assertSee(__('messages.admin_nav.sections.'.$sectionKey))
+                    ->assertSee('aria-current="page"', false)
+                    ->assertSee(__('messages.admin_nav.switch_language_to_english'))
+                    ->assertSee(__('messages.admin_nav.switch_language_to_french'))
+                    ->assertSee('data-admin-locale="en"', false)
+                    ->assertSee('data-admin-locale="fr"', false)
+                    ->assertSee('data-admin-overview', false);
             } else {
-                $sectionResponse->assertSee(__('messages.admin_nav.page_in_preparation'));
+                $sectionResponse->assertOk()
+                    ->assertSee(__('messages.admin_nav.sections.'.$sectionKey))
+                    ->assertSee('data-admin-section-hub="'.$sectionKey.'"', false)
+                    ->assertSee(__('messages.admin_nav.section_hub_intros.'.$sectionKey))
+                    ->assertSee('aria-current="page"', false)
+                    ->assertSee(__('messages.admin_nav.switch_language_to_english'))
+                    ->assertSee(__('messages.admin_nav.switch_language_to_french'))
+                    ->assertSee('data-admin-locale="en"', false)
+                    ->assertSee('data-admin-locale="fr"', false);
+
+                foreach ($section['groups'] as $group) {
+                    $groupPages = $group['pages'] ?? [$group['page']];
+                    $groupKey = $group['label'] ?? $group['page'];
+                    $groupLabel = isset($group['label'])
+                        ? __('messages.admin_nav.groups.'.$group['label'])
+                        : __('messages.admin_nav.pages.'.$group['page']);
+
+                    $sectionResponse->assertSee('data-admin-section-card="'.$groupKey.'"', false)
+                        ->assertSee($groupLabel)
+                        ->assertSee(__('messages.admin_nav.section_hub_descriptions.'.$groupKey))
+                        ->assertSee(route('admin.dashboard.page', [
+                            'page' => $groupPages[0],
+                            'lang' => 'en',
+                        ]), false);
+                }
+
+                $frenchSectionResponse = $this->get(route('admin.dashboard.section', [
+                    'section' => $sectionKey,
+                    'lang' => 'fr',
+                ]))
+                    ->assertOk()
+                    ->assertSee(__('messages.admin_nav.sections.'.$sectionKey, [], 'fr'))
+                    ->assertSee('data-admin-section-hub="'.$sectionKey.'"', false)
+                    ->assertSee(__('messages.admin_nav.section_hub_intros.'.$sectionKey, [], 'fr'));
+
+                foreach ($section['groups'] as $group) {
+                    $groupPages = $group['pages'] ?? [$group['page']];
+                    $groupKey = $group['label'] ?? $group['page'];
+                    $groupLabel = isset($group['label'])
+                        ? __('messages.admin_nav.groups.'.$group['label'], [], 'fr')
+                        : __('messages.admin_nav.pages.'.$group['page'], [], 'fr');
+
+                    $frenchSectionResponse->assertSee('data-admin-section-card="'.$groupKey.'"', false)
+                        ->assertSee($groupLabel)
+                        ->assertSee(__('messages.admin_nav.section_hub_descriptions.'.$groupKey, [], 'fr'))
+                        ->assertSee(route('admin.dashboard.page', [
+                            'page' => $groupPages[0],
+                            'lang' => 'fr',
+                        ]), false);
+                }
+
+                if ($sectionKey === 'platform_management') {
+                    $sectionResponse->assertDontSee('data-admin-agency-directory', false);
+                }
             }
 
             foreach ($section['groups'] as $group) {
@@ -96,6 +149,14 @@ class AdminDashboardControllerTest extends TestCase
                     } elseif ($page === 'alerts') {
                         $pageResponse->assertSee('data-admin-alerts', false)
                             ->assertSee('data-alerts-empty', false);
+                    } elseif (in_array($page, [
+                        'all_agencies',
+                        'pending_verification',
+                        'verified_agencies',
+                        'unverified_agencies',
+                        'suspended_agencies',
+                    ], true)) {
+                        $pageResponse->assertSee('data-admin-agency-directory', false);
                     } else {
                         $pageResponse->assertSee(__('messages.admin_nav.page_in_preparation'));
                     }

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\DocumentStatus;
 use App\Enums\ReviewStatus;
 use App\Enums\VerificationStatus;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -21,7 +22,12 @@ class Agency extends Model
 
     protected function casts(): array
     {
-        return ['verification_status' => VerificationStatus::class, 'trust_score' => 'integer'];
+        return [
+            'verification_status' => VerificationStatus::class,
+            'trust_score' => 'integer',
+            'suspended_at' => 'datetime',
+            'verified_at' => 'datetime',
+        ];
     }
 
     public function owner(): BelongsTo
@@ -84,6 +90,11 @@ class Agency extends Model
         return $this->hasMany(TrustScoreLog::class);
     }
 
+    public function moderationEvents(): HasMany
+    {
+        return $this->hasMany(AgencyModerationEvent::class);
+    }
+
     public function recalculateTrustScoreFromPublishedReviews(): int
     {
         $publishedReviews = $this->reviews()->where('status', ReviewStatus::PUBLISHED->value);
@@ -134,10 +145,11 @@ class Agency extends Model
         return $url.(str_contains($url, '?') ? '&' : '?').http_build_query(['v' => $version]);
     }
 
-    public function scopeVerified($query)
+    public function scopeVerified(Builder $query): Builder
     {
         return $query
             ->where('verification_status', VerificationStatus::VERIFIED)
+            ->where('operating_status', 'active')
             ->whereHas('documents', fn ($documentQuery) => $documentQuery->where('status', DocumentStatus::APPROVED));
     }
     // Example: Agency::with(['countries', 'services'])->withAvg(['reviews' => fn ($q) => $q->where('status', 'published')], 'rating')->get();

@@ -19,7 +19,7 @@
 
             @if (! $canCreatePackage)
                 <div class="agency-state-warning mb-6 rounded-xl border px-4 py-3 text-sm font-medium" role="alert">
-                    {{ $errors->first('verification') ?: __('messages.agency_must_be_verified_to_create_packages') }}
+                    {{ $errors->first('verification') ?: ($agency->operating_status === 'suspended' ? __('messages.agency_suspended_cannot_create_packages') : __('messages.agency_must_be_verified_to_create_packages')) }}
                 </div>
             @elseif ($errors->has('verification'))
                 <div class="agency-state-danger mb-6 rounded-xl border px-4 py-3 text-sm font-medium" role="alert">

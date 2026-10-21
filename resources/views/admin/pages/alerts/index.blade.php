@@ -95,8 +95,18 @@
                                     'medium' => 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200',
                                     default => 'border-slate-500/40 bg-slate-500/10 text-slate-700 dark:text-slate-200',
                                 };
+                                $statusClasses = match ($alert->status) {
+                                    'resolved' => 'border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200',
+                                    'acknowledged' => 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200',
+                                    default => 'border-rose-500/40 bg-rose-500/10 text-rose-800 dark:text-rose-200',
+                                };
+                                $statusCellClasses = match ($alert->status) {
+                                    'resolved' => 'bg-emerald-50/80 dark:bg-emerald-950/30',
+                                    'acknowledged' => 'bg-amber-50/80 dark:bg-amber-950/30',
+                                    default => 'bg-rose-50/80 dark:bg-rose-950/30',
+                                };
                             @endphp
-                            <tr class="align-top">
+                            <tr class="align-top {{ $alert->status === 'resolved' ? 'bg-emerald-500/5' : '' }}">
                                 <td class="max-w-md px-4 py-4">
                                     <a href="{{ $detailUrl }}" class="break-words font-semibold admin-heading underline decoration-transparent underline-offset-4 hover:decoration-current focus-visible:decoration-current">{{ $alert->title }}</a>
                                     <p class="mt-1 break-words text-xs leading-5 admin-muted">{{ $alert->related_label }}</p>
@@ -105,7 +115,11 @@
                                 <td class="px-4 py-4">
                                     <span class="inline-flex border px-2 py-1 text-xs font-bold {{ $severityClasses }}">{{ __('messages.admin_alerts.severities.'.$alert->severity) }}</span>
                                 </td>
-                                <td class="px-4 py-4 admin-muted">{{ __('messages.admin_alerts.statuses.'.$alert->status) }}</td>
+                                <td class="px-4 py-4 {{ $statusCellClasses }}" data-alert-status-cell="{{ $alert->status }}">
+                                    <span class="admin-badge inline-flex border px-2 py-1 text-xs font-bold {{ $statusClasses }}" data-alert-status="{{ $alert->status }}">
+                                        {{ __('messages.admin_alerts.statuses.'.$alert->status) }}
+                                    </span>
+                                </td>
                                 <td class="whitespace-nowrap px-4 py-4 admin-muted">
                                     <time datetime="{{ \Illuminate\Support\Carbon::parse($alert->created_at)->toIso8601String() }}">{{ \Illuminate\Support\Carbon::parse($alert->created_at)->locale(app()->getLocale())->diffForHumans() }}</time>
                                 </td>

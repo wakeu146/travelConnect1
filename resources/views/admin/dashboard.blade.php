@@ -28,8 +28,16 @@
 
         @if ($activePage === 'overview')
             @include('admin.pages.overview.index')
+        @elseif ($activeSection !== 'main' && $activePage === null)
+            @include('admin.pages.section-hub.index')
         @elseif ($activePage === 'alerts')
             @include('admin.pages.alerts.index')
+        @elseif (in_array($activePage, ['all_agencies', 'pending_verification', 'verified_agencies', 'unverified_agencies', 'suspended_agencies'], true))
+            @if ($agencyProfile)
+                @include('admin.pages.agencies.show', ['profile' => $agencyProfile])
+            @else
+                @include('admin.pages.agencies.index', ['directory' => $agencyDirectory])
+            @endif
         @else
             <section class="admin-empty-state grid justify-items-center gap-4 border p-8 text-center sm:p-12" aria-labelledby="admin-placeholder-title">
                 <span class="admin-empty-icon flex h-12 w-12 items-center justify-center rounded-xl">

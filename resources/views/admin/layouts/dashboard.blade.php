@@ -98,13 +98,16 @@
                     <div class="relative">
                         <button
                             type="button"
-                            class="admin-icon-button relative flex h-9 w-9 items-center justify-center rounded-lg"
-                            aria-label="{{ __('messages.admin_nav.notifications') }}"
+                            class="admin-icon-button relative flex h-9 w-9 items-center justify-center rounded-lg {{ $unreadAdminSecurityNotificationCount > 0 ? 'has-security-alert' : '' }}"
+                            aria-label="{{ $unreadAdminSecurityNotificationCount > 0 ? __('messages.admin_nav.urgent_admin_security_alert') : __('messages.admin_nav.notifications') }}"
                             aria-controls="admin-notifications"
                             aria-expanded="false"
                             data-admin-popover-toggle="admin-notifications"
                         >
                             <x-admin.icon name="bell" class="h-4.5 w-4.5" />
+                            @if ($unreadAdminSecurityNotificationCount > 0)
+                                <x-admin.icon name="alert_triangle" class="admin-security-alert-indicator absolute -right-1 -top-1 h-4 w-4" />
+                            @endif
                             @if ($unreadAdminNotificationCount > 0)
                                 <span data-admin-notification-count="{{ $unreadAdminNotificationCount }}" class="admin-notification-count absolute -right-1.5 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold" aria-label="{{ __('messages.admin_nav.unread_notification_count', ['count' => $unreadAdminNotificationCount]) }}">
                                     {{ $unreadAdminNotificationCount > 99 ? '99+' : $unreadAdminNotificationCount }}
@@ -128,20 +131,31 @@
                             @forelse ($adminNotifications as $notification)
                                 @php
                                     $notificationData = $notification->data;
+                                    $isSecurityNotification = isset($notificationData['kind']);
+                                    $isAgencyDocumentNotification = $notification->type === \App\Notifications\AdminAgencyDocumentReceived::class;
                                 @endphp
-                                <a href="{{ route('admin.notifications.open', ['notification' => $notification->id, 'lang' => app()->getLocale()]) }}" class="admin-notification-item flex items-start gap-3 border-b px-2 py-3 last:border-b-0 admin-border {{ is_null($notification->read_at) ? 'is-unread' : '' }}">
+                                <a href="{{ route('admin.notifications.open', ['notification' => $notification->id, 'lang' => app()->getLocale()]) }}" data-admin-notification-type="{{ $isSecurityNotification ? 'security' : ($isAgencyDocumentNotification ? 'agency_document' : 'traveler_issue') }}" class="admin-notification-item flex items-start gap-3 border-b px-2 py-3 last:border-b-0 admin-border {{ is_null($notification->read_at) ? 'is-unread' : '' }} {{ $isSecurityNotification ? 'is-security-alert' : '' }}">
                                     <span class="admin-notification-icon mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg">
-                                        <x-admin.icon name="flag" class="h-4 w-4" />
+                                        <x-admin.icon :name="$isSecurityNotification ? 'alert_triangle' : ($isAgencyDocumentNotification ? 'file' : 'flag')" class="h-4 w-4" />
                                     </span>
                                     <span class="grid min-w-0 flex-1 gap-1">
                                         <span class="flex items-center justify-between gap-2">
-                                            <span class="text-xs font-bold admin-heading">{{ __('messages.admin_nav.traveler_issue_notification_title', ['type' => __('messages.admin_alerts.categories.'.($notificationData['issue_type'] ?? 'complaint'))]) }}</span>
+                                            <span class="text-xs font-bold admin-heading">{{ $isSecurityNotification ? __('messages.admin_nav.security_notification_title') : ($isAgencyDocumentNotification ? __('messages.admin_nav.agency_document_notification_title') : __('messages.admin_nav.traveler_issue_notification_title', ['type' => __('messages.admin_alerts.categories.'.($notificationData['issue_type'] ?? 'complaint'))])) }}</span>
+                                            @if ($isSecurityNotification)
+                                                <span class="admin-security-alert-label shrink-0 rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide">{{ __('messages.admin_nav.urgent') }}</span>
+                                            @endif
                                             @if (is_null($notification->read_at))
                                                 <span class="admin-notification-unread-dot h-2 w-2 shrink-0 rounded-full" aria-label="{{ __('messages.admin_nav.unread') }}"></span>
                                             @endif
                                         </span>
-                                        <span class="break-words text-xs leading-5 admin-muted">{{ $notificationData['subject'] ?? '' }}</span>
-                                        <span class="text-[10px] admin-muted">{{ $notification->created_at->locale(app()->getLocale())->diffForHumans() }} · {{ __('messages.admin_nav.view_alert') }}</span>
+                                        @if ($isSecurityNotification)
+                                            <span class="break-words text-xs font-semibold leading-5 admin-security-alert-text">{{ __('messages.admin_nav.security_notification_messages.'.($notificationData['kind'] ?? 'unknown_device_password')) }}</span>
+                                        @elseif ($isAgencyDocumentNotification)
+                                            <span class="break-words text-xs leading-5 admin-muted">{{ __('messages.admin_nav.agency_document_notification_body', ['agency' => $notificationData['agency_name'] ?? '', 'type' => __('messages.admin_nav.agency_document_types.'.($notificationData['document_type'] ?? 'other'))]) }}</span>
+                                        @else
+                                            <span class="break-words text-xs leading-5 admin-muted">{{ $notificationData['subject'] ?? '' }}</span>
+                                        @endif
+                                        <span class="text-[10px] admin-muted">{{ $notification->created_at->locale(app()->getLocale())->diffForHumans() }} · {{ $isAgencyDocumentNotification ? __('messages.admin_nav.view_agency_profile') : __('messages.admin_nav.view_alert') }}</span>
                                     </span>
                                 </a>
                             @empty

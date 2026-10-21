@@ -15,6 +15,7 @@ class InquiryController extends Controller
         abort_unless($request->user()?->isTraveler(), 403);
 
         $agency = Agency::whereRaw('LOWER(REPLACE(company_name, " ", "-")) = ?', [mb_strtolower($slug)])
+            ->where('operating_status', 'active')
             ->firstOrFail();
 
         $data = $request->validate([

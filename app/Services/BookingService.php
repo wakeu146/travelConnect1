@@ -6,6 +6,7 @@ use App\Enums\BookingStatus;
 use App\Enums\PackageAvailabilityStatus;
 use App\Enums\PackageStatus;
 use App\Enums\PaymentStatus;
+use App\Models\Agency;
 use App\Models\Booking;
 use App\Models\Package;
 use App\Models\PackageAvailability;
@@ -38,6 +39,16 @@ class BookingService
         }
 
         return DB::transaction(function () use ($traveler, $package, $availability, $travelerCount): Booking {
+            $agencyIsActive = Agency::query()
+                ->whereKey($package->agency_id)
+                ->where('operating_status', 'active')
+                ->lockForUpdate()
+                ->exists();
+
+            if (! $agencyIsActive) {
+                throw new \RuntimeException(__('messages.agency_suspended_cannot_book'));
+            }
+
             $availability->refresh();
 
             if ($availability->departure_date->lte(today())) {

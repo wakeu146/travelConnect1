@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\UserRole;
 use App\Mail\AdminLoginCodeMail;
 use App\Models\User;
+use App\Notifications\AdminSecurityAlertReceived;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -14,6 +15,97 @@ use Tests\TestCase;
 class AdminTotpAuthenticationTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_correct_admin_password_from_an_unrecognized_device_creates_an_urgent_alert_without_authenticating(): void
+    {
+        $admin = User::factory()->withRole(UserRole::ADMIN)->create();
+        Mail::fake();
+
+        $this->post(route('login.store'), [
+            'email' => $admin->email,
+            'password' => 'password',
+        ])->assertRedirect(route('admin.login.verify', ['lang' => 'en']));
+
+        $this->assertGuest();
+        $event = $admin->adminLoginEvents()
+            ->where('outcome', 'password_accepted')
+            ->where('failed_step', 'unknown_device_password')
+            ->firstOrFail();
+        $notification = $admin->notifications()
+            ->where('type', AdminSecurityAlertReceived::class)
+            ->firstOrFail();
+
+        $this->assertDatabaseHas('admin_alerts', [
+            'source_type' => 'login_burst',
+            'source_id' => $event->id,
+            'status' => 'open',
+        ]);
+        $this->assertSame($event->id, $notification->data['event_id']);
+
+        $this->actingAs($admin)->withSession([
+            'admin_login.verified_user_id' => $admin->id,
+            'admin_login.session_version' => $admin->admin_session_version,
+            'admin_login.verified_at' => now()->timestamp,
+            'admin_login.last_activity' => now()->timestamp,
+        ]);
+
+        $this->get(route('admin.dashboard', ['lang' => 'en']))
+            ->assertSee(__('messages.admin_nav.security_notification_title'))
+            ->assertSee(__('messages.admin_nav.urgent'))
+            ->assertSee(__('messages.admin_nav.urgent_admin_security_alert'))
+            ->assertSee(__('messages.admin_nav.security_notification_messages.unknown_device_password'));
+
+        $this->get(route('admin.notifications.open', [
+            'notification' => $notification->id,
+            'lang' => 'en',
+        ]))->assertRedirect(route('admin.dashboard.page', [
+            'page' => 'alerts',
+            'source' => 'login_burst',
+            'source_id' => $event->id,
+            'lang' => 'en',
+        ]));
+
+        $this->get(route('admin.dashboard.page', [
+            'page' => 'alerts',
+            'source' => 'login_burst',
+            'source_id' => $event->id,
+            'lang' => 'en',
+        ]))->assertSee(__('messages.admin_alerts.reasons.unknown_device_password'))
+            ->assertSee($admin->email);
+    }
+
+    public function test_repeated_second_factor_failures_create_an_urgent_alert_without_authenticating(): void
+    {
+        $admin = User::factory()->withRole(UserRole::ADMIN)->create();
+        Mail::fake();
+
+        $this->post(route('login.store'), [
+            'email' => $admin->email,
+            'password' => 'password',
+        ])->assertRedirect(route('admin.login.verify', ['lang' => 'en']));
+
+        foreach (range(1, 3) as $attempt) {
+            $this->post(route('admin.login.verify.submit'), ['code' => '000000'])
+                ->assertSessionHasErrors('code');
+        }
+
+        $this->assertGuest();
+        $event = $admin->adminLoginEvents()
+            ->where('outcome', 'code_failed')
+            ->latest('id')
+            ->firstOrFail();
+        $notification = $admin->notifications()
+            ->where('type', AdminSecurityAlertReceived::class)
+            ->whereJsonContains('data->kind', 'second_factor_failures')
+            ->firstOrFail();
+
+        $this->assertDatabaseHas('admin_alerts', [
+            'source_type' => 'login_burst',
+            'source_id' => $event->id,
+            'status' => 'open',
+        ]);
+        $this->assertSame($event->id, $notification->data['event_id']);
+    }
 
     public function test_unenrolled_admin_can_enroll_in_totp_after_email_verification(): void
     {

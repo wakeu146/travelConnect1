@@ -6,6 +6,7 @@ use App\Enums\DocumentStatus;
 use App\Enums\DocumentType;
 use App\Enums\InquiryStatus;
 use App\Enums\PackageStatus;
+use App\Enums\UserRole;
 use App\Enums\VerificationStatus;
 use App\Models\Agency;
 use App\Models\AgencyDocument;
@@ -15,12 +16,15 @@ use App\Models\Inquiry;
 use App\Models\Package;
 use App\Models\PackageImage;
 use App\Models\Service;
+use App\Models\User;
+use App\Notifications\AdminAgencyDocumentReceived;
 use App\Notifications\AgencyActivityNotification;
 use App\Services\BookingService;
 use App\Services\ConversationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -36,6 +40,13 @@ class AgencyController extends Controller
         abort_unless($user && $user->isAgencyOwner(), 403);
 
         return $user->agency()->firstOrFail();
+    }
+
+    private function notifyAdminsOfDocument(AgencyDocument $document): void
+    {
+        $admins = User::query()->where('role', UserRole::ADMIN)->get();
+
+        Notification::send($admins, new AdminAgencyDocumentReceived($document));
     }
 
     private function ensurePackageOwnership(Package $package): void
@@ -316,12 +327,40 @@ class AgencyController extends Controller
             return back()->withErrors(['document' => __('messages.document_update_locked')])->withInput();
         }
 
-        $agency->documents()->create([
-            'type' => $data['type'],
-            'file_path' => $request->file('document')->store('agency-documents', 'public'),
-            'status' => DocumentStatus::PENDING->value,
-            'uploaded_at' => now(),
-        ]);
+        $filePath = $request->file('document')->store('agency-documents', 'public');
+        if (! $filePath) {
+            return back()->withErrors(['document' => __('messages.upload_failed')])->withInput();
+        }
+
+        $document = DB::transaction(function () use ($agency, $request, $data, $filePath): AgencyDocument {
+            $lockedAgency = Agency::query()->whereKey($agency->id)->lockForUpdate()->firstOrFail();
+            $document = $lockedAgency->documents()->create([
+                'type' => $data['type'],
+                'file_path' => $filePath,
+                'status' => DocumentStatus::PENDING->value,
+                'uploaded_at' => now(),
+            ]);
+            $document->setRelation('agency', $lockedAgency);
+
+            if ($lockedAgency->verification_status === VerificationStatus::REJECTED) {
+                $lockedAgency->forceFill([
+                    'verification_status' => VerificationStatus::PENDING,
+                    'verified_at' => null,
+                ])->save();
+                $lockedAgency->moderationEvents()->create([
+                    'actor_id' => $request->user()->id,
+                    'action' => 'verification_resubmitted',
+                    'previous_verification_status' => VerificationStatus::REJECTED->value,
+                    'new_verification_status' => VerificationStatus::PENDING->value,
+                    'previous_operating_status' => $lockedAgency->operating_status,
+                    'new_operating_status' => $lockedAgency->operating_status,
+                ]);
+            }
+
+            return $document;
+        });
+
+        $this->notifyAdminsOfDocument($document);
 
         return redirect()->route('agency.profile', ['lang' => app()->getLocale()])->with('status', __('messages.document_uploaded'));
     }
@@ -351,6 +390,8 @@ class AgencyController extends Controller
             'status' => DocumentStatus::PENDING->value,
             'uploaded_at' => now(),
         ]);
+        $document->load('agency:id,company_name');
+        $this->notifyAdminsOfDocument($document);
 
         return redirect()->route('agency.profile', ['lang' => app()->getLocale()])->with('status', __('messages.document_updated'));
     }
@@ -424,13 +465,20 @@ class AgencyController extends Controller
             'agency' => $agency,
             'destinations' => $agency->countries()->orderBy('countries.name')->pluck('countries.name'),
             'package' => null,
-            'canCreatePackage' => $agency->verification_status === VerificationStatus::VERIFIED,
+            'canCreatePackage' => $agency->verification_status === VerificationStatus::VERIFIED
+                && $agency->operating_status === 'active',
         ]);
     }
 
     public function storePackage(Request $request): RedirectResponse
     {
         $agency = $this->currentAgency();
+
+        if ($agency->operating_status === 'suspended') {
+            return back()
+                ->withErrors(['verification' => __('messages.agency_suspended_cannot_create_packages')])
+                ->withInput();
+        }
 
         if ($agency->verification_status !== VerificationStatus::VERIFIED) {
             return back()
@@ -486,7 +534,8 @@ class AgencyController extends Controller
             'package' => $package->load(['images'])
                 ->loadCount(['bookings', 'availabilities as upcoming_departures_count' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>', today()->toDateString())])
                 ->loadSum('bookings as travelers_booked', 'traveler_count'),
-            'canCreatePackage' => $agency->verification_status === VerificationStatus::VERIFIED,
+            'canCreatePackage' => $agency->verification_status === VerificationStatus::VERIFIED
+                && $agency->operating_status === 'active',
         ]);
     }
 
@@ -494,6 +543,12 @@ class AgencyController extends Controller
     {
         $this->authorize('update', $package);
         $this->ensurePackageOwnership($package);
+        if ($package->agency->operating_status === 'suspended'
+            && $request->input('status') === PackageStatus::PUBLISHED->value) {
+            return back()
+                ->withErrors(['verification' => __('messages.agency_suspended_cannot_create_packages')])
+                ->withInput();
+        }
 
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -545,6 +600,11 @@ class AgencyController extends Controller
         $this->authorize('update', $package);
         $this->ensurePackageOwnership($package);
         $agency = $package->agency;
+
+        if ($agency->operating_status === 'suspended') {
+            return back()
+                ->withErrors(['verification' => __('messages.agency_suspended_cannot_create_packages')]);
+        }
 
         if ($agency->verification_status !== VerificationStatus::VERIFIED) {
             return back()

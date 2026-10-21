@@ -14,7 +14,9 @@ class FavoriteController extends Controller
         abort_unless($request->user()->isTraveler(), 403);
 
         $agencyName = Str::of($slug)->replace('-', ' ')->title()->toString();
-        $agency = Agency::where('company_name', $agencyName)->firstOrFail();
+        $agency = Agency::where('company_name', $agencyName)
+            ->where('operating_status', 'active')
+            ->firstOrFail();
         $favorite = $request->user()->favorites()->where('agency_id', $agency->id)->first();
 
         if ($favorite) {

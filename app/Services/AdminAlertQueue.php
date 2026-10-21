@@ -57,7 +57,13 @@ class AdminAlertQueue
                 'alert_sources.related_label',
                 'alert_sources.created_at',
                 DB::raw("COALESCE(admin_alerts.status, 'open') as status"),
-            ]);
+            ])
+            ->where(function (Builder $query): void {
+                $query->whereNull('admin_alerts.id')
+                    ->orWhere('admin_alerts.status', '!=', 'resolved')
+                    ->orWhereNull('admin_alerts.resolved_at')
+                    ->orWhere('admin_alerts.resolved_at', '>', now()->subDays(30));
+            });
 
         if (($filters['status'] ?? 'all') !== 'all') {
             $query->whereRaw("COALESCE(admin_alerts.status, 'open') = ?", [$filters['status']]);
@@ -81,6 +87,7 @@ class AdminAlertQueue
         }
 
         return $query
+            ->orderByRaw("CASE WHEN COALESCE(admin_alerts.status, 'open') = 'resolved' THEN 1 ELSE 0 END")
             ->orderByDesc('alert_sources.created_at')
             ->orderBy('alert_sources.source_type')
             ->orderByDesc('alert_sources.source_id')
@@ -116,6 +123,12 @@ class AdminAlertQueue
             ->where('source_id', $sourceId)
             ->first();
 
+        abort_if(
+            $state?->status === 'resolved'
+                && $state->resolved_at?->lte(now()->subDays(30)),
+            404,
+        );
+
         return [
             'source_type' => $sourceType,
             'source_id' => $sourceId,
@@ -128,7 +141,13 @@ class AdminAlertQueue
             'status' => $state?->status ?? 'open',
             'details' => $this->detailsFor($sourceType, $source),
             'actions' => $state?->actions ?? collect(),
-            'management_page' => $definition['management_page'],
+            'management_page' => $sourceType === 'traveler_issue'
+                ? match ($source->type) {
+                    'complaint' => 'user_agency_complaints',
+                    'booking_dispute' => 'booking_disputes',
+                    default => $definition['management_page'],
+                }
+                : $definition['management_page'],
         ];
     }
 
@@ -278,22 +297,45 @@ class AdminAlertQueue
         $loginBurstQuery = DB::table('admin_login_events')
             ->selectRaw("'login_burst' as source_type, MAX(id) as source_id, 'suspicious_activity' as category, 'high' as severity, email as title, COALESCE(ip_address, ?) as related_label, MAX(created_at) as created_at", [__('messages.admin_alerts.unknown_ip')])
             ->where(function (Builder $query): void {
-                $query->where('outcome', 'password_failed')
-                    ->orWhere(function (Builder $blockedQuery): void {
-                        $blockedQuery->where('outcome', 'blocked')
-                            ->where('failed_step', 'password_lockout');
-                    });
+                $query->where(function (Builder $passwordFailures): void {
+                    $passwordFailures->where('outcome', 'password_failed')
+                        ->where('failed_step', 'password');
+                })->orWhere(function (Builder $lockoutAttempts): void {
+                    $lockoutAttempts->where('outcome', 'blocked')
+                        ->where('failed_step', 'password_lockout');
+                })->orWhere(function (Builder $unknownDevice): void {
+                    $unknownDevice->where('outcome', 'password_accepted')
+                        ->where('failed_step', 'unknown_device_password');
+                })->orWhere(function (Builder $secondFactorFailures): void {
+                    $secondFactorFailures->where('outcome', 'code_failed')
+                        ->whereIn('failed_step', ['email_code', 'totp']);
+                });
             })
             ->where('created_at', '>=', now()->subMinutes(10))
             ->groupBy('email', 'ip_address')
-            ->havingRaw('COUNT(*) >= 5');
+            ->havingRaw(
+                "SUM(CASE WHEN outcome IN ('password_failed', 'blocked') THEN 1 ELSE 0 END) >= 5
+                OR SUM(CASE WHEN outcome = 'password_accepted' AND failed_step = 'unknown_device_password' THEN 1 ELSE 0 END) >= 1
+                OR SUM(CASE WHEN outcome = 'code_failed' AND failed_step IN ('email_code', 'totp') THEN 1 ELSE 0 END) >= 3",
+            );
+
+        $trackedLoginAlerts = DB::table('admin_alerts')
+            ->join('admin_login_events', 'admin_login_events.id', '=', 'admin_alerts.source_id')
+            ->where('admin_alerts.source_type', 'login_burst')
+            ->where('admin_login_events.created_at', '<', now()->subMinutes(10))
+            ->where(function (Builder $query): void {
+                $query->where('admin_alerts.status', '!=', 'resolved')
+                    ->orWhere('admin_alerts.resolved_at', '>', now()->subDays(30));
+            })
+            ->selectRaw("'login_burst' as source_type, admin_login_events.id as source_id, 'suspicious_activity' as category, 'high' as severity, admin_login_events.email as title, COALESCE(admin_login_events.ip_address, ?) as related_label, admin_login_events.created_at as created_at", [__('messages.admin_alerts.unknown_ip')]);
 
         return $agencyQuery
             ->unionAll($reviewQuery)
             ->unionAll($issueQuery)
             ->unionAll($integrationQuery)
             ->unionAll($failedJobQuery)
-            ->unionAll($loginBurstQuery);
+            ->unionAll($loginBurstQuery)
+            ->unionAll($trackedLoginAlerts);
     }
 
     private function assertSourceExists(string $sourceType, int $sourceId): void
@@ -328,27 +370,53 @@ class AdminAlertQueue
                     ->orWhere(function (Builder $blockedQuery): void {
                         $blockedQuery->where('outcome', 'blocked')
                             ->where('failed_step', 'password_lockout');
+                    })
+                    ->orWhere(function (Builder $unknownDevice): void {
+                        $unknownDevice->where('outcome', 'password_accepted')
+                            ->where('failed_step', 'unknown_device_password');
+                    })
+                    ->orWhere(function (Builder $secondFactorFailures): void {
+                        $secondFactorFailures->where('outcome', 'code_failed')
+                            ->whereIn('failed_step', ['email_code', 'totp']);
                     });
             })
             ->first() ?? abort(404);
 
         $burstQuery = DB::table('admin_login_events')
+            ->selectRaw("SUM(CASE WHEN outcome IN ('password_failed', 'blocked') THEN 1 ELSE 0 END) as failed_attempt_count")
+            ->selectRaw("SUM(CASE WHEN outcome = 'password_accepted' AND failed_step = 'unknown_device_password' THEN 1 ELSE 0 END) as unknown_device_password_count")
+            ->selectRaw("SUM(CASE WHEN outcome = 'code_failed' AND failed_step IN ('email_code', 'totp') THEN 1 ELSE 0 END) as second_factor_failure_count")
             ->where(function (Builder $query): void {
-                $query->where('outcome', 'password_failed')
-                    ->orWhere(function (Builder $blockedQuery): void {
-                        $blockedQuery->where('outcome', 'blocked')
-                            ->where('failed_step', 'password_lockout');
-                    });
+                $query->where(function (Builder $passwordFailures): void {
+                    $passwordFailures->where('outcome', 'password_failed')
+                        ->where('failed_step', 'password');
+                })->orWhere(function (Builder $lockoutAttempts): void {
+                    $lockoutAttempts->where('outcome', 'blocked')
+                        ->where('failed_step', 'password_lockout');
+                })->orWhere(function (Builder $unknownDevice): void {
+                    $unknownDevice->where('outcome', 'password_accepted')
+                        ->where('failed_step', 'unknown_device_password');
+                })->orWhere(function (Builder $secondFactorFailures): void {
+                    $secondFactorFailures->where('outcome', 'code_failed')
+                        ->whereIn('failed_step', ['email_code', 'totp']);
+                });
             })
             ->where('created_at', '>=', Carbon::parse($source->created_at)->subMinutes(10))
             ->where('created_at', '<=', $source->created_at)
             ->when($source->email === null, fn (Builder $query) => $query->whereNull('email'), fn (Builder $query) => $query->where('email', $source->email))
-            ->when($source->ip_address === null, fn (Builder $query) => $query->whereNull('ip_address'), fn (Builder $query) => $query->where('ip_address', $source->ip_address));
+            ->when($source->ip_address === null, fn (Builder $query) => $query->whereNull('ip_address'), fn (Builder $query) => $query->where('ip_address', $source->ip_address))
+            ->first();
 
-        $source->failed_attempt_count = $burstQuery->count();
-        $latestEventId = (clone $burstQuery)->max('id');
+        $source->failed_attempt_count = (int) $burstQuery->failed_attempt_count;
+        $source->unknown_device_password_count = (int) $burstQuery->unknown_device_password_count;
+        $source->second_factor_failure_count = (int) $burstQuery->second_factor_failure_count;
 
-        abort_unless($source->failed_attempt_count >= 5 && (int) $latestEventId === $sourceId, 404);
+        abort_unless(
+            $source->failed_attempt_count >= 5
+                || $source->unknown_device_password_count >= 1
+                || $source->second_factor_failure_count >= 3,
+            404,
+        );
 
         return $source;
     }
@@ -361,9 +429,15 @@ class AdminAlertQueue
             'traveler_issue' => $source->description,
             'integration_failure' => $source->safe_message,
             'failed_job' => $this->failedJobReason((string) $source->exception),
-            'login_burst' => __('messages.admin_alerts.reasons.login_burst', [
-                'count' => $source->failed_attempt_count,
-            ]),
+            'login_burst' => match (true) {
+                $source->unknown_device_password_count > 0 => __('messages.admin_alerts.reasons.unknown_device_password'),
+                $source->second_factor_failure_count >= 3 => __('messages.admin_alerts.reasons.second_factor_failures', [
+                    'count' => $source->second_factor_failure_count,
+                ]),
+                default => __('messages.admin_alerts.reasons.login_burst', [
+                    'count' => $source->failed_attempt_count,
+                ]),
+            },
         };
     }
 
@@ -384,7 +458,7 @@ class AdminAlertQueue
             'traveler_issue' => $source->subject,
             'integration_failure' => $source->safe_message,
             'failed_job' => $source->uuid,
-            'login_burst' => $source->email,
+            'login_burst' => __('messages.admin_alerts.suspicious_login_title'),
         };
     }
 
@@ -449,6 +523,7 @@ class AdminAlertQueue
                 ['label' => __('messages.admin_alerts.fields.email'), 'value' => $source->email],
                 ['label' => __('messages.admin_alerts.fields.ip_address'), 'value' => $source->ip_address ?? __('messages.admin_alerts.unknown_ip')],
                 ['label' => __('messages.admin_alerts.fields.failed_attempts'), 'value' => (string) $source->failed_attempt_count],
+                ['label' => __('messages.admin_alerts.fields.second_factor_failures'), 'value' => (string) $source->second_factor_failure_count],
                 ['label' => __('messages.admin_alerts.fields.window'), 'value' => __('messages.admin_alerts.ten_minutes')],
                 ['label' => __('messages.admin_alerts.fields.user_agent'), 'value' => Str::limit((string) $source->user_agent, 240) ?: '—'],
             ],

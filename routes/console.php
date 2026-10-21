@@ -23,3 +23,8 @@ Schedule::command('admin:prune-login-events')
     ->dailyAt('01:00')
     ->name('admin.prune-login-events')
     ->withoutOverlapping();
+
+Schedule::command('agencies:prune-unsubmitted')
+    ->everyFifteenMinutes()
+    ->name('agencies.prune-unsubmitted')
+    ->withoutOverlapping();

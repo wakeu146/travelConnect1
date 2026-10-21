@@ -1604,6 +1604,18 @@ input:not([type='checkbox']):not([type='radio']) {
     color: var(--admin-muted);
 }
 
+.admin-dashboard [data-verified-badge] {
+    border: 1px solid #0369a1;
+    background: #0284c7;
+    color: #ffffff;
+}
+
+.admin-dashboard[data-admin-theme="dark"] [data-verified-badge] {
+    border-color: #d7e5e7;
+    background: #f5f7f5;
+    color: #173042;
+}
+
 .admin-empty-state {
     border-color: var(--admin-border);
     background: var(--admin-surface);
@@ -1651,6 +1663,30 @@ input:not([type='checkbox']):not([type='radio']) {
     border: 2px solid var(--admin-surface);
     background: var(--admin-accent);
     color: #ffffff;
+}
+
+.admin-security-alert-indicator {
+    color: #dc2626;
+    fill: var(--admin-surface);
+    stroke-width: 2.5;
+}
+
+.admin-security-alert-label {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.admin-security-alert-text {
+    color: #991b1b;
+}
+
+.admin-dashboard[data-admin-theme="dark"] .admin-security-alert-label {
+    background: rgb(127 29 29 / 40%);
+    color: #fecaca;
+}
+
+.admin-dashboard[data-admin-theme="dark"] .admin-security-alert-text {
+    color: #fecaca;
 }
 
 .admin-notification-icon {

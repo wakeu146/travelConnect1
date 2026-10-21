@@ -147,7 +147,7 @@
                 <a href="{{ route('agency.notifications.index', ['lang' => app()->getLocale()]) }}" aria-label="{{ __('messages.notifications') }}" title="{{ __('messages.notifications') }}" class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#dbe3e5] bg-white text-[#607985] transition hover:border-[#e76f51] hover:text-[#e76f51]">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5" aria-hidden="true"><path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5"></path><path d="M10 20a2 2 0 0 0 4 0"></path></svg>
                     @if ($notificationCount > 0)
-                        <span class="absolute -right-1.5 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-[#e76f51] px-1 text-[10px] font-bold text-white">
+                        <span data-agency-notification-count="{{ $notificationCount }}" class="absolute -right-1.5 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-[#e76f51] px-1 text-[10px] font-bold text-white">
                             {{ $notificationCount > 99 ? '99+' : $notificationCount }}
                         </span>
                     @endif

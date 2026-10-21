@@ -164,7 +164,7 @@ class AdminAuthenticationService
 
         if (! $verified) {
             $failedStep = $this->secondFactor->usesAuthenticator($admin) ? 'totp' : 'email_code';
-            $this->security->recordEvent($admin, $admin->email, $request, 'code_failed', $failedStep);
+            $this->security->recordFailedSecondFactorAttempt($admin, $request, $failedStep);
 
             return null;
         }

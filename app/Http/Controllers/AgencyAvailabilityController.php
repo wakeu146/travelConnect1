@@ -66,6 +66,10 @@ class AgencyAvailabilityController extends Controller
     {
         $agency = auth()->user()->agency;
 
+        if ($agency->operating_status === 'suspended') {
+            return back()->withErrors(['status' => __('messages.agency_suspended_cannot_manage_availability')]);
+        }
+
         $data = $request->validate([
             'package_id' => ['required', 'exists:packages,id'],
             'departure_date' => ['required', 'date'],
@@ -110,6 +114,7 @@ class AgencyAvailabilityController extends Controller
     public function update(Request $request, PackageAvailability $availability): RedirectResponse
     {
         $this->authorize('update', $availability);
+        $agency = auth()->user()->agency;
 
         $data = $request->validate([
             'package_id' => ['required', 'exists:packages,id'],
@@ -120,7 +125,13 @@ class AgencyAvailabilityController extends Controller
         ]);
 
         $package = Package::findOrFail($data['package_id']);
-        abort_unless($package->agency_id === auth()->user()->agency->id, 403);
+        abort_unless($package->agency_id === $agency->id, 403);
+
+        if ($agency->operating_status === 'suspended' && $data['status'] === 'active') {
+            return back()
+                ->withErrors(['status' => __('messages.agency_suspended_cannot_manage_availability')])
+                ->withInput();
+        }
 
         if ($data['status'] === 'active' && today()->gte($data['departure_date'])) {
             return back()->withErrors(['departure_date' => __('messages.departure_date_passed')])->withInput();
@@ -142,6 +153,10 @@ class AgencyAvailabilityController extends Controller
         $status = $request->validate([
             'status' => ['required', 'in:active,inactive,cancelled'],
         ])['status'];
+
+        if (auth()->user()->agency->operating_status === 'suspended' && $status === 'active') {
+            return back()->withErrors(['status' => __('messages.agency_suspended_cannot_manage_availability')]);
+        }
 
         if ($status === 'active' && $availability->departure_date->lte(today())) {
             return back()->withErrors(['status' => __('messages.departure_date_passed')]);

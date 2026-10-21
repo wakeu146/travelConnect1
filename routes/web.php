@@ -63,8 +63,15 @@ Route::get('/agencies/{slug}', function (string $slug) {
     $user = Auth::user();
     $agencyModel = Agency::query()
         ->with(['countries', 'services', 'experiences' => fn ($query) => $query->latest('published_at')])
+        ->where('operating_status', 'active')
         ->get()
         ->first(fn (Agency $agency) => Str::slug($agency->company_name) === $slug);
+    $suspendedAgencyExists = Agency::query()
+        ->where('operating_status', 'suspended')
+        ->get(['company_name'])
+        ->contains(fn (Agency $agency): bool => Str::slug($agency->company_name) === $slug);
+
+    abort_if($suspendedAgencyExists, 404);
 
     if (! $agencyModel && ! isset($fallbackAgencies[$slug])) {
         abort(404);

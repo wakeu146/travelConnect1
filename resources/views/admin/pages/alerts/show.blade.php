@@ -1,3 +1,11 @@
+@php
+    $statusClasses = match ($alert['status']) {
+        'resolved' => 'border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200',
+        'acknowledged' => 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200',
+        default => 'border-rose-500/40 bg-rose-500/10 text-rose-800 dark:text-rose-200',
+    };
+@endphp
+
 <section class="grid gap-6" aria-label="{{ __('messages.admin_alerts.record_detail') }}" data-alert-detail>
     <div class="flex flex-wrap items-center justify-between gap-3">
         <a href="{{ route('admin.dashboard.page', ['page' => 'alerts', 'lang' => app()->getLocale()]) }}" class="admin-nav-link inline-flex min-h-10 items-center gap-2 border px-3 py-2 text-sm font-semibold">
@@ -23,7 +31,7 @@
                 <div class="flex flex-wrap items-center gap-2">
                     <span class="admin-badge inline-flex border px-2 py-1 text-xs font-bold">{{ __('messages.admin_alerts.categories.'.$alert['category']) }}</span>
                     <span class="admin-badge inline-flex border px-2 py-1 text-xs font-bold" data-alert-severity="{{ $alert['severity'] }}">{{ __('messages.admin_alerts.severities.'.$alert['severity']) }}</span>
-                    <span class="admin-badge inline-flex border px-2 py-1 text-xs font-bold">{{ __('messages.admin_alerts.statuses.'.$alert['status']) }}</span>
+                    <span class="admin-badge inline-flex border px-2 py-1 text-xs font-bold {{ $statusClasses }}" data-alert-status="{{ $alert['status'] }}">{{ __('messages.admin_alerts.statuses.'.$alert['status']) }}</span>
                 </div>
                 <h2 class="break-words text-xl font-bold admin-heading">{{ $alert['title'] }}</h2>
                 <p class="text-sm admin-muted">{{ __('messages.admin_alerts.related_record') }}: {{ $alert['related_label'] }}</p>

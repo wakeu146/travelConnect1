@@ -157,6 +157,7 @@ class BookingController extends Controller
     public function packageShow(Package $package): View
     {
         $package->load(['agency', 'images', 'availabilities' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>', today()->toDateString())->orderBy('departure_date')]);
+        abort_unless($package->agency?->operating_status === 'active', 404);
 
         return view('packages.show', [
             'package' => $package,
@@ -169,6 +170,7 @@ class BookingController extends Controller
         $this->authorize('create', Booking::class);
 
         $package->load(['agency', 'images', 'availabilities' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>', today()->toDateString())->orderBy('departure_date')]);
+        abort_unless($package->agency?->operating_status === 'active', 404);
 
         return view('bookings.create', [
             'package' => $package,

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AdminAgencyModerationController;
 use App\Http\Controllers\Admin\AdminAlertsController;
 use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\AdminLoginVerificationController;
@@ -21,6 +22,37 @@ Route::get('/dashboard/sections/{section}', [AdminDashboardController::class, 's
 Route::get('/dashboard/pages/{page}', [AdminDashboardController::class, 'page'])
     ->middleware(['auth', EnsureAdminSession::class])
     ->name('dashboard.page');
+
+Route::get('/dashboard/agencies/{agency}', [AdminDashboardController::class, 'agency'])
+    ->middleware(['auth', EnsureAdminSession::class])
+    ->whereNumber('agency')
+    ->name('agencies.show');
+
+Route::post('/dashboard/agencies/{agency}/verification', [AdminAgencyModerationController::class, 'verification'])
+    ->middleware(['auth', EnsureAdminSession::class])
+    ->whereNumber('agency')
+    ->name('agencies.verification');
+
+Route::post('/dashboard/agencies/{agency}/suspend', [AdminAgencyModerationController::class, 'suspend'])
+    ->middleware(['auth', EnsureAdminSession::class])
+    ->whereNumber('agency')
+    ->name('agencies.suspend');
+
+Route::post('/dashboard/agencies/{agency}/reinstate', [AdminAgencyModerationController::class, 'reinstate'])
+    ->middleware(['auth', EnsureAdminSession::class])
+    ->whereNumber('agency')
+    ->name('agencies.reinstate');
+
+Route::delete('/dashboard/agencies/{agency}', [AdminAgencyModerationController::class, 'destroy'])
+    ->middleware(['auth', EnsureAdminSession::class])
+    ->whereNumber('agency')
+    ->name('agencies.destroy');
+
+Route::get('/dashboard/agencies/{agency}/documents/{document}', [AdminAgencyModerationController::class, 'document'])
+    ->middleware(['auth', EnsureAdminSession::class])
+    ->whereNumber(['agency', 'document'])
+    ->scopeBindings()
+    ->name('agencies.documents.show');
 
 Route::get('/notifications/{notification}', [AdminNotificationController::class, 'open'])
     ->middleware(['auth', EnsureAdminSession::class])

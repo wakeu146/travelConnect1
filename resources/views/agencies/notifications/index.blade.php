@@ -20,7 +20,7 @@
     <div class="space-y-4">
         @forelse ($notifications as $notification)
             @php($data = $notification->data ?? [])
-            <x-agency.panel class="p-5">
+            <x-agency.panel class="p-5" data-agency-notification>
                 <div class="flex items-start justify-between gap-4">
                     <div class="min-w-0">
                         <div class="flex flex-wrap items-center gap-2">

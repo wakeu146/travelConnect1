@@ -11,6 +11,9 @@
         @case('bell')
             <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
             @break
+        @case('alert_triangle')
+            <path d="m10.3 3.9-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3.1l-8-14a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4m0 4h.01" />
+            @break
         @case('layers')
             <path d="m12 3 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5M3 16l9 5 9-5" />
             @break
@@ -37,6 +40,9 @@
             @break
         @case('shield_check')
             <path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z" /><path d="m9 12 2 2 4-4" />
+            @break
+        @case('verified')
+            <circle cx="12" cy="12" r="9" /><path d="m8.5 12 2.2 2.2 4.8-4.8" />
             @break
         @case('flag')
             <path d="M5 21V5m0 0c6-4 8 4 14 0v11c-6 4-8-4-14 0" />

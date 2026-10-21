@@ -342,6 +342,147 @@ class AdminAlertsControllerTest extends TestCase
         ]);
     }
 
+    public function test_traveler_alerts_open_the_matching_management_queue_even_when_empty(): void
+    {
+        $this->actAsVerifiedAdmin();
+        $traveler = User::factory()->create();
+        $complaint = $traveler->travelerIssues()->create([
+            'type' => 'complaint',
+            'subject' => 'A traveler complaint',
+            'description' => 'A complaint description.',
+        ]);
+        $bookingDispute = $traveler->travelerIssues()->create([
+            'type' => 'booking_dispute',
+            'subject' => 'A booking dispute',
+            'description' => 'A dispute description.',
+        ]);
+
+        $this->get(route('admin.dashboard.page', [
+            'page' => 'alerts',
+            'source' => 'traveler_issue',
+            'source_id' => $complaint->id,
+        ]))
+            ->assertSee(route('admin.dashboard.page', [
+                'page' => 'user_agency_complaints',
+                'lang' => 'en',
+            ]), false);
+
+        $this->get(route('admin.dashboard.page', [
+            'page' => 'user_agency_complaints',
+            'lang' => 'en',
+        ]))->assertSee(__('messages.admin_nav.page_in_preparation'));
+
+        $this->get(route('admin.dashboard.page', [
+            'page' => 'alerts',
+            'source' => 'traveler_issue',
+            'source_id' => $bookingDispute->id,
+        ]))
+            ->assertSee(route('admin.dashboard.page', [
+                'page' => 'booking_disputes',
+                'lang' => 'en',
+            ]), false);
+
+        $this->get(route('admin.dashboard.page', [
+            'page' => 'booking_disputes',
+            'lang' => 'en',
+        ]))->assertSee(__('messages.admin_nav.page_in_preparation'));
+    }
+
+    public function test_resolved_alerts_are_colored_sorted_last_and_hidden_after_thirty_days(): void
+    {
+        $admin = $this->actAsVerifiedAdmin();
+        $this->travelTo(now()->startOfSecond());
+        $traveler = User::factory()->create();
+        $openIssue = $traveler->travelerIssues()->create([
+            'type' => 'complaint',
+            'subject' => 'Open traveler complaint',
+            'description' => 'Still needs attention.',
+        ]);
+        $recentlyResolvedIssue = $traveler->travelerIssues()->create([
+            'type' => 'complaint',
+            'subject' => 'Recently resolved complaint',
+            'description' => 'Resolved within the retention period.',
+            'status' => 'resolved',
+        ]);
+        $expiredIssue = $traveler->travelerIssues()->create([
+            'type' => 'complaint',
+            'subject' => 'Expired resolved complaint',
+            'description' => 'Resolved more than thirty days ago.',
+            'status' => 'resolved',
+        ]);
+
+        DB::table('traveler_issues')->where('id', $openIssue->id)->update([
+            'created_at' => now()->subDays(20),
+            'updated_at' => now()->subDays(20),
+        ]);
+        DB::table('traveler_issues')->where('id', $recentlyResolvedIssue->id)->update([
+            'created_at' => now()->subDays(25),
+            'updated_at' => now()->subDays(10),
+        ]);
+        DB::table('traveler_issues')->where('id', $expiredIssue->id)->update([
+            'created_at' => now()->subDays(40),
+            'updated_at' => now()->subDays(31),
+        ]);
+
+        DB::table('admin_alerts')->insert([
+            [
+                'source_type' => 'traveler_issue',
+                'source_id' => $recentlyResolvedIssue->id,
+                'status' => 'resolved',
+                'resolved_by' => $admin->id,
+                'resolved_at' => now()->subDays(10),
+                'created_at' => now()->subDays(10),
+                'updated_at' => now()->subDays(10),
+            ],
+            [
+                'source_type' => 'traveler_issue',
+                'source_id' => $expiredIssue->id,
+                'status' => 'resolved',
+                'resolved_by' => $admin->id,
+                'resolved_at' => now()->subDays(31),
+                'created_at' => now()->subDays(31),
+                'updated_at' => now()->subDays(31),
+            ],
+        ]);
+
+        $this->get(route('admin.dashboard.page', ['page' => 'alerts', 'lang' => 'en']))
+            ->assertSeeInOrder([
+                $openIssue->subject,
+                $recentlyResolvedIssue->subject,
+            ])
+            ->assertSee('class="px-4 py-4 bg-rose-50/80 dark:bg-rose-950/30" data-alert-status-cell="open"', false)
+            ->assertSee('class="px-4 py-4 bg-emerald-50/80 dark:bg-emerald-950/30" data-alert-status-cell="resolved"', false)
+            ->assertSee('data-alert-status="resolved"', false)
+            ->assertSee('bg-emerald-500/10', false)
+            ->assertDontSee($expiredIssue->subject);
+
+        $this->get(route('admin.dashboard.page', [
+            'page' => 'alerts',
+            'source' => 'traveler_issue',
+            'source_id' => $recentlyResolvedIssue->id,
+            'lang' => 'en',
+        ]))
+            ->assertSee('data-alert-status="resolved"', false)
+            ->assertSee('bg-emerald-500/10', false);
+
+        $this->get(route('admin.dashboard.page', [
+            'page' => 'alerts',
+            'source' => 'traveler_issue',
+            'source_id' => $expiredIssue->id,
+            'lang' => 'en',
+        ]))->assertNotFound();
+
+        $this->assertDatabaseHas('admin_alerts', [
+            'source_type' => 'traveler_issue',
+            'source_id' => $expiredIssue->id,
+            'status' => 'resolved',
+        ]);
+        $this->assertDatabaseHas('traveler_issues', [
+            'id' => $expiredIssue->id,
+            'status' => 'resolved',
+        ]);
+    }
+
     public function test_only_a_verified_admin_can_change_an_alert_status(): void
     {
         $agency = Agency::factory()->create();

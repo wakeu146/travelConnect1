@@ -7,8 +7,11 @@ use App\Mail\AdminSecurityAlertMail;
 use App\Models\AdminLoginEvent;
 use App\Models\TrustedAdminDevice;
 use App\Models\User;
+use App\Notifications\AdminSecurityAlertReceived;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -41,13 +44,15 @@ class AdminLoginSecurityService
             return;
         }
 
-        $this->recordEvent($user, $email, $request, 'password_failed', 'password');
+        $event = $this->recordEvent($user, $email, $request, 'password_failed', 'password');
 
         if ($user?->isAdmin() && $this->isPasswordLockedOut($user)) {
             $lockoutMinutes = (int) config('admin.password_lockout_minutes');
             $alertKey = 'admin-password-lockout-alert:'.$user->id;
 
             if (Cache::add($alertKey, true, $lockoutMinutes * 60)) {
+                $this->trackAlert($event);
+                $this->notifySecurityAdmins(collect([$user]), $event, 'failed_password_burst');
                 $this->sendAlert(
                     $user,
                     $request,
@@ -83,6 +88,9 @@ class AdminLoginSecurityService
         }
 
         $administrators = $user?->isAdmin() ? collect([$user]) : User::query()->where('role', UserRole::ADMIN)->get();
+        $this->trackAlert($event);
+        $this->notifySecurityAdmins($administrators, $event, 'failed_password_burst');
+
         foreach ($administrators as $administrator) {
             $this->sendAlert($administrator, $request, __('messages.admin_alert_failed_burst'));
         }
@@ -99,13 +107,61 @@ class AdminLoginSecurityService
 
     public function recordPasswordLockoutAttempt(User $admin, string $email, Request $request): void
     {
-        $this->recordEvent($admin, $email, $request, 'blocked', 'password_lockout');
+        $event = $this->recordEvent($admin, $email, $request, 'blocked', 'password_lockout');
+
+        $alertKey = 'admin-password-lockout-alert:'.$admin->id;
+        if (Cache::add($alertKey, true, (int) config('admin.password_lockout_minutes') * 60)) {
+            $this->trackAlert($event);
+            $this->notifySecurityAdmins(collect([$admin]), $event, 'failed_password_burst');
+            $this->sendAlert(
+                $admin,
+                $request,
+                __('messages.admin_alert_password_lockout', [
+                    'attempts' => (int) config('admin.password_lockout_attempts'),
+                    'minutes' => (int) config('admin.password_lockout_minutes'),
+                ]),
+            );
+        }
+    }
+
+    public function recordFailedSecondFactorAttempt(
+        User $admin,
+        Request $request,
+        string $failedStep,
+    ): void {
+        $event = $this->recordEvent($admin, $admin->email, $request, 'code_failed', $failedStep);
+        $failureCount = AdminLoginEvent::query()
+            ->where('user_id', $admin->id)
+            ->where('outcome', 'code_failed')
+            ->whereIn('failed_step', ['email_code', 'totp'])
+            ->where('created_at', '>=', now()->subMinutes(10))
+            ->count();
+
+        if ($failureCount < 3) {
+            return;
+        }
+
+        $alertKey = 'admin-second-factor-failure-alert:'.$admin->id;
+        if (! Cache::add($alertKey, true, 10 * 60)) {
+            return;
+        }
+
+        $this->trackAlert($event);
+        $this->notifySecurityAdmins(collect([$admin]), $event, 'second_factor_failures');
+        $this->sendAlert($admin, $request, __('messages.admin_alert_second_factor_failures'));
     }
 
     public function alertIfPasswordAcceptedFromUnknownDevice(User $admin, Request $request): void
     {
         if ($this->findTrustedDevice($admin, $request)) {
             return;
+        }
+
+        $event = $this->recordEvent($admin, $admin->email, $request, 'password_accepted', 'unknown_device_password');
+        $alertKey = 'admin-unknown-device-password-alert:'.$admin->id;
+        if (Cache::add($alertKey, true, 10 * 60)) {
+            $this->trackAlert($event);
+            $this->notifySecurityAdmins(collect([$admin]), $event, 'unknown_device_password');
         }
 
         $this->sendAlert($admin, $request, __('messages.admin_alert_password_accepted_unknown_device'));
@@ -190,5 +246,29 @@ class AdminLoginSecurityService
                 'exception' => $exception,
             ]);
         }
+    }
+
+    /**
+     * @param  Collection<int, User>  $administrators
+     */
+    private function notifySecurityAdmins(
+        Collection $administrators,
+        AdminLoginEvent $event,
+        string $kind,
+    ): void {
+        foreach ($administrators as $administrator) {
+            $administrator->notify(new AdminSecurityAlertReceived($event, $kind));
+        }
+    }
+
+    private function trackAlert(AdminLoginEvent $event): void
+    {
+        DB::table('admin_alerts')->insertOrIgnore([
+            'source_type' => 'login_burst',
+            'source_id' => $event->id,
+            'status' => 'open',
+            'created_at' => $event->created_at,
+            'updated_at' => $event->created_at,
+        ]);
     }
 }

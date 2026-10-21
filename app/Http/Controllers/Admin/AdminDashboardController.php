@@ -3,12 +3,18 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Agency;
+use App\Notifications\AdminAgencyDocumentReceived;
+use App\Notifications\AdminSecurityAlertReceived;
 use App\Notifications\AdminTravelerIssueReceived;
+use App\Services\AdminAgencyManagementService;
 use App\Services\AdminAlertQueue;
 use App\Services\AdminOverviewData;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class AdminDashboardController extends Controller
@@ -18,7 +24,7 @@ class AdminDashboardController extends Controller
         return $this->renderDashboard($request, 'main', 'overview', overview: $overviewData->get());
     }
 
-    public function section(Request $request, string $section): View
+    public function section(Request $request, string $section): View|RedirectResponse
     {
         $sections = $this->sections();
         abort_unless(array_key_exists($section, $sections), 404);
@@ -31,6 +37,7 @@ class AdminDashboardController extends Controller
         string $page,
         AdminOverviewData $overviewData,
         AdminAlertQueue $alertQueue,
+        AdminAgencyManagementService $agencyManagement,
     ): View {
         $sections = $this->sections();
 
@@ -40,6 +47,7 @@ class AdminDashboardController extends Controller
                 if (in_array($page, $pages, true)) {
                     $alerts = null;
                     $alertDetail = null;
+                    $agencyDirectory = null;
 
                     if ($page === 'alerts') {
                         $filterOptions = $alertQueue->filterOptions();
@@ -59,6 +67,30 @@ class AdminDashboardController extends Controller
                         }
                     }
 
+                    if (in_array($page, [
+                        'all_agencies',
+                        'pending_verification',
+                        'verified_agencies',
+                        'unverified_agencies',
+                        'suspended_agencies',
+                    ], true)) {
+                        $filters = $request->validate([
+                            'search' => ['nullable', 'string', 'max:120'],
+                            'verification_status' => ['nullable', Rule::in(['all', 'pending', 'verified', 'rejected'])],
+                            'operating_status' => ['nullable', Rule::in(['all', 'active', 'suspended'])],
+                            'country_id' => ['nullable', 'integer', 'exists:countries,id'],
+                            'created_from' => ['nullable', 'date'],
+                            'created_to' => ['nullable', 'date'],
+                        ]);
+                        if (isset($filters['created_from'], $filters['created_to'])
+                            && $filters['created_from'] > $filters['created_to']) {
+                            throw ValidationException::withMessages([
+                                'created_to' => __('messages.admin_agencies.filter_date_error'),
+                            ]);
+                        }
+                        $agencyDirectory = $agencyManagement->listing($page, $filters);
+                    }
+
                     return $this->renderDashboard(
                         $request,
                         $sectionKey,
@@ -67,12 +99,29 @@ class AdminDashboardController extends Controller
                         $page === 'overview' ? $overviewData->get() : null,
                         $alerts,
                         $alertDetail,
+                        $agencyDirectory,
                     );
                 }
             }
         }
 
         abort(404);
+    }
+
+    public function agency(
+        Request $request,
+        Agency $agency,
+        AdminAgencyManagementService $agencyManagement,
+    ): View {
+        $profile = $agencyManagement->profile($agency, $request);
+
+        return $this->renderDashboard(
+            $request,
+            'platform_management',
+            'all_agencies',
+            'agencies',
+            agencyProfile: $profile,
+        );
     }
 
     /**
@@ -91,8 +140,20 @@ class AdminDashboardController extends Controller
         ?array $overview = null,
         ?LengthAwarePaginator $alerts = null,
         ?array $alertDetail = null,
+        ?array $agencyDirectory = null,
+        ?array $agencyProfile = null,
     ): View {
         $sections = $this->sections();
+        $adminNotifications = $request->user()
+            ->unreadNotifications()
+            ->whereIn('type', [
+                AdminSecurityAlertReceived::class,
+                AdminTravelerIssueReceived::class,
+                AdminAgencyDocumentReceived::class,
+            ])
+            ->latest()
+            ->limit(5)
+            ->get();
         $sectionTitle = __("messages.admin_nav.sections.{$section}");
         $pageTitle = $page
             ? __("messages.admin_nav.pages.{$page}")
@@ -118,15 +179,20 @@ class AdminDashboardController extends Controller
             'overview' => $overview,
             'alerts' => $alerts,
             'alertDetail' => $alertDetail,
-            'adminNotifications' => $request->user()
-                ->notifications()
-                ->where('type', AdminTravelerIssueReceived::class)
-                ->latest()
-                ->limit(5)
-                ->get(),
+            'agencyDirectory' => $agencyDirectory,
+            'agencyProfile' => $agencyProfile,
+            'adminNotifications' => $adminNotifications,
+            'unreadAdminSecurityNotificationCount' => $request->user()
+                ->unreadNotifications()
+                ->where('type', AdminSecurityAlertReceived::class)
+                ->count(),
             'unreadAdminNotificationCount' => $request->user()
                 ->unreadNotifications()
-                ->where('type', AdminTravelerIssueReceived::class)
+                ->whereIn('type', [
+                    AdminSecurityAlertReceived::class,
+                    AdminTravelerIssueReceived::class,
+                    AdminAgencyDocumentReceived::class,
+                ])
                 ->count(),
         ]);
     }
