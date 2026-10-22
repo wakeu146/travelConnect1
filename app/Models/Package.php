@@ -57,4 +57,9 @@ class Package extends Model
     {
         return $this->hasMany(Booking::class);
     }
+
+    public function moderationEvents(): HasMany
+    {
+        return $this->hasMany(PackageModerationEvent::class);
+    }
 }

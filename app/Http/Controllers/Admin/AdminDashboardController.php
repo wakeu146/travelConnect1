@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Agency;
+use App\Models\Package;
 use App\Notifications\AdminAgencyDocumentReceived;
 use App\Notifications\AdminSecurityAlertReceived;
 use App\Notifications\AdminTravelerIssueReceived;
 use App\Services\AdminAgencyManagementService;
 use App\Services\AdminAlertQueue;
 use App\Services\AdminOverviewData;
+use App\Services\AdminTravelManagementService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -38,6 +40,7 @@ class AdminDashboardController extends Controller
         AdminOverviewData $overviewData,
         AdminAlertQueue $alertQueue,
         AdminAgencyManagementService $agencyManagement,
+        AdminTravelManagementService $travelManagement,
     ): View|RedirectResponse {
         $pageRoute = config("admin_dashboard.page_routes.{$page}");
         if ($pageRoute !== null) {
@@ -59,6 +62,7 @@ class AdminDashboardController extends Controller
                     $alerts = null;
                     $alertDetail = null;
                     $agencyDirectory = null;
+                    $travelManagementData = null;
 
                     if ($page === 'alerts') {
                         $filterOptions = $alertQueue->filterOptions();
@@ -102,6 +106,37 @@ class AdminDashboardController extends Controller
                         $agencyDirectory = $agencyManagement->listing($page, $filters);
                     }
 
+                    if (in_array($page, [
+                        'all_travel_packages',
+                        'published_packages',
+                        'draft_unpublished_packages',
+                        'reported_pending_review',
+                    ], true)) {
+                        $filters = $request->validate([
+                            'search' => ['nullable', 'string', 'max:120'],
+                            'status' => ['nullable', Rule::in(['all', 'unpublished', 'draft', 'published', 'archived'])],
+                            'destination' => ['nullable', 'string', 'max:191'],
+                        ]);
+                        $travelManagementData = [
+                            ...$travelManagement->packages($page, $filters),
+                            'destinations' => Package::query()
+                                ->whereNotNull('destination')
+                                ->where('destination', '!=', '')
+                                ->distinct()
+                                ->orderBy('destination')
+                                ->pluck('destination'),
+                            'reportsAvailable' => false,
+                        ];
+                    } elseif ($page === 'travel_services') {
+                        $filters = $request->validate(['search' => ['nullable', 'string', 'max:120']]);
+                        $travelManagementData = $travelManagement->services($filters);
+                    } elseif ($page === 'countries') {
+                        $filters = $request->validate(['search' => ['nullable', 'string', 'max:120']]);
+                        $travelManagementData = $travelManagement->countries($filters);
+                    } elseif ($page === 'destinations') {
+                        $travelManagementData = $travelManagement->destinations();
+                    }
+
                     return $this->renderDashboard(
                         $request,
                         $sectionKey,
@@ -111,6 +146,7 @@ class AdminDashboardController extends Controller
                         $alerts,
                         $alertDetail,
                         $agencyDirectory,
+                        travelManagementData: $travelManagementData,
                     );
                 }
             }
@@ -157,6 +193,25 @@ class AdminDashboardController extends Controller
     }
 
     /**
+     * @param  array<string, mixed>  $travelManagementData
+     */
+    public function renderTravelManagementPage(
+        Request $request,
+        string $page,
+        array $travelManagementData,
+        ?string $pageTitle = null,
+    ): View {
+        return $this->renderDashboard(
+            $request,
+            'platform_management',
+            $page,
+            'travel_management',
+            travelManagementData: $travelManagementData,
+            pageTitleOverride: $pageTitle,
+        );
+    }
+
+    /**
      * @return array<string, array{icon: string, groups: array<int, array<string, mixed>>}>
      */
     private function sections(): array
@@ -175,6 +230,7 @@ class AdminDashboardController extends Controller
         ?array $agencyDirectory = null,
         ?array $agencyProfile = null,
         ?array $usersPageData = null,
+        ?array $travelManagementData = null,
         ?string $pageTitleOverride = null,
     ): View {
         $sections = $this->sections();
@@ -216,6 +272,7 @@ class AdminDashboardController extends Controller
             'agencyDirectory' => $agencyDirectory,
             'agencyProfile' => $agencyProfile,
             'usersPageData' => $usersPageData,
+            'travelManagementData' => $travelManagementData,
             'adminNotifications' => $adminNotifications,
             'unreadAdminSecurityNotificationCount' => $request->user()
                 ->unreadNotifications()

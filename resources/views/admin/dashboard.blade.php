@@ -44,6 +44,18 @@
             @else
                 @include('admin.pages.users.users', $usersPageData)
             @endif
+        @elseif ($travelManagementData !== null)
+            @if (isset($travelManagementData['package']))
+                @include('admin.pages.travel-management.packages.show', $travelManagementData)
+            @elseif (isset($travelManagementData['packages']))
+                @include('admin.pages.travel-management.packages.index', $travelManagementData)
+            @elseif (isset($travelManagementData['services']))
+                @include('admin.pages.travel-management.services.index', $travelManagementData)
+            @elseif (isset($travelManagementData['countries']))
+                @include('admin.pages.travel-management.countries.index', $travelManagementData)
+            @else
+                @include('admin.pages.travel-management.destinations.index', $travelManagementData)
+            @endif
         @else
             <section class="admin-empty-state grid justify-items-center gap-4 border p-8 text-center sm:p-12" aria-labelledby="admin-placeholder-title">
                 <span class="admin-empty-icon flex h-12 w-12 items-center justify-center rounded-xl">

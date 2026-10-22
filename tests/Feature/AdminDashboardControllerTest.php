@@ -178,6 +178,19 @@ class AdminDashboardControllerTest extends TestCase
                             'suspended_agencies',
                         ], true)) {
                             $pageResponse->assertSee('data-admin-agency-directory', false);
+                        } elseif (in_array($page, [
+                            'all_travel_packages',
+                            'published_packages',
+                            'draft_unpublished_packages',
+                            'reported_pending_review',
+                        ], true)) {
+                            $pageResponse->assertSee('data-admin-package-directory', false);
+                        } elseif ($page === 'travel_services') {
+                            $pageResponse->assertSee('data-admin-travel-services', false);
+                        } elseif ($page === 'countries') {
+                            $pageResponse->assertSee('data-admin-travel-countries', false);
+                        } elseif ($page === 'destinations') {
+                            $pageResponse->assertSee('data-admin-travel-destinations', false);
                         } else {
                             $pageResponse->assertSee(__('messages.admin_nav.page_in_preparation'));
                         }

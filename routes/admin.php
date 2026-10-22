@@ -5,7 +5,9 @@ use App\Http\Controllers\Admin\AdminAlertsController;
 use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\AdminLoginVerificationController;
 use App\Http\Controllers\Admin\AdminNotificationController;
+use App\Http\Controllers\Admin\AdminPackageModerationController;
 use App\Http\Controllers\Admin\AdminTotpEnrollmentController;
+use App\Http\Controllers\Admin\AdminTravelCatalogueController;
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\AuthController;
 use App\Http\Middleware\EnsureAdminSession;
@@ -28,6 +30,34 @@ Route::get('/dashboard/agencies/{agency}', [AdminDashboardController::class, 'ag
     ->middleware(['auth', EnsureAdminSession::class])
     ->whereNumber('agency')
     ->name('agencies.show');
+
+Route::get('/dashboard/packages/{package}', [AdminPackageModerationController::class, 'show'])
+    ->middleware(['auth', EnsureAdminSession::class])
+    ->whereNumber('package')
+    ->name('packages.show');
+
+Route::post('/dashboard/packages/{package}/moderation', [AdminPackageModerationController::class, 'moderate'])
+    ->middleware(['auth', EnsureAdminSession::class])
+    ->whereNumber('package')
+    ->name('packages.moderation');
+
+Route::post('/dashboard/catalogue/countries', [AdminTravelCatalogueController::class, 'storeCountry'])
+    ->middleware(['auth', EnsureAdminSession::class])
+    ->name('catalogue.countries.store');
+
+Route::patch('/dashboard/catalogue/countries/{country}', [AdminTravelCatalogueController::class, 'updateCountry'])
+    ->middleware(['auth', EnsureAdminSession::class])
+    ->whereNumber('country')
+    ->name('catalogue.countries.update');
+
+Route::post('/dashboard/catalogue/services', [AdminTravelCatalogueController::class, 'storeService'])
+    ->middleware(['auth', EnsureAdminSession::class])
+    ->name('catalogue.services.store');
+
+Route::patch('/dashboard/catalogue/services/{service}', [AdminTravelCatalogueController::class, 'updateService'])
+    ->middleware(['auth', EnsureAdminSession::class])
+    ->whereNumber('service')
+    ->name('catalogue.services.update');
 
 Route::post('/dashboard/agencies/{agency}/verification', [AdminAgencyModerationController::class, 'verification'])
     ->middleware(['auth', EnsureAdminSession::class])
