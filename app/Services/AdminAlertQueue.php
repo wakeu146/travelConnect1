@@ -205,11 +205,14 @@ class AdminAlertQueue
             ]);
 
             if ($sourceType === 'traveler_issue') {
-                TravelerIssue::query()
+                $issue = TravelerIssue::query()
                     ->whereKey($sourceId)
                     ->lockForUpdate()
-                    ->firstOrFail()
-                    ->update(['status' => $nextStatus === 'resolved' ? 'resolved' : 'in_review']);
+                    ->firstOrFail();
+
+                if ($issue->type === 'complaint') {
+                    $issue->update(['status' => $nextStatus === 'resolved' ? 'resolved' : 'in_review']);
+                }
             }
         });
     }

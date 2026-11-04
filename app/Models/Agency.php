@@ -80,6 +80,16 @@ class Agency extends Model
         return $this->hasMany(Booking::class);
     }
 
+    public function travelRequestRecipients(): HasMany
+    {
+        return $this->hasMany(TravelRequestRecipient::class);
+    }
+
+    public function travelRequestProposals(): HasMany
+    {
+        return $this->hasMany(TravelRequestProposal::class);
+    }
+
     public function favorites(): HasMany
     {
         return $this->hasMany(Favorite::class);

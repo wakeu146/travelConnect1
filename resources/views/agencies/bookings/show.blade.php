@@ -66,10 +66,10 @@
 
                     <section class="agency-panel-muted rounded-xl border p-5" aria-labelledby="booking-trip-title">
                         <h3 id="booking-trip-title" class="text-xs font-bold uppercase tracking-[.16em] text-[#607985]">{{ __('messages.trip_details') }}</h3>
-                        <p class="mt-3 text-lg font-bold">{{ $booking->package?->title ?? __('messages.travel_package') }}</p>
+                        <p class="mt-3 text-lg font-bold">{{ $booking->package?->title ?? $booking->customRequest?->title ?? __('messages.travel_package') }}</p>
                         <dl class="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-                            <div><dt class="text-xs text-[#607985]">{{ __('messages.destination') }}</dt><dd class="mt-1 font-semibold">{{ $booking->package?->destination ?? __('messages.not_available') }}</dd></div>
-                            <div><dt class="text-xs text-[#607985]">{{ __('messages.departure') }}</dt><dd class="mt-1 font-semibold">{{ $booking->availability?->departure_date?->translatedFormat('d M Y') ?? __('messages.not_available') }}</dd></div>
+                            <div><dt class="text-xs text-[#607985]">{{ __('messages.destination') }}</dt><dd class="mt-1 font-semibold">{{ $booking->customRequest?->destination ?? $booking->package?->destination ?? __('messages.not_available') }}</dd></div>
+                            <div><dt class="text-xs text-[#607985]">{{ __('messages.departure') }}</dt><dd class="mt-1 font-semibold">{{ $booking->customRequest?->travel_date?->translatedFormat('d M Y') ?? $booking->availability?->departure_date?->translatedFormat('d M Y') ?? __('messages.not_available') }}</dd></div>
                             <div><dt class="text-xs text-[#607985]">{{ __('messages.package_duration') }}</dt><dd class="mt-1 font-semibold">{{ $booking->package?->duration_days ? __('messages.duration_days_label', ['count' => $booking->package->duration_days]) : __('messages.not_available') }}</dd></div>
                             <div><dt class="text-xs text-[#607985]">{{ __('messages.availability') }}</dt><dd class="mt-1 font-semibold">{{ $booking->availability?->status ? __('messages.'.$booking->availability->status->value) : __('messages.not_available') }}</dd></div>
                         </dl>

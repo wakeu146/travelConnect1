@@ -23,7 +23,7 @@
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="text-xs font-bold uppercase tracking-wide text-[#607985]">{{ __('messages.traveler_issues.types.'.$issue->type) }}</span>
                             <span aria-hidden="true" class="text-[#9aadb2]">·</span>
-                            <span class="inline-flex items-center border px-2.5 py-1 text-xs font-bold text-[#173042] {{ $issue->status === 'resolved' ? 'border-emerald-500/30 bg-emerald-500/10' : ($issue->status === 'in_review' ? 'border-sky-500/30 bg-sky-500/10' : 'border-amber-500/30 bg-amber-500/10') }}">{{ __('messages.traveler_issues.statuses.'.$issue->status) }}</span>
+                            <span class="inline-flex items-center border px-2.5 py-1 text-xs font-bold text-[#173042] {{ $issue->status === 'resolved' ? 'border-emerald-500/30 bg-emerald-500/10' : ($issue->status === 'dismissed' ? 'border-rose-500/30 bg-rose-500/10' : ($issue->status === 'in_review' ? 'border-sky-500/30 bg-sky-500/10' : 'border-amber-500/30 bg-amber-500/10')) }}">{{ __('messages.traveler_issues.statuses.'.$issue->status) }}</span>
                         </div>
                         <span class="break-words text-lg font-bold transition group-hover:text-[#e76f51]">{{ $issue->subject }}</span>
                         @if ($issue->booking)

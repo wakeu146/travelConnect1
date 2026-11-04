@@ -342,6 +342,43 @@ class AdminAlertsControllerTest extends TestCase
         ]);
     }
 
+    public function test_alert_actions_do_not_change_booking_dispute_status(): void
+    {
+        $admin = $this->actAsVerifiedAdmin();
+        $traveler = User::factory()->create();
+        $issue = $traveler->travelerIssues()->create([
+            'type' => 'booking_dispute',
+            'subject' => 'Booking service differed',
+            'description' => 'The service did not match the booking details.',
+            'status' => 'awaiting_information',
+        ]);
+
+        $this->get(route('admin.dashboard.page', [
+            'page' => 'alerts',
+            'source' => 'traveler_issue',
+            'source_id' => $issue->id,
+        ]))->assertSee(__('messages.admin_alerts.booking_dispute_actions_description'));
+
+        $this->post(route('admin.alerts.acknowledge', [
+            'source' => 'traveler_issue',
+            'sourceId' => $issue->id,
+        ]))->assertRedirect();
+
+        $this->assertDatabaseHas('traveler_issues', [
+            'id' => $issue->id,
+            'status' => 'awaiting_information',
+        ]);
+        $this->assertDatabaseHas('admin_alerts', [
+            'source_type' => 'traveler_issue',
+            'source_id' => $issue->id,
+            'status' => 'acknowledged',
+        ]);
+        $this->assertDatabaseHas('admin_alert_actions', [
+            'action' => 'acknowledge',
+            'actor_id' => $admin->id,
+        ]);
+    }
+
     public function test_traveler_alerts_open_the_matching_management_queue_even_when_empty(): void
     {
         $this->actAsVerifiedAdmin();
@@ -385,7 +422,10 @@ class AdminAlertsControllerTest extends TestCase
         $this->get(route('admin.dashboard.page', [
             'page' => 'booking_disputes',
             'lang' => 'en',
-        ]))->assertSee(__('messages.admin_nav.page_in_preparation'));
+        ]))->assertRedirect(route('admin.booking-disputes.index', ['lang' => 'en']));
+
+        $this->get(route('admin.booking-disputes.index', ['lang' => 'en']))
+            ->assertSee(__('messages.admin_disputes.description'));
     }
 
     public function test_resolved_alerts_are_colored_sorted_last_and_hidden_after_thirty_days(): void

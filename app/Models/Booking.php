@@ -21,6 +21,10 @@ class Booking extends Model
         'agency_id',
         'package_id',
         'package_availability_id',
+        'booking_type',
+        'custom_request_id',
+        'custom_proposal_id',
+        'quote_snapshot',
         'user_id',
         'booking_reference',
         'status',
@@ -46,6 +50,7 @@ class Booking extends Model
             'total_amount' => 'decimal:2',
             'status' => BookingStatus::class,
             'payment_status' => PaymentStatus::class,
+            'quote_snapshot' => 'array',
             'expires_at' => 'datetime',
             'confirmed_at' => 'datetime',
             'rejected_at' => 'datetime',
@@ -74,9 +79,29 @@ class Booking extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    public function customRequest(): BelongsTo
+    {
+        return $this->belongsTo(TravelRequest::class, 'custom_request_id');
+    }
+
+    public function customProposal(): BelongsTo
+    {
+        return $this->belongsTo(TravelRequestProposal::class, 'custom_proposal_id');
+    }
+
     public function paymentTransactions(): HasMany
     {
         return $this->hasMany(BookingPaymentTransaction::class);
+    }
+
+    public function statusHistory(): HasMany
+    {
+        return $this->hasMany(BookingStatusHistory::class)->latest('created_at')->latest('id');
+    }
+
+    public function travelerIssues(): HasMany
+    {
+        return $this->hasMany(TravelerIssue::class);
     }
 
     public function review(): HasOne

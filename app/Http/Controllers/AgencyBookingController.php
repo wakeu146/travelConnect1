@@ -7,6 +7,7 @@ use App\Enums\PaymentStatus;
 use App\Models\Booking;
 use App\Notifications\AgencyActivityNotification;
 use App\Services\BookingService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -72,6 +73,7 @@ class AgencyBookingController extends Controller
 
         $query = (clone $agencyBookings)->with([
             'package:id,agency_id,title,destination,duration_days',
+            'customRequest:id,title,destination,travel_date',
             'traveler:id,name,email,phone,profile_photo_path',
             'availability:id,package_id,departure_date,capacity,status',
         ]);
@@ -84,6 +86,9 @@ class AgencyBookingController extends Controller
                         ->orWhere('email', 'like', "%{$search}%")
                         ->orWhere('phone', 'like', "%{$search}%"))
                     ->orWhereHas('package', fn ($packageQuery) => $packageQuery
+                        ->where('title', 'like', "%{$search}%")
+                        ->orWhere('destination', 'like', "%{$search}%"))
+                    ->orWhereHas('customRequest', fn ($customRequestQuery) => $customRequestQuery
                         ->where('title', 'like', "%{$search}%")
                         ->orWhere('destination', 'like', "%{$search}%"));
             });
@@ -122,11 +127,15 @@ class AgencyBookingController extends Controller
         }
 
         if ($departureFrom !== '') {
-            $query->whereHas('availability', fn ($availabilityQuery) => $availabilityQuery->whereDate('departure_date', '>=', $departureFrom));
+            $query->where(fn (Builder $bookingQuery) => $bookingQuery
+                ->whereHas('availability', fn ($availabilityQuery) => $availabilityQuery->whereDate('departure_date', '>=', $departureFrom))
+                ->orWhereHas('customRequest', fn ($customRequestQuery) => $customRequestQuery->whereDate('travel_date', '>=', $departureFrom)));
         }
 
         if ($departureTo !== '') {
-            $query->whereHas('availability', fn ($availabilityQuery) => $availabilityQuery->whereDate('departure_date', '<=', $departureTo));
+            $query->where(fn (Builder $bookingQuery) => $bookingQuery
+                ->whereHas('availability', fn ($availabilityQuery) => $availabilityQuery->whereDate('departure_date', '<=', $departureTo))
+                ->orWhereHas('customRequest', fn ($customRequestQuery) => $customRequestQuery->whereDate('travel_date', '<=', $departureTo)));
         }
 
         if ($upcoming) {
@@ -166,7 +175,7 @@ class AgencyBookingController extends Controller
     {
         $this->authorize('viewAgency', $booking);
         $agency = request()->user()->agency;
-        $booking->load(['package', 'traveler', 'availability']);
+        $booking->load(['package', 'traveler', 'availability', 'customRequest', 'customProposal']);
         $travelerPhotoPath = $booking->traveler?->profile_photo_path;
         $travelerPhotoUrl = $travelerPhotoPath && Storage::disk('public')->exists($travelerPhotoPath)
             ? asset('storage/'.$travelerPhotoPath)
@@ -196,11 +205,11 @@ class AgencyBookingController extends Controller
         ]);
     }
 
-    public function confirm(Booking $booking, BookingService $bookingService): RedirectResponse
+    public function confirm(Request $request, Booking $booking, BookingService $bookingService): RedirectResponse
     {
         $this->authorize('update', $booking);
 
-        if ($this->expirePendingBookingIfOverdue($booking, $bookingService)) {
+        if ($this->expirePendingBookingIfOverdue($request, $booking, $bookingService)) {
             return redirect()->route('agency.bookings.show', ['booking' => $booking->id])->withErrors(['status' => __('messages.pending_booking_expired')]);
         }
 
@@ -208,17 +217,21 @@ class AgencyBookingController extends Controller
             return back()->withErrors(['status' => __('messages.only_pending_confirm')]);
         }
 
-        $bookingService->transitionStatus($booking, BookingStatus::CONFIRMED);
+        try {
+            $bookingService->transitionStatus($booking, BookingStatus::CONFIRMED, actor: $request->user());
+        } catch (\RuntimeException $exception) {
+            return back()->withErrors(['status' => $exception->getMessage()]);
+        }
         $this->notifyTraveler($booking, 'booking_confirmed_notification');
 
         return redirect()->route('agency.bookings.show', ['booking' => $booking->id])->with('status', __('messages.booking_confirmed'));
     }
 
-    public function reject(Booking $booking, BookingService $bookingService): RedirectResponse
+    public function reject(Request $request, Booking $booking, BookingService $bookingService): RedirectResponse
     {
         $this->authorize('update', $booking);
 
-        if ($this->expirePendingBookingIfOverdue($booking, $bookingService)) {
+        if ($this->expirePendingBookingIfOverdue($request, $booking, $bookingService)) {
             return redirect()->route('agency.bookings.show', ['booking' => $booking->id])->withErrors(['status' => __('messages.pending_booking_expired')]);
         }
 
@@ -226,17 +239,17 @@ class AgencyBookingController extends Controller
             return back()->withErrors(['status' => __('messages.only_pending_reject')]);
         }
 
-        $bookingService->transitionStatus($booking, BookingStatus::REJECTED);
+        $bookingService->transitionStatus($booking, BookingStatus::REJECTED, actor: $request->user());
         $this->notifyTraveler($booking, 'booking_rejected_notification');
 
         return redirect()->route('agency.bookings.show', ['booking' => $booking->id])->with('status', __('messages.booking_rejected'));
     }
 
-    public function cancel(Booking $booking, BookingService $bookingService): RedirectResponse
+    public function cancel(Request $request, Booking $booking, BookingService $bookingService): RedirectResponse
     {
         $this->authorize('update', $booking);
 
-        if ($this->expirePendingBookingIfOverdue($booking, $bookingService)) {
+        if ($this->expirePendingBookingIfOverdue($request, $booking, $bookingService)) {
             return redirect()->route('agency.bookings.show', ['booking' => $booking->id])->withErrors(['status' => __('messages.pending_booking_expired')]);
         }
 
@@ -244,13 +257,13 @@ class AgencyBookingController extends Controller
             return back()->withErrors(['status' => __('messages.booking_cannot_cancel')]);
         }
 
-        $bookingService->transitionStatus($booking, BookingStatus::CANCELLED, __('messages.cancelled_by_agency'));
+        $bookingService->transitionStatus($booking, BookingStatus::CANCELLED, __('messages.cancelled_by_agency'), $request->user());
         $this->notifyTraveler($booking, 'booking_cancelled_notification');
 
         return redirect()->route('agency.bookings.show', ['booking' => $booking->id])->with('status', __('messages.booking_cancelled'));
     }
 
-    public function complete(Booking $booking, BookingService $bookingService): RedirectResponse
+    public function complete(Request $request, Booking $booking, BookingService $bookingService): RedirectResponse
     {
         $this->authorize('update', $booking);
 
@@ -258,7 +271,7 @@ class AgencyBookingController extends Controller
             return back()->withErrors(['status' => __('messages.only_confirmed_complete')]);
         }
 
-        $bookingService->transitionStatus($booking, BookingStatus::COMPLETED);
+        $bookingService->transitionStatus($booking, BookingStatus::COMPLETED, actor: $request->user());
         $this->notifyTraveler($booking, 'booking_completed_notification');
 
         return redirect()->route('agency.bookings.show', ['booking' => $booking->id])->with('status', __('messages.booking_completed'));
@@ -275,13 +288,16 @@ class AgencyBookingController extends Controller
         ));
     }
 
-    private function expirePendingBookingIfOverdue(Booking $booking, BookingService $bookingService): bool
-    {
+    private function expirePendingBookingIfOverdue(
+        Request $request,
+        Booking $booking,
+        BookingService $bookingService,
+    ): bool {
         if ($booking->status !== BookingStatus::PENDING || ! $booking->expires_at || ! $booking->expires_at->isPast()) {
             return false;
         }
 
-        $bookingService->transitionStatus($booking, BookingStatus::EXPIRED);
+        $bookingService->transitionStatus($booking, BookingStatus::EXPIRED, actor: $request->user());
         $this->notifyTraveler($booking, 'booking_expired_notification');
 
         return true;

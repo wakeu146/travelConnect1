@@ -56,6 +56,10 @@
             @else
                 @include('admin.pages.travel-management.destinations.index', $travelManagementData)
             @endif
+        @elseif ($bookingPageData !== null)
+            @include('admin.bookings.'.$bookingPageData['view'], $bookingPageData['data'])
+        @elseif ($customRequestData !== null)
+            @include('admin.custom-requests.'.$customRequestData['view'], $customRequestData['data'])
         @else
             <section class="admin-empty-state grid justify-items-center gap-4 border p-8 text-center sm:p-12" aria-labelledby="admin-placeholder-title">
                 <span class="admin-empty-icon flex h-12 w-12 items-center justify-center rounded-xl">

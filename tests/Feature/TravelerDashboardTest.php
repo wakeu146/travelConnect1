@@ -252,6 +252,12 @@ class TravelerDashboardTest extends TestCase
             ->assertDontSee('TC-2026-100002')
             ->assertSee('data-booking-details-open', false)
             ->assertSee('data-booking-details-dialog', false)
+            ->assertSeeInOrder([
+                'href="'.route('account.bookings', ['lang' => 'en']).'"',
+                'href="'.route('account.custom-requests.create', ['lang' => 'en']).'"',
+                __('messages.custom_requests.custom_request'),
+            ], false)
+            ->assertSee('href="'.route('account.custom-requests.index', ['lang' => 'en']).'"', false)
             ->assertSee('href="'.route('account.bookings', ['lang' => 'en']).'"', false);
     }
 

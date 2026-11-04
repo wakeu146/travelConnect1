@@ -20,9 +20,10 @@
 
                 <div class="mt-6 grid gap-6 md:grid-cols-2">
                     <div>
-                        <p class="text-xs font-bold uppercase tracking-[.18em] text-[#607985]">Package</p>
-                        <p class="mt-2 text-xl font-bold">{{ $booking->package?->title ?? 'Package' }}</p>
-                        <p class="mt-2 text-sm text-[#607985]">Departure: {{ $booking->availability?->departure_date?->format('F j, Y') ?? 'TBD' }}</p>
+                        <p class="text-xs font-bold uppercase tracking-[.18em] text-[#607985]">{{ $booking->booking_type === 'custom' ? __('messages.custom_requests.request_details') : 'Package' }}</p>
+                        <p class="mt-2 text-xl font-bold">{{ $booking->package?->title ?? $booking->customRequest?->title ?? __('messages.travel_package') }}</p>
+                        <p class="mt-2 text-sm text-[#607985]">{{ __('messages.destination') }}: {{ $booking->customRequest?->destination ?? $booking->package?->destination ?? __('messages.not_available') }}</p>
+                        <p class="mt-2 text-sm text-[#607985]">{{ __('messages.departure') }}: {{ $booking->customRequest?->travel_date?->format('F j, Y') ?? $booking->availability?->departure_date?->format('F j, Y') ?? 'TBD' }}</p>
                     </div>
                     <div>
                         <p class="text-xs font-bold uppercase tracking-[.18em] text-[#607985]">Agency</p>

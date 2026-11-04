@@ -5,6 +5,7 @@ use App\Http\Controllers\AgencyAvailabilityController;
 use App\Http\Controllers\AgencyBookingController;
 use App\Http\Controllers\AgencyController;
 use App\Http\Controllers\AgencyConversationController;
+use App\Http\Controllers\AgencyCustomRequestController;
 use App\Http\Controllers\AgencyDiscoveryController;
 use App\Http\Controllers\AgencyNotificationController;
 use App\Http\Controllers\AgencyOperationsController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\InquiryController;
 use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\TravelerCustomRequestController;
 use App\Http\Controllers\TravelerIssueController;
 use App\Http\Middleware\PreventAuthenticatedWorkspaceCaching;
 use App\Models\Agency;
@@ -188,6 +190,13 @@ Route::middleware(['auth', 'agency-owner', PreventAuthenticatedWorkspaceCaching:
     Route::patch('/bookings/{booking}/reject', [AgencyBookingController::class, 'reject'])->name('bookings.reject');
     Route::patch('/bookings/{booking}/cancel', [AgencyBookingController::class, 'cancel'])->name('bookings.cancel');
     Route::patch('/bookings/{booking}/complete', [AgencyBookingController::class, 'complete'])->name('bookings.complete');
+    Route::get('/custom-requests', [AgencyCustomRequestController::class, 'index'])->name('custom-requests.index');
+    Route::get('/custom-requests/applications', [AgencyCustomRequestController::class, 'applications'])->name('custom-requests.applications');
+    Route::get('/custom-requests/{travelRequest}', [AgencyCustomRequestController::class, 'show'])->whereNumber('travelRequest')->name('custom-requests.show');
+    Route::patch('/custom-requests/{travelRequest}/read', [AgencyCustomRequestController::class, 'markRead'])->whereNumber('travelRequest')->name('custom-requests.read');
+    Route::get('/custom-requests/{travelRequest}/proposal', [AgencyCustomRequestController::class, 'createProposal'])->whereNumber('travelRequest')->name('custom-requests.proposal.create');
+    Route::post('/custom-requests/{travelRequest}/proposal', [AgencyCustomRequestController::class, 'storeProposal'])->whereNumber('travelRequest')->name('custom-requests.proposal.store');
+    Route::patch('/custom-request-proposals/{proposal}/withdraw', [AgencyCustomRequestController::class, 'withdrawProposal'])->whereNumber('proposal')->name('custom-request-proposals.withdraw');
 
     Route::get('/inquiries', [AgencyOperationsController::class, 'inquiries'])->name('inquiries.index');
     Route::get('/customers', [AgencyOperationsController::class, 'customers'])->name('customers.index');
@@ -256,6 +265,14 @@ Route::get('/dashboard', function () {
 })->middleware(['auth', PreventAuthenticatedWorkspaceCaching::class])->name('dashboard');
 Route::get('/account/bookings', [BookingController::class, 'index'])->middleware('auth')->name('account.bookings');
 Route::post('/account/bookings', [BookingController::class, 'storeFromAccount'])->middleware('auth')->name('account.bookings.store');
+Route::middleware(['auth', PreventAuthenticatedWorkspaceCaching::class])->prefix('account/custom-requests')->name('account.custom-requests.')->group(function (): void {
+    Route::get('/', [TravelerCustomRequestController::class, 'index'])->name('index');
+    Route::get('/create', [TravelerCustomRequestController::class, 'create'])->name('create');
+    Route::post('/', [TravelerCustomRequestController::class, 'store'])->name('store');
+    Route::get('/{travelRequest}', [TravelerCustomRequestController::class, 'show'])->whereNumber('travelRequest')->name('show');
+    Route::post('/{travelRequest}/proposals/{proposal}/select', [TravelerCustomRequestController::class, 'select'])
+        ->whereNumber(['travelRequest', 'proposal'])->name('proposals.select');
+});
 Route::middleware(['auth', PreventAuthenticatedWorkspaceCaching::class])->prefix('account/issues')->name('account.issues.')->group(function (): void {
     Route::get('/', [TravelerIssueController::class, 'index'])->name('index');
     Route::get('/create', [TravelerIssueController::class, 'create'])->name('create');

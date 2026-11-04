@@ -8,6 +8,7 @@ use App\Enums\PackageStatus;
 use App\Enums\PaymentStatus;
 use App\Models\Agency;
 use App\Models\Booking;
+use App\Models\BookingStatusHistory;
 use App\Models\Package;
 use App\Models\PackageAvailability;
 use App\Models\User;
@@ -159,39 +160,43 @@ class BookingService
             ->update(['status' => PackageAvailabilityStatus::EXPIRED->value]);
     }
 
-    public function transitionStatus(Booking $booking, BookingStatus $newStatus, ?string $cancellationReason = null): Booking
-    {
-        $currentStatus = $booking->status;
+    public function transitionStatus(
+        Booking $booking,
+        BookingStatus $newStatus,
+        ?string $reason = null,
+        ?User $actor = null,
+    ): Booking {
+        return DB::transaction(function () use ($booking, $newStatus, $reason, $actor): Booking {
+            $booking = Booking::query()->lockForUpdate()->findOrFail($booking->id);
+            $currentStatus = $booking->status;
+            $allowedTransitions = match ($currentStatus) {
+                BookingStatus::PENDING => [
+                    BookingStatus::CONFIRMED,
+                    BookingStatus::REJECTED,
+                    BookingStatus::CANCELLED,
+                    BookingStatus::EXPIRED,
+                ],
+                BookingStatus::CONFIRMED => [
+                    BookingStatus::CANCELLED,
+                    BookingStatus::COMPLETED,
+                ],
+                default => [],
+            };
 
-        $allowedTransitions = match ($currentStatus) {
-            BookingStatus::PENDING => [
-                BookingStatus::CONFIRMED,
-                BookingStatus::REJECTED,
-                BookingStatus::CANCELLED,
-                BookingStatus::EXPIRED,
-            ],
-            BookingStatus::CONFIRMED => [
-                BookingStatus::CANCELLED,
-                BookingStatus::COMPLETED,
-            ],
-            default => [],
-        };
+            if (! in_array($newStatus, $allowedTransitions, true)) {
+                throw new \RuntimeException(sprintf(
+                    'Invalid booking status transition from %s to %s.',
+                    $currentStatus->value,
+                    $newStatus->value,
+                ));
+            }
 
-        if (! in_array($newStatus, $allowedTransitions, true)) {
-            throw new \RuntimeException(sprintf(
-                'Invalid booking status transition from %s to %s.',
-                $currentStatus->value,
-                $newStatus->value,
-            ));
-        }
-
-        return DB::transaction(function () use ($booking, $newStatus, $cancellationReason): Booking {
             $payload = ['status' => $newStatus->value];
 
             switch ($newStatus) {
                 case BookingStatus::CONFIRMED:
+                    $this->assertCanConfirm($booking);
                     $payload['confirmed_at'] = now();
-                    $payload['payment_status'] = PaymentStatus::PAID->value;
                     break;
 
                 case BookingStatus::REJECTED:
@@ -200,7 +205,7 @@ class BookingService
 
                 case BookingStatus::CANCELLED:
                     $payload['cancelled_at'] = now();
-                    $payload['cancellation_reason'] = $cancellationReason ?? 'Cancelled by booking lifecycle';
+                    $payload['cancellation_reason'] = $reason ?? 'Cancelled by booking lifecycle';
                     break;
 
                 case BookingStatus::COMPLETED:
@@ -213,9 +218,66 @@ class BookingService
             }
 
             $booking->update($payload);
+            BookingStatusHistory::query()->create([
+                'booking_id' => $booking->id,
+                'actor_id' => $actor?->id,
+                'event_type' => 'status_transition',
+                'from_status' => $currentStatus->value,
+                'to_status' => $newStatus->value,
+                'reason' => $reason,
+            ]);
 
             return $booking->refresh();
         });
+    }
+
+    private function assertCanConfirm(Booking $booking): void
+    {
+        if ($booking->expires_at?->isPast()) {
+            throw new \RuntimeException('This pending booking has expired.');
+        }
+
+        $agencyIsActive = Agency::query()
+            ->whereKey($booking->agency_id)
+            ->where('operating_status', 'active')
+            ->lockForUpdate()
+            ->exists();
+
+        if ($booking->booking_type === 'custom') {
+            if (! $agencyIsActive || ! $booking->customRequest || ! $booking->customProposal) {
+                throw new \RuntimeException('This custom booking is no longer available for confirmation.');
+            }
+
+            return;
+        }
+
+        $package = Package::query()->findOrFail($booking->package_id);
+
+        if ($package->status !== PackageStatus::PUBLISHED || ! $agencyIsActive) {
+            throw new \RuntimeException('This package is no longer available for confirmation.');
+        }
+
+        $availability = PackageAvailability::query()
+            ->whereKey($booking->package_availability_id)
+            ->lockForUpdate()
+            ->firstOrFail();
+
+        if (
+            $availability->status !== PackageAvailabilityStatus::ACTIVE
+            || $availability->departure_date->lte(today())
+        ) {
+            throw new \RuntimeException('This departure is no longer available.');
+        }
+
+        $reservedTravelers = (int) Booking::query()
+            ->where('package_availability_id', $availability->id)
+            ->whereKeyNot($booking->id)
+            ->reservesCapacity()
+            ->sum('traveler_count');
+
+        if ($reservedTravelers + $booking->traveler_count > $availability->capacity) {
+            throw new \RuntimeException('There are not enough seats remaining for this booking.');
+        }
     }
 
     protected function lockAndGetAvailableCapacity(PackageAvailability $availability): int

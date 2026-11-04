@@ -2,6 +2,9 @@
 
 use App\Http\Controllers\Admin\AdminAgencyModerationController;
 use App\Http\Controllers\Admin\AdminAlertsController;
+use App\Http\Controllers\Admin\AdminBookingController;
+use App\Http\Controllers\Admin\AdminBookingDisputeController;
+use App\Http\Controllers\Admin\AdminCustomRequestController;
 use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\AdminLoginVerificationController;
 use App\Http\Controllers\Admin\AdminNotificationController;
@@ -119,6 +122,37 @@ Route::prefix('users')->name('users.')->middleware(['auth', EnsureAdminSession::
         ->middleware('throttle:admin.users.actions')
         ->name('destroy');
     Route::get('/{userId}', [AdminUserController::class, 'show'])->whereNumber('userId')->name('show');
+});
+
+Route::prefix('bookings')->name('bookings.')->middleware(['auth', EnsureAdminSession::class])->group(function (): void {
+    Route::get('/', [AdminBookingController::class, 'index'])->name('index');
+    Route::get('/pending', [AdminBookingController::class, 'pending'])->name('pending');
+    Route::get('/confirmed', [AdminBookingController::class, 'confirmed'])->name('confirmed');
+    Route::get('/completed', [AdminBookingController::class, 'completed'])->name('completed');
+    Route::get('/cancelled-rejected', [AdminBookingController::class, 'cancelledRejected'])->name('cancelled-rejected');
+    Route::get('/expired', [AdminBookingController::class, 'expired'])->name('expired');
+    Route::get('/export', [AdminBookingController::class, 'export'])->name('export');
+    Route::get('/{booking}', [AdminBookingController::class, 'show'])->whereNumber('booking')->name('show');
+    Route::patch('/{booking}/status', [AdminBookingController::class, 'transition'])->whereNumber('booking')->name('status');
+    Route::post('/{booking}/notes', [AdminBookingController::class, 'note'])->whereNumber('booking')->name('notes.store');
+    Route::post('/{booking}/disputes', [AdminBookingController::class, 'openDispute'])->whereNumber('booking')->name('disputes.store');
+});
+
+Route::prefix('custom-requests')->name('custom-requests.')->middleware(['auth', EnsureAdminSession::class])->group(function (): void {
+    Route::get('/', [AdminCustomRequestController::class, 'index'])->name('index');
+    Route::get('/export', [AdminCustomRequestController::class, 'export'])->name('export');
+    Route::get('/{travelRequest}', [AdminCustomRequestController::class, 'show'])->whereNumber('travelRequest')->name('show');
+    Route::post('/{travelRequest}/moderate/{action}', [AdminCustomRequestController::class, 'moderate'])
+        ->whereNumber('travelRequest')->whereIn('action', ['hold', 'restore', 'reject', 'close', 'reopen'])->name('moderate');
+    Route::post('/{travelRequest}/notes', [AdminCustomRequestController::class, 'note'])->whereNumber('travelRequest')->name('notes.store');
+});
+
+Route::prefix('booking-disputes')->name('booking-disputes.')->middleware(['auth', EnsureAdminSession::class])->group(function (): void {
+    Route::get('/', [AdminBookingDisputeController::class, 'index'])->name('index');
+    Route::get('/{issue}', [AdminBookingDisputeController::class, 'show'])->whereNumber('issue')->name('show');
+    Route::patch('/{issue}/assignment', [AdminBookingDisputeController::class, 'assign'])->whereNumber('issue')->name('assignment');
+    Route::patch('/{issue}/status', [AdminBookingDisputeController::class, 'transition'])->whereNumber('issue')->name('status');
+    Route::post('/{issue}/notes', [AdminBookingDisputeController::class, 'note'])->whereNumber('issue')->name('notes.store');
 });
 
 Route::get('/notifications/{notification}', [AdminNotificationController::class, 'open'])

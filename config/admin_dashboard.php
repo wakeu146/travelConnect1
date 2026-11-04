@@ -2,6 +2,19 @@
 
 return [
     'page_routes' => [
+        'all_bookings' => 'admin.bookings.index',
+        'pending_bookings' => 'admin.bookings.pending',
+        'confirmed_bookings' => 'admin.bookings.confirmed',
+        'completed_bookings' => 'admin.bookings.completed',
+        'cancelled_rejected_bookings' => 'admin.bookings.cancelled-rejected',
+        'expired_bookings' => 'admin.bookings.expired',
+        'booking_disputes' => 'admin.booking-disputes.index',
+        'all_requests' => 'admin.custom-requests.index',
+        'new_requests' => 'admin.custom-requests.index',
+        'in_progress_requests' => 'admin.custom-requests.index',
+        'quoted_requests' => 'admin.custom-requests.index',
+        'accepted_converted_requests' => 'admin.custom-requests.index',
+        'closed_requests' => 'admin.custom-requests.index',
         'all_users' => 'admin.users.index',
         'travelers' => 'admin.users.travelers',
         'agency_owners' => 'admin.users.agency-owners',

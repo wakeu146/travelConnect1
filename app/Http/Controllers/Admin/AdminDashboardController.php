@@ -172,6 +172,22 @@ class AdminDashboardController extends Controller
     }
 
     /**
+     * Render custom-request operations within the existing administrator shell.
+     *
+     * @param  array{view: string, data: array<string, mixed>}  $customRequestData
+     */
+    public function renderCustomRequests(Request $request, string $page, array $customRequestData): View
+    {
+        return $this->renderDashboard(
+            $request,
+            'platform_management',
+            $page,
+            'custom_travel_requests',
+            customRequestData: $customRequestData,
+        );
+    }
+
+    /**
      * Render a Users module page inside the existing administrator dashboard shell.
      *
      * @param  array<string, mixed>  $usersPageData
@@ -212,6 +228,26 @@ class AdminDashboardController extends Controller
     }
 
     /**
+     * @param  array<string, mixed>  $bookingPageData
+     */
+    public function renderBookingsModule(
+        Request $request,
+        string $page,
+        string $view,
+        array $bookingPageData,
+        ?string $pageTitle = null,
+    ): View {
+        return $this->renderDashboard(
+            $request,
+            'platform_management',
+            $page,
+            'bookings',
+            pageTitleOverride: $pageTitle,
+            bookingPageData: ['view' => $view, 'data' => $bookingPageData],
+        );
+    }
+
+    /**
      * @return array<string, array{icon: string, groups: array<int, array<string, mixed>>}>
      */
     private function sections(): array
@@ -232,6 +268,8 @@ class AdminDashboardController extends Controller
         ?array $usersPageData = null,
         ?array $travelManagementData = null,
         ?string $pageTitleOverride = null,
+        ?array $bookingPageData = null,
+        ?array $customRequestData = null,
     ): View {
         $sections = $this->sections();
         $adminNotifications = $request->user()
@@ -273,6 +311,8 @@ class AdminDashboardController extends Controller
             'agencyProfile' => $agencyProfile,
             'usersPageData' => $usersPageData,
             'travelManagementData' => $travelManagementData,
+            'bookingPageData' => $bookingPageData,
+            'customRequestData' => $customRequestData,
             'adminNotifications' => $adminNotifications,
             'unreadAdminSecurityNotificationCount' => $request->user()
                 ->unreadNotifications()

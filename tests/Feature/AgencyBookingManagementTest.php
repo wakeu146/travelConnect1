@@ -26,10 +26,11 @@ class AgencyBookingManagementTest extends TestCase
     {
         $agency = Agency::factory()->create();
         $package = Package::factory()->create(['agency_id' => $agency->id, 'status' => PackageStatus::PUBLISHED]);
+        $departureDate = now()->addMonth()->toDateString();
 
         $response = $this->actingAs($agency->owner)->post(route('agency.availability.store'), [
             'package_id' => $package->id,
-            'departure_date' => '2026-10-10',
+            'departure_date' => $departureDate,
             'capacity' => 20,
             'status' => 'active',
             'notes' => 'Early season departure',
@@ -44,7 +45,7 @@ class AgencyBookingManagementTest extends TestCase
 
         $createdAvailability = PackageAvailability::query()->where('package_id', $package->id)->first();
         $this->assertNotNull($createdAvailability);
-        $this->assertSame('2026-10-10', $createdAvailability->departure_date->format('Y-m-d'));
+        $this->assertSame($departureDate, $createdAvailability->departure_date->format('Y-m-d'));
     }
 
     public function test_agency_cannot_create_availability_for_another_agencys_package(): void
@@ -56,7 +57,7 @@ class AgencyBookingManagementTest extends TestCase
         $this->actingAs($agencyA->owner)
             ->post(route('agency.availability.store'), [
                 'package_id' => $packageB->id,
-                'departure_date' => '2026-10-15',
+                'departure_date' => now()->addMonth()->toDateString(),
                 'capacity' => 10,
                 'status' => 'active',
             ])
@@ -138,7 +139,7 @@ class AgencyBookingManagementTest extends TestCase
         $package = Package::factory()->create(['agency_id' => $agency->id, 'status' => PackageStatus::PUBLISHED, 'price_from' => 1200]);
         $availability = PackageAvailability::create([
             'package_id' => $package->id,
-            'departure_date' => '2026-09-20',
+            'departure_date' => now()->addMonth()->toDateString(),
             'capacity' => 10,
             'status' => 'active',
         ]);
@@ -172,7 +173,7 @@ class AgencyBookingManagementTest extends TestCase
 
         $booking->refresh();
         $this->assertSame('confirmed', $booking->status->value);
-        $this->assertSame(PaymentStatus::PAID, $booking->payment_status);
+        $this->assertSame(PaymentStatus::UNPAID, $booking->payment_status);
         $this->assertSame(1, $traveler->notifications()->whereJsonContains('data->type', 'booking')->count());
 
         $this->actingAs($agency->owner)

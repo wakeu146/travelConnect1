@@ -12,7 +12,10 @@
                     <p class="text-xs font-bold uppercase tracking-[.18em] text-[#e76f51]">{{ __('messages.booking') }}</p>
                     <h2 class="mt-2 text-2xl font-bold">{{ __('messages.book_this_package') }}</h2>
                 </div>
-                <a href="{{ route('account.discover', ['lang' => app()->getLocale()]) }}" class="inline-flex items-center justify-center rounded-xl border border-[#dbe3e5] px-4 py-2.5 text-sm font-semibold text-[#173042] hover:border-[#e76f51] hover:text-[#e76f51]">{{ __('messages.discover_agencies') }}</a>
+                <div class="flex flex-wrap gap-2">
+                    <a href="{{ route('account.custom-requests.index', ['lang' => app()->getLocale()]) }}" class="inline-flex items-center justify-center rounded-xl border border-[#dbe3e5] px-4 py-2.5 text-sm font-semibold text-[#173042] hover:border-[#e76f51] hover:text-[#e76f51]">{{ __('messages.custom_requests.my_requests') }}</a>
+                    <a href="{{ route('account.discover', ['lang' => app()->getLocale()]) }}" class="inline-flex items-center justify-center rounded-xl border border-[#dbe3e5] px-4 py-2.5 text-sm font-semibold text-[#173042] hover:border-[#e76f51] hover:text-[#e76f51]">{{ __('messages.discover_agencies') }}</a>
+                </div>
             </div>
 
             <form method="GET" action="{{ route('account.bookings', ['lang' => app()->getLocale()]) }}" class="mt-6 grid gap-4">
@@ -169,7 +172,7 @@
                         <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                             <div class="min-w-0">
                                 <div class="flex flex-wrap items-center gap-3">
-                                    <h3 class="text-lg font-bold">{{ $booking->package?->title ?? __('messages.travel_package') }}</h3>
+                                    <h3 class="text-lg font-bold">{{ $booking->package?->title ?? $booking->customRequest?->title ?? __('messages.travel_package') }}</h3>
                                     <span data-booking-status="{{ $bookingStatus }}" class="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.12em] {{ $statusClasses }}">{{ __('messages.booking_status_'.$bookingStatus) }}</span>
                                 </div>
                                 <p class="mt-2 text-sm text-[#607985]">{{ $booking->agency?->company_name ?? __('messages.travel_agency') }}</p>
@@ -178,7 +181,7 @@
                         </div>
 
                         <dl class="mt-5 grid gap-4 border-t border-[#e7eceb] pt-5 sm:grid-cols-2 lg:grid-cols-4">
-                            <div><dt class="text-xs font-semibold text-[#607985]">{{ __('messages.departure') }}</dt><dd class="mt-1 text-sm font-bold">{{ $booking->availability?->departure_date?->translatedFormat('d M Y') ?? __('messages.not_available') }}</dd></div>
+                            <div><dt class="text-xs font-semibold text-[#607985]">{{ __('messages.departure') }}</dt><dd class="mt-1 text-sm font-bold">{{ $booking->customRequest?->travel_date?->translatedFormat('d M Y') ?? $booking->availability?->departure_date?->translatedFormat('d M Y') ?? __('messages.not_available') }}</dd></div>
                             <div><dt class="text-xs font-semibold text-[#607985]">{{ __('messages.traveler_count_label') }}</dt><dd class="mt-1 text-sm font-bold">{{ $booking->traveler_count }}</dd></div>
                             <div><dt class="text-xs font-semibold text-[#607985]">{{ __('messages.total') }}</dt><dd class="mt-1 text-sm font-bold">{{ $booking->currency }} {{ number_format((float) $booking->total_amount, 2) }}</dd></div>
                             <div><dt class="text-xs font-semibold text-[#607985]">{{ __('messages.payment') }}</dt><dd class="mt-1 text-sm font-bold">{{ __('messages.payment_status_'.$booking->payment_status->value) }}</dd></div>
@@ -194,7 +197,7 @@
                             <div class="flex items-start justify-between gap-4">
                                 <div>
                                     <p class="text-xs font-bold uppercase tracking-[.18em] text-[#e76f51]">{{ __('messages.reference') }} · {{ $booking->booking_reference }}</p>
-                                    <h2 id="booking-details-title-{{ $booking->id }}" class="mt-2 font-serif text-2xl">{{ $booking->package?->title ?? __('messages.travel_package') }}</h2>
+                                    <h2 id="booking-details-title-{{ $booking->id }}" class="mt-2 font-serif text-2xl">{{ $booking->package?->title ?? $booking->customRequest?->title ?? __('messages.travel_package') }}</h2>
                                     <p class="mt-1 text-sm text-[#607985]">{{ $booking->agency?->company_name ?? __('messages.travel_agency') }}</p>
                                 </div>
                                 <button type="button" data-booking-details-close class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#607985] transition hover:bg-[#f1f6f4] hover:text-[#173042]" aria-label="{{ __('messages.close_booking_dialog') }}" title="{{ __('messages.close_booking_dialog') }}">
@@ -203,7 +206,7 @@
                             </div>
                             <span data-booking-status="{{ $bookingStatus }}" class="mt-4 inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.12em] {{ $statusClasses }}">{{ __('messages.booking_status_'.$bookingStatus) }}</span>
                             <dl class="mt-5 grid gap-3 sm:grid-cols-2">
-                                <div data-booking-detail-surface class="border p-4"><dt class="text-xs font-semibold text-[#607985]">{{ __('messages.departure') }}</dt><dd class="mt-1 font-bold">{{ $booking->availability?->departure_date?->translatedFormat('d M Y') ?? __('messages.not_available') }}</dd></div>
+                                <div data-booking-detail-surface class="border p-4"><dt class="text-xs font-semibold text-[#607985]">{{ __('messages.departure') }}</dt><dd class="mt-1 font-bold">{{ $booking->customRequest?->travel_date?->translatedFormat('d M Y') ?? $booking->availability?->departure_date?->translatedFormat('d M Y') ?? __('messages.not_available') }}</dd></div>
                                 <div data-booking-detail-surface class="border p-4"><dt class="text-xs font-semibold text-[#607985]">{{ __('messages.traveler_count_label') }}</dt><dd class="mt-1 font-bold">{{ $booking->traveler_count }}</dd></div>
                                 <div data-booking-detail-surface class="border p-4"><dt class="text-xs font-semibold text-[#607985]">{{ __('messages.total') }}</dt><dd class="mt-1 font-bold">{{ $booking->currency }} {{ number_format((float) $booking->total_amount, 2) }}</dd></div>
                                 <div data-booking-detail-surface class="border p-4"><dt class="text-xs font-semibold text-[#607985]">{{ __('messages.payment') }}</dt><dd class="mt-1 font-bold">{{ __('messages.payment_status_'.$booking->payment_status->value) }}</dd></div>

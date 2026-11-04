@@ -36,6 +36,7 @@ class BookingController extends Controller
                 'agency:id,company_name',
                 'package:id,title,destination,duration_days',
                 'availability:id,departure_date',
+                'customRequest:id,title,destination,travel_date',
             ])
             ->latest()
             ->paginate(10);
@@ -231,11 +232,11 @@ class BookingController extends Controller
         $this->authorize('view', $booking);
 
         return view('bookings.confirmation', [
-            'booking' => $booking->load(['package', 'availability', 'traveler', 'agency']),
+            'booking' => $booking->load(['package', 'availability', 'customRequest', 'traveler', 'agency']),
         ]);
     }
 
-    public function cancel(Request $request, Booking $booking): RedirectResponse
+    public function cancel(Request $request, Booking $booking, BookingService $bookingService): RedirectResponse
     {
         $this->authorize('cancel', $booking);
 
@@ -247,9 +248,12 @@ class BookingController extends Controller
             return back()->withErrors(['status' => 'This booking cannot be cancelled.']);
         }
 
-        $bookingService = app(BookingService::class);
-        $bookingService->transitionStatus($booking, BookingStatus::CANCELLED);
-        $booking->update(['cancellation_reason' => $request->input('reason', 'Cancelled by traveler')]);
+        $bookingService->transitionStatus(
+            $booking,
+            BookingStatus::CANCELLED,
+            $request->input('reason') ?: 'Cancelled by traveler',
+            $request->user(),
+        );
         $booking->loadMissing(['agency.owner']);
         $booking->agency?->owner?->notify(new AgencyActivityNotification(
             __('messages.booking_notification_title'),
@@ -266,7 +270,7 @@ class BookingController extends Controller
         $this->authorize('view', $booking);
 
         return view('bookings.show', [
-            'booking' => $booking->load(['package', 'availability', 'traveler', 'agency', 'review']),
+            'booking' => $booking->load(['package', 'availability', 'customRequest', 'customProposal', 'traveler', 'agency', 'review']),
         ]);
     }
 }

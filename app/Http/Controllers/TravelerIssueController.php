@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\UserRole;
 use App\Models\Booking;
+use App\Models\BookingDisputeActivity;
 use App\Models\User;
 use App\Notifications\AdminTravelerIssueReceived;
 use Illuminate\Http\RedirectResponse;
@@ -65,9 +66,19 @@ class TravelerIssueController extends Controller
         $issue = $traveler->travelerIssues()->create([
             'booking_id' => $data['booking_id'] ?? null,
             'type' => $data['type'],
+            'category' => 'general',
             'subject' => $data['subject'],
             'description' => $data['description'],
         ]);
+        if ($issue->type === 'booking_dispute' && $issue->booking_id !== null) {
+            BookingDisputeActivity::query()->create([
+                'traveler_issue_id' => $issue->id,
+                'actor_id' => $traveler->id,
+                'event_type' => 'opened',
+                'note' => $issue->description,
+                'metadata' => ['source' => 'traveler'],
+            ]);
+        }
 
         $admins = User::query()->where('role', UserRole::ADMIN)->get();
         Notification::send($admins, new AdminTravelerIssueReceived($issue));

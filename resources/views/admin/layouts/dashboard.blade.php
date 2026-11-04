@@ -206,7 +206,7 @@
         <div class="admin-backdrop fixed inset-0 z-30 hidden lg:hidden" data-admin-backdrop></div>
 
         <div class="lg:grid lg:min-h-[calc(100vh-4rem)] lg:grid-cols-[17rem_minmax(0,1fr)]">
-            <aside id="admin-sidebar" class="admin-sidebar fixed bottom-24 left-0 top-28 z-40 hidden w-[min(18rem,calc(100vw-2rem))] overflow-y-auto border-r p-4 lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:block lg:h-dvh lg:w-[17rem] lg:overflow-y-auto lg:px-4 lg:pb-24 lg:pt-20">
+            <aside id="admin-sidebar" class="admin-sidebar fixed inset-y-0 left-0 z-[60] hidden w-[min(18rem,calc(100vw-2rem))] overflow-y-auto border-r p-4 lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:block lg:h-dvh lg:w-[17rem] lg:overflow-y-auto lg:px-4 lg:pb-24 lg:pt-20">
                 <div class="mb-4 flex items-center justify-between px-2 lg:hidden">
                     <p class="text-xs font-bold uppercase tracking-[.14em] admin-muted">{{ __('messages.admin_nav.navigation') }}</p>
                     <button type="button" class="admin-icon-button flex h-8 w-8 items-center justify-center rounded-lg" data-admin-sidebar-close aria-label="{{ __('messages.admin_nav.close_sidebar') }}">

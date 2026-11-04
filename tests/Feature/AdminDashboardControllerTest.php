@@ -155,10 +155,33 @@ class AdminDashboardControllerTest extends TestCase
                     $pageRoute = config("admin_dashboard.page_routes.{$page}");
                     if ($pageRoute !== null) {
                         $pageResponse->assertRedirect(route($pageRoute, ['lang' => 'en']));
-                        $this->get(route($pageRoute, ['lang' => 'en']))
+                        $directResponse = $this->get(route($pageRoute, ['lang' => 'en']))
                             ->assertOk()
-                            ->assertSee('data-admin-users', false)
                             ->assertDontSee(__('messages.admin_nav.page_in_preparation'));
+
+                        if ($page === 'booking_disputes') {
+                            $directResponse->assertSee('data-admin-booking-disputes', false);
+                        } elseif (in_array($page, [
+                            'all_bookings',
+                            'pending_bookings',
+                            'confirmed_bookings',
+                            'completed_bookings',
+                            'cancelled_rejected_bookings',
+                            'expired_bookings',
+                        ], true)) {
+                            $directResponse->assertSee('data-admin-bookings', false);
+                        } elseif (in_array($page, [
+                            'all_requests',
+                            'new_requests',
+                            'in_progress_requests',
+                            'quoted_requests',
+                            'accepted_converted_requests',
+                            'closed_requests',
+                        ], true)) {
+                            $directResponse->assertSee('data-admin-custom-requests', false);
+                        } else {
+                            $directResponse->assertSee('data-admin-users', false);
+                        }
                     } else {
                         $pageResponse->assertOk()
                             ->assertSee(__('messages.admin_nav.pages.'.$page))

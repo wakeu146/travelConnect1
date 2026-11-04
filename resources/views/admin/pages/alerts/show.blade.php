@@ -65,7 +65,11 @@
 
         <section class="grid gap-3 border-t pt-5 admin-border" aria-labelledby="alert-actions-title">
             <h3 id="alert-actions-title" class="text-sm font-bold admin-heading">{{ __('messages.admin_alerts.actions_title') }}</h3>
-            <p class="text-sm leading-6 admin-muted">{{ __('messages.admin_alerts.actions_description') }}</p>
+            <p class="text-sm leading-6 admin-muted">
+                {{ $alert['source_type'] === 'traveler_issue' && $alert['category'] === 'booking_dispute'
+                    ? __('messages.admin_alerts.booking_dispute_actions_description')
+                    : __('messages.admin_alerts.actions_description') }}
+            </p>
             @if ($alert['status'] !== 'resolved')
                 <div class="flex flex-wrap gap-2">
                     @if ($alert['status'] === 'open')

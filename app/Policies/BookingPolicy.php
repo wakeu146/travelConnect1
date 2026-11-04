@@ -12,6 +12,16 @@ class BookingPolicy
         return $user->isTraveler();
     }
 
+    public function viewAdmin(User $user, Booking $booking): bool
+    {
+        return $user->isAdmin();
+    }
+
+    public function interveneAdmin(User $user, Booking $booking): bool
+    {
+        return $user->isAdmin();
+    }
+
     public function viewAgency(User $user, Booking $booking): bool
     {
         return $user->isAgencyOwner() && $booking->agency_id === $user->agency?->id;

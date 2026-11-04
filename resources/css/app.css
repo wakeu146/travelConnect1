@@ -9,6 +9,15 @@
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
 
+[data-custom-request-page],
+[data-custom-request-page] *,
+[data-custom-request-page]::before,
+[data-custom-request-page]::after,
+[data-custom-request-page] *::before,
+[data-custom-request-page] *::after {
+    border-radius: 0 !important;
+}
+
 :root {
     --app-scrollbar-thumb: #9aadb2;
     --app-scrollbar-track: #edf3f1;
