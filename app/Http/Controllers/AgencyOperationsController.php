@@ -99,7 +99,7 @@ class AgencyOperationsController extends Controller
             ->paginate(20)
             ->appends($request->query());
 
-        $publishedReviews = $agency->reviews()->where('status', ReviewStatus::PUBLISHED->value);
+        $publishedReviews = $agency->reviews()->where('status', ReviewStatus::PUBLISHED->value)->where('is_hidden', false);
         $ratingCounts = (clone $publishedReviews)->selectRaw('rating, COUNT(*) as review_count')->groupBy('rating')->pluck('review_count', 'rating');
 
         return view('agencies.reviews.index', [
@@ -118,7 +118,7 @@ class AgencyOperationsController extends Controller
     {
         $agency = $this->currentAgency();
         abort_unless($review->agency_id === $agency->id, 404);
-        abort_unless($review->status === ReviewStatus::PUBLISHED, 403);
+        abort_unless($review->status === ReviewStatus::PUBLISHED && ! $review->is_hidden, 403);
 
         $data = $request->validate([
             'agency_response' => ['required', 'string', 'min:10', 'max:2000'],

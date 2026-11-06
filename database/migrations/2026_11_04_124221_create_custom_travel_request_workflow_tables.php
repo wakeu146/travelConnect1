@@ -2,12 +2,26 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
+        if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            foreach (['travel_requests', 'services'] as $table) {
+                $engine = DB::selectOne(
+                    'SELECT ENGINE AS engine FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
+                    [$table],
+                )?->engine;
+
+                if ($engine !== null && strcasecmp($engine, 'InnoDB') !== 0) {
+                    DB::statement("ALTER TABLE `{$table}` ENGINE = InnoDB");
+                }
+            }
+        }
+
         if (! Schema::hasTable('travel_request_recipients')) {
             Schema::create('travel_request_recipients', function (Blueprint $table): void {
                 $table->id();
@@ -71,7 +85,7 @@ return new class extends Migration
                 $table->foreignId('actor_id')->nullable()->constrained('users')->nullOnDelete();
                 $table->json('snapshot');
                 $table->timestamps();
-                $table->index(['travel_request_proposal_id', 'created_at']);
+                $table->index(['travel_request_proposal_id', 'created_at'], 'tr_req_revisions_proposal_created_idx');
             });
         }
 

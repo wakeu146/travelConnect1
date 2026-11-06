@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
 
@@ -65,6 +67,21 @@ class Agency extends Model
         return $this->hasMany(Review::class);
     }
 
+    public function latestTrustScoreLog(): HasOne
+    {
+        return $this->hasOne(TrustScoreLog::class)->latestOfMany('calculated_at');
+    }
+
+    public function contentReports(): HasManyThrough
+    {
+        return $this->hasManyThrough(ContentReport::class, Review::class, 'agency_id', 'review_id');
+    }
+
+    public function travelerIssues(): HasManyThrough
+    {
+        return $this->hasManyThrough(TravelerIssue::class, Booking::class, 'agency_id', 'booking_id');
+    }
+
     public function conversations(): HasMany
     {
         return $this->hasMany(Conversation::class);
@@ -107,11 +124,15 @@ class Agency extends Model
 
     public function recalculateTrustScoreFromPublishedReviews(): int
     {
-        $publishedReviews = $this->reviews()->where('status', ReviewStatus::PUBLISHED->value);
+        $publishedReviews = $this->reviews()
+            ->where('status', ReviewStatus::PUBLISHED->value)
+            ->where('is_hidden', false);
         $reviewCount = (clone $publishedReviews)->count();
 
         if ($reviewCount === 0) {
-            return (int) $this->trust_score;
+            $this->update(['trust_score' => 0]);
+
+            return 0;
         }
 
         $averageRating = (float) (clone $publishedReviews)->avg('rating');
@@ -149,7 +170,7 @@ class Agency extends Model
             return null;
         }
 
-        $url = $disk->url($path);
+        $url = '/storage/'.ltrim($path, '/');
         $version = $this->updated_at?->format('U.u') ?? crc32($path);
 
         return $url.(str_contains($url, '?') ? '&' : '?').http_build_query(['v' => $version]);

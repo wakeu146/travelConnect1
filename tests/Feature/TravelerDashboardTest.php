@@ -160,6 +160,26 @@ class TravelerDashboardTest extends TestCase
             ->assertDontSee('private-license-value');
     }
 
+    public function test_discover_shows_uploaded_agency_images_and_static_images_when_no_upload_exists(): void
+    {
+        Storage::fake('public');
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        $uploadedAgency = $this->createVerifiedAgency('Custom Image Agency', 90, [
+            'logo_path' => 'agency-logos/custom/logo.png',
+            'cover_image_path' => 'agency-covers/custom/cover.jpg',
+        ]);
+        Storage::disk('public')->put($uploadedAgency->logo_path, 'logo image');
+        Storage::disk('public')->put($uploadedAgency->cover_image_path, 'cover image');
+        $this->createVerifiedAgency('Atlas Horizon Voyages', 80);
+
+        $response = $this->actingAs($traveler)->get(route('discover'));
+
+        $response->assertSee('Custom Image Agency')
+            ->assertSee('src="/storage/agency-logos/custom/logo.png?v=', false)
+            ->assertSee('Atlas Horizon Voyages')
+            ->assertSee('src="'.asset('images/agencies/atlas-horizon.jpg').'"', false);
+    }
+
     public function test_all_agencies_page_keeps_the_existing_authentication_boundary(): void
     {
         $response = $this->get(route('discover'));

@@ -141,6 +141,16 @@ class AdminBookingManagementTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_admin_opens_booking_details_with_dispute_history_loaded(): void
+    {
+        $this->actingAsVerifiedAdmin();
+        $booking = $this->createBooking('TC-ADMIN-DETAIL-001', 'pending');
+
+        $this->get(route('admin.bookings.show', ['booking' => $booking->id, 'lang' => 'en']))
+            ->assertOk()
+            ->assertSee($booking->booking_reference);
+    }
+
     public function test_booking_export_is_filtered_and_escapes_spreadsheet_formulas(): void
     {
         $admin = $this->actingAsVerifiedAdmin();

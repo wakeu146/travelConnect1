@@ -18,8 +18,8 @@ class AgencyDiscoveryController extends Controller
 
         $agencyQuery = Agency::verified()
             ->with(['countries:id,name', 'services:id,name'])
-            ->withCount(['reviews as published_reviews_count' => fn (Builder $query) => $query->where('status', 'published')])
-            ->withAvg(['reviews as published_rating' => fn (Builder $query) => $query->where('status', 'published')], 'rating');
+            ->withCount(['reviews as published_reviews_count' => fn (Builder $query) => $query->where('status', 'published')->where('is_hidden', false)])
+            ->withAvg(['reviews as published_rating' => fn (Builder $query) => $query->where('status', 'published')->where('is_hidden', false)], 'rating');
 
         if ($search !== '') {
             $searchVariants = [$search];

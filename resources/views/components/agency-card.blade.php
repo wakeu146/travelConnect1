@@ -1,11 +1,12 @@
 @props(['name', 'image' => null, 'alt', 'description', 'country' => null, 'countries' => [], 'location' => null, 'service' => null, 'rating' => '—', 'reviewCount' => 0, 'trustScore' => null, 'useRealImage' => false, 'saved' => false])
 @php($agencyImages = ['Atlas Horizon Voyages' => 'atlas-horizon.jpg', 'Lumiere Routes' => 'lumiere-routes.jpg', 'Northstar Escapes' => 'northstar-escapes.jpg', 'Sirocco Travel House' => 'sirocco-travel.jpg', 'Blue Fern Expeditions' => 'blue-fern.jpg'])
 @php($displayCountries = count($countries) ? $countries : ($country ? [$country] : []))
-@php($cardImage = $useRealImage ? $image : ($agencyImages[$name] ?? $image))
+@php($cardImage = $useRealImage ? ($image ?? $agencyImages[$name] ?? null) : ($agencyImages[$name] ?? $image))
+@php($cardImageUrl = $cardImage && (str_starts_with($cardImage, 'http') || str_starts_with($cardImage, '/')) ? $cardImage : ($cardImage ? asset('images/agencies/'.$cardImage) : null))
 <article class="group relative overflow-hidden border border-[#dbe3e5] bg-white shadow-[0_12px_40px_rgba(23,48,66,.06)] transition hover:-translate-y-1 hover:shadow-[0_16px_45px_rgba(23,48,66,.12)]">
     <div class="relative h-64 overflow-hidden">
-        @if ($cardImage)
-            <img src="{{ str_starts_with($cardImage, 'http') ? $cardImage : asset('images/agencies/'.$cardImage) }}" alt="{{ $alt }}" class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
+        @if ($cardImageUrl)
+            <img src="{{ $cardImageUrl }}" alt="{{ $alt }}" class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
         @else
             <div data-agency-logo-fallback class="flex h-full items-center justify-center bg-[#edf4f3] font-serif text-5xl text-[#55707c]" aria-label="{{ $name }}">{{ collect(explode(' ', $name))->filter()->take(2)->map(fn ($word) => mb_substr($word, 0, 1))->implode('') }}</div>
         @endif

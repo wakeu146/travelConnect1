@@ -7,6 +7,7 @@ use App\Enums\UserRole;
 use App\Enums\VerificationStatus;
 use App\Mail\AgencyModerationMail;
 use App\Models\Agency;
+use App\Models\AgencyDocument;
 use App\Models\AgencyModerationEvent;
 use App\Models\Booking;
 use App\Models\Country;
@@ -18,6 +19,7 @@ use DateTimeInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -28,9 +30,21 @@ use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 class AdminAgencyManagementService
 {
+    private const REQUIRED_VERIFICATION_DOCUMENT_TYPES = [
+        'license',
+        'id_proof',
+        'business_registration',
+    ];
+
+    private const VERIFICATION_PAGES = [
+        'verification_pending',
+        'approved',
+        'rejected',
+    ];
+
     /**
      * @param  array<string, mixed>  $filters
-     * @return array{agencies: LengthAwarePaginator<int, Agency>, countries: Collection<int, Country>, filters: array<string, mixed>}
+     * @return array{agencies: LengthAwarePaginator<int, Agency>, countries: Collection<int, Country>, filters: array<string, mixed>, requiredDocumentTypes: array<int, string>}
      */
     public function listing(string $page, array $filters): array
     {
@@ -40,8 +54,9 @@ class AdminAgencyManagementService
             ->withMax('documents', 'uploaded_at');
 
         match ($page) {
-            'pending_verification' => $query->where('verification_status', VerificationStatus::PENDING),
-            'verified_agencies' => $query->where('verification_status', VerificationStatus::VERIFIED),
+            'pending_verification', 'verification_pending' => $query->where('verification_status', VerificationStatus::PENDING),
+            'verified_agencies', 'approved' => $query->where('verification_status', VerificationStatus::VERIFIED),
+            'rejected' => $query->where('verification_status', VerificationStatus::REJECTED),
             'unverified_agencies' => $query->whereIn('verification_status', [
                 VerificationStatus::PENDING,
                 VerificationStatus::REJECTED,
@@ -49,6 +64,13 @@ class AdminAgencyManagementService
             'suspended_agencies' => $query->where('operating_status', 'suspended'),
             default => null,
         };
+
+        if (in_array($page, self::VERIFICATION_PAGES, true)) {
+            $query->with(['documents' => fn (HasMany $documentQuery) => $documentQuery
+                ->select(['id', 'agency_id', 'type', 'status', 'uploaded_at'])
+                ->latest('uploaded_at')
+                ->latest('id')]);
+        }
 
         if (($filters['search'] ?? '') !== '') {
             $search = '%'.$filters['search'].'%';
@@ -94,17 +116,20 @@ class AdminAgencyManagementService
                 ->withQueryString(),
             'countries' => Country::query()->orderBy('name')->get(['id', 'name']),
             'filters' => $filters,
+            'requiredDocumentTypes' => self::REQUIRED_VERIFICATION_DOCUMENT_TYPES,
         ];
     }
 
     /**
      * @return array{
      *     agency: Agency,
+     *     requiredDocumentTypes: array<int, string>,
      *     packages: LengthAwarePaginator<int, Package>,
      *     reviews: LengthAwarePaginator<int, Review>,
      *     bookings: LengthAwarePaginator<int, Booking>,
      *     history: LengthAwarePaginator<int, AgencyModerationEvent>,
      *     missingInformation: array<int, string>,
+     *     verificationDecision: AgencyModerationEvent|null,
      *     caseStatus: string,
      *     publishedRating: float,
      *     publishedReviewCount: int
@@ -121,10 +146,16 @@ class AdminAgencyManagementService
             'packages',
             'reviews',
             'bookings',
-            'reviews as published_reviews_count' => fn (Builder $query) => $query->where('status', 'published'),
+            'reviews as published_reviews_count' => fn (Builder $query) => $query->where('status', 'published')->where('is_hidden', false),
         ])->loadAvg([
-            'reviews as published_reviews_avg_rating' => fn (Builder $query) => $query->where('status', 'published'),
+            'reviews as published_reviews_avg_rating' => fn (Builder $query) => $query->where('status', 'published')->where('is_hidden', false),
         ], 'rating');
+        $verificationDecision = $agency->moderationEvents()
+            ->whereIn('action', ['verification_approved', 'verification_rejected'])
+            ->with('actor:id,name')
+            ->latest('created_at')
+            ->latest('id')
+            ->first();
 
         $missingInformation = [];
 
@@ -146,11 +177,13 @@ class AdminAgencyManagementService
 
         return [
             'agency' => $agency,
+            'requiredDocumentTypes' => self::REQUIRED_VERIFICATION_DOCUMENT_TYPES,
             'packages' => $agency->packages()->withCount('bookings')->latest()->paginate(10, ['*'], 'packages_page')->withQueryString(),
             'reviews' => $agency->reviews()->with('user:id,name')->latest()->paginate(10, ['*'], 'reviews_page')->withQueryString(),
             'bookings' => $agency->bookings()->with(['traveler:id,name,email', 'package:id,title'])->latest()->paginate(10, ['*'], 'bookings_page')->withQueryString(),
             'history' => $agency->moderationEvents()->with('actor:id,name')->latest()->paginate(10, ['*'], 'history_page')->withQueryString(),
             'missingInformation' => $missingInformation,
+            'verificationDecision' => $verificationDecision,
             'caseStatus' => $this->caseStatus($agency),
             'publishedRating' => (float) ($agency->published_reviews_avg_rating ?? 0),
             'publishedReviewCount' => (int) $agency->published_reviews_count,
@@ -173,13 +206,26 @@ class AdminAgencyManagementService
             }
 
             if ($decision === 'approve') {
-                $hasReviewableDocuments = $agency->documents()
+                $submittedDocumentTypes = $agency->documents()
+                    ->whereIn('type', self::REQUIRED_VERIFICATION_DOCUMENT_TYPES)
                     ->where('status', '!=', DocumentStatus::REJECTED->value)
-                    ->exists();
+                    ->get(['type'])
+                    ->map(fn (AgencyDocument $document): string => $document->type->value)
+                    ->unique()
+                    ->all();
+                $missingDocumentTypes = array_values(array_diff(
+                    self::REQUIRED_VERIFICATION_DOCUMENT_TYPES,
+                    $submittedDocumentTypes,
+                ));
 
-                if (! $hasReviewableDocuments) {
+                if ($missingDocumentTypes !== []) {
                     throw ValidationException::withMessages([
-                        'decision' => __('messages.admin_agencies.approval_requires_documents'),
+                        'decision' => __('messages.admin_agencies.approval_requires_documents', [
+                            'documents' => implode(', ', array_map(
+                                fn (string $type): string => __('messages.admin_agencies.document_types.'.$type),
+                                $missingDocumentTypes,
+                            )),
+                        ]),
                     ]);
                 }
 
@@ -337,6 +383,31 @@ class AdminAgencyManagementService
     public function deleteAgencyForAccountRemoval(Agency $agency): array
     {
         return $this->deleteAgency($agency, false, convertOwnerToTraveler: false) ?? [];
+    }
+
+    public function permanentlyDelete(Agency $agency): bool
+    {
+        $owner = $agency->owner()->first();
+        $storagePaths = $this->deleteAgency($agency, false);
+
+        if ($storagePaths === null) {
+            return false;
+        }
+
+        $this->deleteAgencyMedia($storagePaths);
+
+        if (! $owner) {
+            return false;
+        }
+
+        $owner->notify(new AgencyActivityNotification(
+            __('messages.agency_moderation_notification_title'),
+            __('messages.agency_permanently_deleted_notification', ['agency' => $agency->company_name]),
+            'agency_permanently_deleted',
+            route('account.activity', ['lang' => app()->getLocale()]),
+        ));
+
+        return $this->sendPermanentDeletionEmail($owner, $agency);
     }
 
     public function sendPermanentDeletionEmail(User $owner, Agency $agency): bool

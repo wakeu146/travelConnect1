@@ -1,5 +1,7 @@
 @php
     $agency = $profile['agency'];
+    $verificationPages = ['verification_pending', 'approved', 'rejected'];
+    $isVerificationWorkflow = in_array($activePage, $verificationPages, true);
     $verificationClass = match ($agency->verification_status->value) {
         'verified' => 'border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200',
         'rejected' => 'border-rose-500/40 bg-rose-500/10 text-rose-800 dark:text-rose-200',
@@ -9,9 +11,9 @@
 
 <section class="grid gap-6" aria-label="{{ __('messages.admin_agencies.profile') }}" data-admin-agency-profile>
     <div class="flex flex-wrap items-center justify-between gap-3">
-        <a href="{{ route('admin.dashboard.page', ['page' => 'all_agencies', 'lang' => app()->getLocale()]) }}" class="admin-nav-link inline-flex min-h-10 items-center gap-2 border px-3 py-2 text-sm font-semibold">
+        <a href="{{ route('admin.dashboard.page', ['page' => $isVerificationWorkflow ? $activePage : 'all_agencies', 'lang' => app()->getLocale()]) }}" class="admin-nav-link inline-flex min-h-10 items-center gap-2 border px-3 py-2 text-sm font-semibold">
             <x-admin.icon name="chevron_right" class="h-4 w-4 rotate-180" />
-            {{ __('messages.admin_agencies.back_to_directory') }}
+            {{ __('messages.admin_agencies.'.($isVerificationWorkflow ? 'back_to_verification' : 'back_to_directory')) }}
         </a>
         <span class="text-xs admin-muted">{{ __('messages.admin_alerts.source_id', ['id' => $agency->id]) }}</span>
     </div>
@@ -74,6 +76,28 @@
             </div>
         </header>
 
+        @if ($profile['verificationDecision'])
+            <section class="grid gap-3 border-b pb-5 admin-border" aria-label="{{ __('messages.admin_agencies.decision_details') }}">
+                <h3 class="text-base font-bold admin-heading">{{ __('messages.admin_agencies.decision_details') }}</h3>
+                <dl class="grid gap-3 sm:grid-cols-3">
+                    <div class="grid gap-1">
+                        <dt class="text-xs font-semibold admin-muted">{{ __('messages.admin_agencies.decision_reviewer') }}</dt>
+                        <dd class="text-sm admin-heading">{{ $profile['verificationDecision']->actor?->name ?? __('messages.admin_agencies.unknown_admin') }}</dd>
+                    </div>
+                    <div class="grid gap-1">
+                        <dt class="text-xs font-semibold admin-muted">{{ __('messages.admin_agencies.decision_date') }}</dt>
+                        <dd class="text-sm admin-heading"><time datetime="{{ $profile['verificationDecision']->created_at->toIso8601String() }}">{{ $profile['verificationDecision']->created_at->locale(app()->getLocale())->isoFormat('LLL') }}</time></dd>
+                    </div>
+                    @if ($profile['verificationDecision']->reason)
+                        <div class="grid gap-1 sm:col-span-3">
+                            <dt class="text-xs font-semibold admin-muted">{{ __('messages.admin_agencies.decision_reason') }}</dt>
+                            <dd class="whitespace-pre-wrap text-sm admin-heading">{{ $profile['verificationDecision']->reason }}</dd>
+                        </div>
+                    @endif
+                </dl>
+            </section>
+        @endif
+
         <div class="grid gap-6 xl:grid-cols-2">
             <section class="grid content-start gap-4" aria-labelledby="agency-public-information">
                 <h3 id="agency-public-information" class="text-base font-bold admin-heading">{{ __('messages.admin_agencies.public_information') }}</h3>
@@ -129,6 +153,28 @@
             </section>
         </div>
 
+        <section class="grid gap-3 border-t pt-5 admin-border" aria-labelledby="agency-required-checks-title">
+            <header class="grid gap-1">
+                <h3 id="agency-required-checks-title" class="text-base font-bold admin-heading">{{ __('messages.admin_agencies.required_checks') }}</h3>
+                <p class="text-sm admin-muted">{{ __('messages.admin_agencies.required_checks_help') }}</p>
+            </header>
+            <ul class="grid gap-3 sm:grid-cols-3">
+                @foreach ($profile['requiredDocumentTypes'] as $requiredDocumentType)
+                    @php
+                        $matchingDocuments = $agency->documents->filter(fn ($document) => $document->type->value === $requiredDocumentType);
+                        $checkDocument = $matchingDocuments->first(fn ($document) => $document->status->value === 'approved')
+                            ?? $matchingDocuments->first(fn ($document) => $document->status->value !== 'rejected')
+                            ?? $matchingDocuments->first();
+                        $checkStatus = $checkDocument?->status->value ?? 'missing';
+                    @endphp
+                    <li class="grid gap-1 border p-3 admin-border">
+                        <span class="text-sm font-semibold admin-heading">{{ __('messages.admin_agencies.document_types.'.$requiredDocumentType) }}</span>
+                        <span class="text-xs admin-muted" data-required-document-status="{{ $checkStatus }}">{{ __('messages.admin_agencies.required_check_statuses.'.$checkStatus) }}</span>
+                    </li>
+                @endforeach
+            </ul>
+        </section>
+
         <section class="grid gap-3 border-t pt-5 admin-border" aria-labelledby="agency-documents-title">
             <header class="flex flex-wrap items-center justify-between gap-2">
                 <h3 id="agency-documents-title" class="text-base font-bold admin-heading">{{ __('messages.admin_agencies.documents') }} ({{ $agency->documents->count() }})</h3>
@@ -175,9 +221,12 @@
                 </div>
                 <form method="POST" action="{{ route('admin.agencies.verification', ['agency' => $agency->id, 'lang' => app()->getLocale()]) }}" class="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end">
                     @csrf
+                    @if ($isVerificationWorkflow)
+                        <input type="hidden" name="queue" value="{{ $activePage }}">
+                    @endif
                     <div class="grid gap-1.5 sm:col-span-3">
-                        <label for="verification-reason" class="text-xs font-semibold admin-heading">{{ __('messages.admin_agencies.decision_reason') }}</label>
-                        <textarea id="verification-reason" name="reason" rows="2" maxlength="2000" class="admin-input w-full border px-3 py-2 text-sm" placeholder="{{ __('messages.admin_agencies.reason_placeholder') }}">{{ old('reason') }}</textarea>
+                        <label for="verification-reason" class="text-xs font-semibold admin-heading">{{ __('messages.admin_agencies.decision_reason') }} <span aria-hidden="true">*</span></label>
+                        <textarea id="verification-reason" name="reason" rows="2" maxlength="2000" required class="admin-input w-full border px-3 py-2 text-sm" placeholder="{{ __('messages.admin_agencies.reason_placeholder') }}">{{ old('reason') }}</textarea>
                     </div>
                     <button name="decision" value="approve" type="submit" class="admin-nav-link inline-flex min-h-10 items-center justify-center border px-4 py-2 text-sm font-semibold">{{ __('messages.admin_agencies.approve') }}</button>
                     <button name="decision" value="reject" type="submit" class="admin-nav-link inline-flex min-h-10 items-center justify-center border border-rose-500/40 px-4 py-2 text-sm font-semibold text-rose-800 dark:text-rose-200">{{ __('messages.admin_agencies.reject') }}</button>
@@ -235,7 +284,7 @@
             ['key' => 'reviews', 'title' => __('messages.admin_agencies.reviews'), 'items' => $profile['reviews'], 'empty' => 'reviews_count'],
             ['key' => 'bookings', 'title' => __('messages.admin_agencies.bookings'), 'items' => $profile['bookings'], 'empty' => 'bookings_count'],
         ] as $activity)
-            <section class="admin-empty-state grid gap-3 border p-5 sm:p-6" aria-labelledby="agency-{{ $activity['key'] }}-title">
+            <section id="agency-{{ $activity['key'] }}" class="admin-empty-state grid gap-3 border p-5 sm:p-6" aria-labelledby="agency-{{ $activity['key'] }}-title">
                 <header class="flex flex-wrap items-baseline justify-between gap-2">
                     <h3 id="agency-{{ $activity['key'] }}-title" class="text-base font-bold admin-heading">{{ $activity['title'] }}</h3>
                     <span class="text-xs admin-muted">{{ $agency->{$activity['empty']} }} {{ __('messages.admin_agencies.page_of') }}</span>

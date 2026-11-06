@@ -32,6 +32,12 @@
             @include('admin.pages.section-hub.index')
         @elseif ($activePage === 'alerts')
             @include('admin.pages.alerts.index')
+        @elseif (in_array($activePage, ['verification_pending', 'approved', 'rejected'], true))
+            @if ($agencyProfile)
+                @include('admin.pages.trust-safety.verification.show', ['profile' => $agencyProfile])
+            @else
+                @include('admin.pages.trust-safety.verification.index', ['directory' => $agencyDirectory])
+            @endif
         @elseif (in_array($activePage, ['all_agencies', 'pending_verification', 'verified_agencies', 'unverified_agencies', 'suspended_agencies'], true))
             @if ($agencyProfile)
                 @include('admin.pages.agencies.show', ['profile' => $agencyProfile])
@@ -59,7 +65,23 @@
         @elseif ($bookingPageData !== null)
             @include('admin.bookings.'.$bookingPageData['view'], $bookingPageData['data'])
         @elseif ($customRequestData !== null)
-            @include('admin.custom-requests.'.$customRequestData['view'], $customRequestData['data'])
+            @include('admin.pages.custom-requests.'.$customRequestData['view'], $customRequestData['data'])
+        @elseif ($trustScoreData !== null)
+            @if ($activePage === 'trust_score_overview')
+                @include('admin.pages.trust-safety.trust-scores.overview', $trustScoreData)
+            @else
+                @include('admin.pages.trust-safety.trust-scores.attention', $trustScoreData)
+            @endif
+        @elseif ($reviewReportData !== null)
+            @if ($activePage === 'reviews_ratings' && isset($reviewReportData['reviews']))
+                @include('admin.pages.trust-safety.reviews-reports.reviews', $reviewReportData)
+            @elseif ($activePage === 'reported_content' && isset($reviewReportData['reports']))
+                @include('admin.pages.trust-safety.reviews-reports.reports', $reviewReportData)
+            @elseif ($activePage === 'user_agency_complaints' && isset($reviewReportData['complaints']))
+                @include('admin.pages.trust-safety.reviews-reports.complaints', $reviewReportData)
+            @else
+                @include('admin.pages.trust-safety.reviews-reports.index')
+            @endif
         @else
             <section class="admin-empty-state grid justify-items-center gap-4 border p-8 text-center sm:p-12" aria-labelledby="admin-placeholder-title">
                 <span class="admin-empty-icon flex h-12 w-12 items-center justify-center rounded-xl">

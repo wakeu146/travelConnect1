@@ -14,11 +14,13 @@ use App\Models\Inquiry;
 use App\Models\Review;
 use App\Models\Service;
 use App\Models\User;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Mockery;
 use Tests\TestCase;
 
 class AgencyDashboardTest extends TestCase
@@ -671,6 +673,19 @@ class AgencyDashboardTest extends TestCase
         $response->assertSee('Emma Travel');
     }
 
+    public function test_agency_media_urls_are_same_origin_paths(): void
+    {
+        $publicDisk = Mockery::mock(FilesystemAdapter::class);
+        $publicDisk->shouldReceive('exists')->once()->with('agency-logos/atlas.png')->andReturnTrue();
+        Storage::shouldReceive('disk')->once()->with('public')->andReturn($publicDisk);
+        $agency = Agency::factory()->create(['logo_path' => 'agency-logos/atlas.png']);
+
+        $this->assertSame(
+            '/storage/agency-logos/atlas.png?v='.$agency->updated_at->format('U.u'),
+            $agency->logoUrl(),
+        );
+    }
+
     public function test_agency_profile_uses_a_searchable_destination_picker_and_agency_logo_in_sidebar_footer(): void
     {
         Storage::fake('public');
@@ -753,8 +768,8 @@ class AgencyDashboardTest extends TestCase
         $this->assertTrue(Storage::disk('public')->exists($agency->cover_image_path));
         $logoUrl = $agency->logoUrl();
         $coverUrl = $agency->coverImageUrl();
-        $this->assertStringStartsWith(Storage::disk('public')->url($agency->logo_path).'?v=', $logoUrl);
-        $this->assertStringStartsWith(Storage::disk('public')->url($agency->cover_image_path).'?v=', $coverUrl);
+        $this->assertStringStartsWith('/storage/'.$agency->logo_path.'?v=', $logoUrl);
+        $this->assertStringStartsWith('/storage/'.$agency->cover_image_path.'?v=', $coverUrl);
 
         $profile = $this->actingAs($agency->owner)->get(route('agency.profile'));
         $profile->assertOk()->assertSee('src="'.$logoUrl.'"', false)->assertSee('src="'.$coverUrl.'"', false);
@@ -994,7 +1009,7 @@ class AgencyDashboardTest extends TestCase
         $this->assertFalse(Storage::disk('public')->exists($oldLogo));
         $this->assertNull($agency->cover_image_path);
         $this->assertFalse(Storage::disk('public')->exists($oldCover));
-        $this->assertStringStartsWith(Storage::disk('public')->url($agency->logo_path).'?v=', $agency->logoUrl());
+        $this->assertStringStartsWith('/storage/'.$agency->logo_path.'?v=', $agency->logoUrl());
         $this->assertNull($agency->coverImageUrl());
     }
 

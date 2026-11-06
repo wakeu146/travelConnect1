@@ -14,7 +14,7 @@
             @endif
 
             <div class="mt-6 grid justify-items-center gap-4">
-                <img src="{{ $qrCode }}" alt="{{ __('messages.admin_totp_qr_alt') }}" class="h-60 w-60 border border-[#dbe3e5] bg-white p-2" />
+                <img src="{{ $qrCode }}" alt="{{ __('messages.admin_totp_qr_alt') }}" class="h-auto aspect-square w-full max-w-60 border border-[#dbe3e5] bg-white p-2" />
                 <div class="grid w-full gap-2 text-center">
                     <p class="text-sm font-semibold">{{ __('messages.admin_totp_manual_entry') }}</p>
                     <code class="select-all break-all rounded border border-[#dbe3e5] bg-[#f7faf9] px-3 py-2 text-sm">{{ $secret }}</code>

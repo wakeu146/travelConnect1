@@ -33,6 +33,9 @@ This README is also the continuation handoff for future AI agents. Read the curr
 * English/French locale switching using the `?lang=en` or `?lang=fr` query parameter
 * Responsive account shell with mobile navigation, notification bell, and persistent light/dark theme
 * Admin dashboard with a real-record platform overview, current status summaries, attention queue, and recent activity
+* Admin Trust & Safety with persisted agency trust scores and their recorded factors, plus attention lists based on verification state, suspensions, flagged or hidden reviews, active reports, and open complaints
+* Admin review, reported-content, and complaint workflows with review moderation and linked report/case actions
+* Admin booking and custom travel-request workspaces with request search/filtering, CSV export, moderation, proposal history, private notes, and linked booking outcomes
 * Admin User directory with role/status filters, category tabs, profile photos, direct account deletion, and audited single/bulk account actions
 * Admin Alerts queue for overdue agency verification, flagged reviews, traveler complaints and booking disputes, failed jobs, suspicious login bursts, and Google/email integration errors
 * Traveler-owned complaint and booking-dispute intake with private case tracking and English/French status labels
@@ -240,6 +243,7 @@ npm run build
 * `resources/views/components/agency-card.blade.php`: reusable agency card
 * `resources/views/auth`: traveler dashboard, saved agencies, activity, and settings pages
 * `resources/views/agencies`: active dashboard, package, availability, booking, payment, profile, review, and analytics views
+* `resources/views/admin/pages`: admin dashboard pages, including Trust & Safety and custom travel requests
 * `resources/views/agency-show.blade.php`: agency profile and review experience
 * `resources/css/app.css`: theme, responsive, and account UI rules
 * `resources/js/app.js`: locale-preserving navigation, favorites, carousels, and UI interactions
@@ -264,6 +268,8 @@ Authentication routes include login, registration, password recovery, verificati
 The active agency dashboard is `GET /agency/dashboard` (`agency.dashboard`), protected by `auth` and `agency-owner`. Agency mutations, experience deletion, and booking transitions must remain scoped to the authenticated owner, with validation and feature tests.
 
 The admin dashboard is `GET /admin/dashboard` (`admin.dashboard`) and its configured pages use `GET /admin/dashboard/pages/{page}` (`admin.dashboard.page`). User management is under `/admin/users` (`admin.users.*`); account actions require a verified administrator session and database-backed sessions for deactivation/revocation. These routes and the alert acknowledge/resolve POST routes require `auth` and `EnsureAdminSession`. Apply pending database migrations before using admin activity history or Alerts.
+
+Admin custom travel requests use the `admin.custom-requests.*` routes. Their page partials are under `resources/views/admin/pages/custom-requests`; agency and traveler custom-request flows use their respective `agency.custom-requests.*` and `account.custom-requests.*` routes. Admin Trust & Safety shows the stored, calculated trust score and recorded score factors; its attention queue reflects actual verification, moderation, content-report, and complaint records rather than a separate invented score rule. Run `php artisan migrate` in the intended environment before using custom-request, booking-dispute, or Trust & Safety workflows.
 
 ## Important behavior
 

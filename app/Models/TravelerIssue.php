@@ -23,6 +23,7 @@ class TravelerIssue extends Model
         'priority',
         'resolution_reason',
         'resolved_at',
+        'assigned_to',
     ];
 
     protected function casts(): array
@@ -55,5 +56,17 @@ class TravelerIssue extends Model
     public function activities(): HasMany
     {
         return $this->hasMany(BookingDisputeActivity::class)->latest('created_at')->latest('id');
+    }
+
+    public function assignee(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_to');
+    }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(TrustSafetyEvent::class, 'source_id')
+            ->where('source_type', 'traveler_issue')
+            ->latest();
     }
 }

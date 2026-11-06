@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\AdminLoginVerificationController;
 use App\Http\Controllers\Admin\AdminNotificationController;
 use App\Http\Controllers\Admin\AdminPackageModerationController;
+use App\Http\Controllers\Admin\AdminReviewReportController;
 use App\Http\Controllers\Admin\AdminTotpEnrollmentController;
 use App\Http\Controllers\Admin\AdminTravelCatalogueController;
 use App\Http\Controllers\Admin\AdminUserController;
@@ -43,6 +44,21 @@ Route::post('/dashboard/packages/{package}/moderation', [AdminPackageModerationC
     ->middleware(['auth', EnsureAdminSession::class])
     ->whereNumber('package')
     ->name('packages.moderation');
+
+Route::middleware(['auth', EnsureAdminSession::class])->group(function (): void {
+    Route::post('/dashboard/reviews/{review}/moderation', [AdminReviewReportController::class, 'moderateReview'])
+        ->whereNumber('review')
+        ->middleware('throttle:admin.users.actions')
+        ->name('reviews.moderation');
+    Route::post('/dashboard/reports/{report}/action', [AdminReviewReportController::class, 'actOnReport'])
+        ->whereNumber('report')
+        ->middleware('throttle:admin.users.actions')
+        ->name('reports.action');
+    Route::post('/dashboard/complaints/{issue}/action', [AdminReviewReportController::class, 'actOnComplaint'])
+        ->whereNumber('issue')
+        ->middleware('throttle:admin.users.actions')
+        ->name('complaints.action');
+});
 
 Route::post('/dashboard/catalogue/countries', [AdminTravelCatalogueController::class, 'storeCountry'])
     ->middleware(['auth', EnsureAdminSession::class])

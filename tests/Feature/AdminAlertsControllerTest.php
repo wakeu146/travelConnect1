@@ -407,7 +407,10 @@ class AdminAlertsControllerTest extends TestCase
         $this->get(route('admin.dashboard.page', [
             'page' => 'user_agency_complaints',
             'lang' => 'en',
-        ]))->assertSee(__('messages.admin_nav.page_in_preparation'));
+        ]))
+            ->assertSee('data-admin-complaints', false)
+            ->assertSee($complaint->subject)
+            ->assertDontSee(__('messages.admin_nav.page_in_preparation'));
 
         $this->get(route('admin.dashboard.page', [
             'page' => 'alerts',

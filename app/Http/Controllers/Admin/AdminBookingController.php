@@ -10,6 +10,7 @@ use App\Services\AdminBookingManagementService;
 use App\Services\BookingDisputeService;
 use App\Services\BookingService;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -64,7 +65,7 @@ class AdminBookingController extends Controller
             'customProposal:id,reference,price,currency',
             'availability:id,package_id,departure_date,capacity,status',
             'statusHistory.actor:id,name',
-            'travelerIssues' => fn (Builder $query) => $query
+            'travelerIssues' => fn (HasMany $query) => $query
                 ->where('type', 'booking_dispute')
                 ->with(['assignedAdmin:id,name', 'activities.actor:id,name']),
         ]);

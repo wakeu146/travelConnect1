@@ -21,7 +21,8 @@ class AdminAgencyModerationController extends Controller
     ): RedirectResponse {
         $data = $request->validate([
             'decision' => ['required', Rule::in(['approve', 'reject'])],
-            'reason' => ['nullable', 'required_if:decision,reject', 'string', 'max:2000'],
+            'reason' => ['required', 'string', 'max:2000'],
+            'queue' => ['nullable', Rule::in(['verification_pending', 'approved', 'rejected'])],
         ]);
 
         $emailSent = $agencyManagement->decideVerification(
@@ -38,6 +39,9 @@ class AdminAgencyModerationController extends Controller
         $response = redirect()->route('admin.agencies.show', [
             'agency' => $agency->id,
             'lang' => app()->getLocale(),
+            'queue' => isset($data['queue'])
+                ? ($data['decision'] === 'approve' ? 'approved' : 'rejected')
+                : null,
         ])->with('status', $message);
 
         return $this->withEmailWarning($response, $emailSent);
@@ -86,16 +90,10 @@ class AdminAgencyModerationController extends Controller
     public function destroy(
         Request $request,
         Agency $agency,
-        AdminUserManagementService $userManagement,
         AdminAgencyManagementService $agencyManagement,
     ): RedirectResponse {
         $agencyName = $agency->company_name;
-
-        $emailSent = $userManagement->permanentlyDelete(
-            $request->user(),
-            $agency->user_id,
-            $agencyManagement,
-        );
+        $emailSent = $agencyManagement->permanentlyDelete($agency);
 
         $response = redirect()->route('admin.dashboard.page', [
             'page' => 'all_agencies',

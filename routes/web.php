@@ -15,6 +15,8 @@ use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\InquiryController;
 use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\ReviewReportController;
+use App\Http\Controllers\TravelerConversationController;
 use App\Http\Controllers\TravelerCustomRequestController;
 use App\Http\Controllers\TravelerIssueController;
 use App\Http\Middleware\PreventAuthenticatedWorkspaceCaching;
@@ -99,8 +101,8 @@ Route::get('/agencies/{slug}', function (string $slug) {
             'name' => $agencyModel->company_name,
             'country' => $agencyModel->countries->first()?->name ?? 'Worldwide',
             'service' => $agencyModel->services->first()?->name ?? 'Travel planning',
-            'rating' => (string) number_format((float) ($agencyModel->reviews()->where('status', 'published')->avg('rating') ?? 0), 1),
-            'reviews' => (string) ($agencyModel->reviews()->where('status', 'published')->count() ?? 0),
+            'rating' => (string) number_format((float) ($agencyModel->reviews()->where('status', 'published')->where('is_hidden', false)->avg('rating') ?? 0), 1),
+            'reviews' => (string) ($agencyModel->reviews()->where('status', 'published')->where('is_hidden', false)->count() ?? 0),
             'description' => $agencyModel->description ?: 'Travel planning with local expertise.',
             'cover' => $agencyModel->coverImageUrl() ?? asset('images/agencies/default-agency.jpg'),
             'countries' => $agencyModel->countries->pluck('name')->all() ?: ['Worldwide'],
@@ -109,13 +111,13 @@ Route::get('/agencies/{slug}', function (string $slug) {
 
     $agencyData['countries'] = $agencyModel ? $agencyData['countries'] : ($agencyCountries[$slug] ?? [$agencyData['country']]);
 
-    $publishedReviewCount = $agencyModel?->reviews()->where('status', 'published')->count() ?? 0;
-    $publishedReviews = $agencyModel?->reviews()->with('user')->where('status', 'published')->orderByDesc('rating')->orderByDesc('created_at')->limit(5)->get() ?? collect();
+    $publishedReviewCount = $agencyModel?->reviews()->where('status', 'published')->where('is_hidden', false)->count() ?? 0;
+    $publishedReviews = $agencyModel?->reviews()->with('user')->where('status', 'published')->where('is_hidden', false)->orderByDesc('rating')->orderByDesc('created_at')->limit(5)->get() ?? collect();
     $visibleReviewCount = $publishedReviewCount;
     $visibleRating = $publishedReviewCount
-        ? number_format((float) $agencyModel->reviews()->where('status', 'published')->avg('rating'), 1)
+        ? number_format((float) $agencyModel->reviews()->where('status', 'published')->where('is_hidden', false)->avg('rating'), 1)
         : '0.0';
-    $ratingCounts = $agencyModel && $publishedReviewCount ? $agencyModel->reviews()->where('status', 'published')->get()->groupBy('rating')->map->count() : collect();
+    $ratingCounts = $agencyModel && $publishedReviewCount ? $agencyModel->reviews()->where('status', 'published')->where('is_hidden', false)->get()->groupBy('rating')->map->count() : collect();
     $pendingReview = $agencyModel?->reviews()->where('user_id', $user->id)->where('status', 'pending')->latest()->first();
     $eligibleReviewBookings = $agencyModel && $user->isTraveler()
         ? $user->bookings()
@@ -130,6 +132,7 @@ Route::get('/agencies/{slug}', function (string $slug) {
 })->middleware(['auth', PreventAuthenticatedWorkspaceCaching::class])->name('agency.show');
 Route::post('/agencies/{slug}/inquiries', [InquiryController::class, 'store'])->middleware('auth')->name('inquiries.store');
 Route::post('/agencies/{slug}/reviews', [ReviewController::class, 'store'])->middleware('auth')->name('reviews.store');
+Route::post('/reviews/{review}/report', [ReviewReportController::class, 'store'])->middleware(['auth', 'throttle:10,1'])->whereNumber('review')->name('reviews.report');
 Route::post('/agencies/{slug}/favorite', [FavoriteController::class, 'toggle'])->middleware('auth')->name('favorites.toggle');
 Route::post('/agency/inquiries/{inquiry}/reply', [AgencyController::class, 'replyToInquiry'])->middleware(['auth', 'agency-owner'])->name('agency.inquiries.reply');
 Route::post('/agency/inquiries/{inquiry}/close', [AgencyController::class, 'closeInquiry'])->middleware(['auth', 'agency-owner'])->name('agency.inquiries.close');

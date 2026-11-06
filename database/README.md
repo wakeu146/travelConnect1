@@ -16,7 +16,13 @@
 - `email_verified_at` remains from the Laravel starter migration even though it was not repeated in the table list because the existing authentication contract uses it.
 - `license_number` is not unique because uniqueness was not requested and licensing authorities can use different jurisdictions.
 - A review has no uniqueness rule per traveler and agency because repeat reviews were not prohibited.
-- The migration syntax targets MySQL 5.7+ and MySQL 8.x. The exact WAMP MySQL version and credentials must be confirmed locally; this repository currently has SQLite configured in `.env`.
+- The migrations target the configured Laravel database connection. Confirm the active environment and database before applying schema changes; local `.env` values are machine-specific and must not be assumed from this document.
+
+## Booking, dispute, and custom-request workflows
+
+The workflow migrations add booking status history, administrator assignment and resolution metadata for traveler issues, dispute activity history, and the custom travel-request lifecycle. Custom requests use recipient, proposal, revision, event, and administrator-note tables; the travel-request schema also tracks references, destinations, dates, budgets, sharing, and review state. Bookings support either package or custom-request outcomes through their type and custom-request/proposal references.
+
+These migrations create workflow tables and alter existing booking, traveler-issue, and travel-request schema. They must be applied to the database used by the running application before signing in to admin pages that query these records. In particular, the custom-request dashboard reads the booking custom-request relationship, so an unmigrated database can fail while rendering the admin overview.
 
 ## Run
 
@@ -26,6 +32,8 @@ With MySQL running and the existing `travelconnect` database selected in `.env`:
 php artisan migrate
 php artisan db:seed
 ```
+
+Before migrating an existing environment, verify the environment and database connection and take an appropriate backup. On an environment marked as production, Laravel requires explicit force authorization to run migrations.
 
 For a clean local database:
 

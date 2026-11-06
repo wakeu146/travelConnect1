@@ -193,6 +193,8 @@ class AdminDashboardControllerTest extends TestCase
                         } elseif ($page === 'alerts') {
                             $pageResponse->assertSee('data-admin-alerts', false)
                                 ->assertSee('data-alerts-empty', false);
+                        } elseif (in_array($page, ['verification_pending', 'approved', 'rejected'], true)) {
+                            $pageResponse->assertSee('data-admin-verification-page="queue"', false);
                         } elseif (in_array($page, [
                             'all_agencies',
                             'pending_verification',
@@ -214,6 +216,21 @@ class AdminDashboardControllerTest extends TestCase
                             $pageResponse->assertSee('data-admin-travel-countries', false);
                         } elseif ($page === 'destinations') {
                             $pageResponse->assertSee('data-admin-travel-destinations', false);
+                        } elseif ($page === 'reviews_ratings') {
+                            $pageResponse->assertSee('data-admin-reviews', false)
+                                ->assertSee('data-admin-review-report-navigation', false);
+                        } elseif ($page === 'reported_content') {
+                            $pageResponse->assertSee('data-admin-reported-content', false)
+                                ->assertSee('data-admin-review-report-navigation', false);
+                        } elseif ($page === 'user_agency_complaints') {
+                            $pageResponse->assertSee('data-admin-complaints', false)
+                                ->assertSee('data-admin-review-report-navigation', false);
+                        } elseif ($page === 'trust_score_overview') {
+                            $pageResponse->assertSee('data-admin-trust-score-overview', false)
+                                ->assertSee('data-admin-trust-score-navigation', false);
+                        } elseif ($page === 'agencies_requiring_attention') {
+                            $pageResponse->assertSee('data-admin-agencies-requiring-attention', false)
+                                ->assertSee('data-admin-trust-score-navigation', false);
                         } else {
                             $pageResponse->assertSee(__('messages.admin_nav.page_in_preparation'));
                         }

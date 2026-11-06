@@ -11,7 +11,9 @@ use App\Notifications\AdminTravelerIssueReceived;
 use App\Services\AdminAgencyManagementService;
 use App\Services\AdminAlertQueue;
 use App\Services\AdminOverviewData;
+use App\Services\AdminReviewReportManagementService;
 use App\Services\AdminTravelManagementService;
+use App\Services\AdminTrustScoreManagementService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -41,6 +43,8 @@ class AdminDashboardController extends Controller
         AdminAlertQueue $alertQueue,
         AdminAgencyManagementService $agencyManagement,
         AdminTravelManagementService $travelManagement,
+        AdminReviewReportManagementService $reviewReportManagement,
+        AdminTrustScoreManagementService $trustScoreManagement,
     ): View|RedirectResponse {
         $pageRoute = config("admin_dashboard.page_routes.{$page}");
         if ($pageRoute !== null) {
@@ -63,6 +67,8 @@ class AdminDashboardController extends Controller
                     $alertDetail = null;
                     $agencyDirectory = null;
                     $travelManagementData = null;
+                    $reviewReportData = null;
+                    $trustScoreData = null;
 
                     if ($page === 'alerts') {
                         $filterOptions = $alertQueue->filterOptions();
@@ -88,6 +94,9 @@ class AdminDashboardController extends Controller
                         'verified_agencies',
                         'unverified_agencies',
                         'suspended_agencies',
+                        'verification_pending',
+                        'approved',
+                        'rejected',
                     ], true)) {
                         $filters = $request->validate([
                             'search' => ['nullable', 'string', 'max:120'],
@@ -135,6 +144,22 @@ class AdminDashboardController extends Controller
                         $travelManagementData = $travelManagement->countries($filters);
                     } elseif ($page === 'destinations') {
                         $travelManagementData = $travelManagement->destinations();
+                    } elseif (in_array($page, ['reviews_ratings', 'reported_content', 'user_agency_complaints'], true)) {
+                        $statuses = match ($page) {
+                            'reviews_ratings' => ['all', 'pending', 'published', 'flagged'],
+                            'reported_content' => ['all', 'open', 'investigating', 'dismissed', 'restricted', 'removed'],
+                            'user_agency_complaints' => ['all', 'open', 'in_review', 'resolved'],
+                        };
+                        $filters = $request->validate([
+                            'search' => ['nullable', 'string', 'max:120'],
+                            'status' => ['nullable', Rule::in($statuses)],
+                        ]);
+                        $reviewReportData = $reviewReportManagement->pageData($page, $filters);
+                    } elseif (in_array($page, ['trust_score_overview', 'agencies_requiring_attention'], true)) {
+                        $filters = $request->validate([
+                            'search' => ['nullable', 'string', 'max:120'],
+                        ]);
+                        $trustScoreData = $trustScoreManagement->pageData($page, $filters['search'] ?? null);
                     }
 
                     return $this->renderDashboard(
@@ -147,6 +172,8 @@ class AdminDashboardController extends Controller
                         $alertDetail,
                         $agencyDirectory,
                         travelManagementData: $travelManagementData,
+                        reviewReportData: $reviewReportData,
+                        trustScoreData: $trustScoreData,
                     );
                 }
             }
@@ -160,13 +187,16 @@ class AdminDashboardController extends Controller
         Agency $agency,
         AdminAgencyManagementService $agencyManagement,
     ): View {
+        $context = $request->validate([
+            'queue' => ['nullable', Rule::in(['verification_pending', 'approved', 'rejected'])],
+        ])['queue'] ?? null;
         $profile = $agencyManagement->profile($agency, $request);
 
         return $this->renderDashboard(
             $request,
-            'platform_management',
-            'all_agencies',
-            'agencies',
+            $context ? 'trust_safety' : 'platform_management',
+            $context ?? 'all_agencies',
+            $context ? 'verification' : 'agencies',
             agencyProfile: $profile,
         );
     }
@@ -267,6 +297,8 @@ class AdminDashboardController extends Controller
         ?array $agencyProfile = null,
         ?array $usersPageData = null,
         ?array $travelManagementData = null,
+        ?array $reviewReportData = null,
+        ?array $trustScoreData = null,
         ?string $pageTitleOverride = null,
         ?array $bookingPageData = null,
         ?array $customRequestData = null,
@@ -313,6 +345,8 @@ class AdminDashboardController extends Controller
             'travelManagementData' => $travelManagementData,
             'bookingPageData' => $bookingPageData,
             'customRequestData' => $customRequestData,
+            'reviewReportData' => $reviewReportData,
+            'trustScoreData' => $trustScoreData,
             'adminNotifications' => $adminNotifications,
             'unreadAdminSecurityNotificationCount' => $request->user()
                 ->unreadNotifications()
