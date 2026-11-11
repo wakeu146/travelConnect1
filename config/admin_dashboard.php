@@ -143,7 +143,7 @@ return [
             ],
         ],
         'system' => [
-            'icon' => 'settings',
+            'icon' => 'cog',
             'groups' => [
                 ['label' => 'content_management', 'icon' => 'file', 'pages' => [
                     'content_countries_destinations',

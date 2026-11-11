@@ -33,12 +33,15 @@ class DatabaseSeeder extends Seeder
                 ['name' => 'Japan', 'code' => 'JP'], ['name' => 'Thailand', 'code' => 'TH'],
                 ['name' => 'Greece', 'code' => 'GR'], ['name' => 'Australia', 'code' => 'AU'],
                 ['name' => 'Switzerland', 'code' => 'CH'], ['name' => 'Iceland', 'code' => 'IS'],
-            ])->map(fn (array $country) => Country::create($country));
+            ])->map(fn (array $country) => Country::firstOrCreate(
+                ['name' => $country['name']],
+                ['code' => $country['code']],
+            ));
 
             $services = collect([
                 'Tailor-made itineraries', 'Family holidays', 'Adventure travel', 'Luxury escapes',
                 'Cultural tours', 'Honeymoon planning', 'Cruises', 'Business travel',
-            ])->map(fn (string $name) => Service::create(['name' => $name]));
+            ])->map(fn (string $name) => Service::firstOrCreate(['name' => $name]));
 
             $travelers = User::factory(10)->create(['role' => 'traveler']);
             $agencies = collect();

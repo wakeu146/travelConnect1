@@ -1,62 +1,86 @@
 <x-account-shell title="{{ __('messages.travel_agency_directory') }} | TravelConnect">
+    <main
+        data-discover-page
+        data-search-url="{{ route('discover.search', ['lang' => app()->getLocale()]) }}"
+        data-search-mode="{{ $searchMode ? 'true' : 'false' }}"
+        data-recent-clear-url="{{ route('discover.recent.clear') }}"
+        data-csrf-token="{{ csrf_token() }}"
+        data-error-message="{{ __('messages.agency_discovery.search_error') }}"
+    >
+        <section data-discovery-hero class="{{ $searchMode ? 'hidden' : '' }} border-b border-[var(--account-border)] bg-[var(--account-surface-soft)]">
+            <div class="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8 lg:py-16">
+                <div class="grid gap-4">
+                    <p class="text-xs font-bold uppercase tracking-[.18em] text-[var(--account-accent)]">{{ __('messages.discover_agencies') }}</p>
+                    <h1 class="max-w-3xl font-serif text-4xl leading-tight tracking-tight text-[var(--account-text)] sm:text-5xl">{{ __('messages.agency_discovery.title') }}</h1>
+                    <p class="max-w-2xl text-sm leading-6 text-[var(--account-text-secondary)] sm:text-base">{{ __('messages.agency_discovery.description') }}</p>
+                </div>
+            </div>
+        </section>
 
-    <main data-discover-page>
-        <section data-discover-hero class="border-b border-[#dbe3e5] bg-[#f1f6f4]">
-            <div class="mx-auto max-w-7xl px-6 pb-12 pt-14 lg:px-8 lg:pb-16 lg:pt-20">
-                <div class="max-w-3xl">
-                    <p class="text-xs font-bold uppercase tracking-[.2em] text-[#e76f51]">{{ __('messages.all_agencies') }}</p>
-                    <h1 class="mt-4 font-serif text-5xl leading-[1.05] tracking-tight text-[#173042] sm:text-6xl">{{ __('messages.find_agency_you_can_trust') }}</h1>
-                    <p class="mt-5 max-w-2xl text-base leading-7 text-[#607985]">{{ __('messages.compare_verified_travel_experts') }}</p>
+        <p data-discovery-hint class="mx-auto hidden max-w-7xl px-4 pt-4 text-sm text-[var(--account-danger)] sm:px-6 lg:px-8" role="status" aria-live="polite"></p>
+
+        <div class="mx-auto grid max-w-7xl gap-10 px-4 py-9 sm:px-6 sm:py-12 lg:px-8">
+            <section data-discovery-recent class="{{ $searchMode || count($recentAgencyCards) === 0 ? 'hidden' : 'grid' }} gap-5">
+                <div class="flex flex-col gap-3 border-b border-[var(--account-border)] pb-4 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <h2 class="text-xl font-bold text-[var(--account-text)]">{{ __('messages.agency_discovery.recent_title') }}</h2>
+                        <p class="mt-1 text-sm text-[var(--account-text-secondary)]">{{ __('messages.agency_discovery.recent_description') }}</p>
+                    </div>
+                    <button type="button" data-discovery-clear-recent class="{{ count($recentAgencyCards) ? 'inline-flex' : 'hidden' }} min-h-10 items-center justify-center rounded-none px-3 text-sm font-semibold text-[var(--account-text-secondary)] transition hover:bg-[var(--account-hover)] hover:text-[var(--account-danger)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--account-focus)]">
+                        {{ __('messages.agency_discovery.clear_recent') }}
+                    </button>
                 </div>
 
-                <form data-discover-search action="{{ route('discover') }}" method="GET" class="mt-10 border border-[#173042] bg-white p-3 shadow-[0_12px_30px_rgba(23,48,66,.08)]">
-                    <div class="grid gap-3 lg:grid-cols-[1fr_auto]">
-                        <label class="relative block">
-                            <span class="sr-only">{{ __('messages.search_agencies_or_destinations') }}</span>
-                            <svg class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#e76f51]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg>
-                            <input type="search" name="search" value="{{ request('search') }}" placeholder="{{ __('messages.agency_name_or_destination') }}" class="w-full border border-[#173042] bg-white py-3.5 pl-12 pr-4 text-sm text-[#173042] outline-none placeholder:text-[#8a9ba0] focus:border-[#e76f51] focus:ring-2 focus:ring-[#e76f51]/15">
-                        </label>
-                        <button type="submit" class="flex items-center justify-center gap-2 bg-[#e76f51] px-6 py-3.5 text-sm font-bold text-white transition hover:bg-[#d95f42]"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg>{{ __('messages.search') }}</button>
+                <div data-discovery-recent-grid class="{{ count($recentAgencyCards) ? 'grid' : 'hidden' }} gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    @foreach ($recentAgencyCards as $agencyCard)
+                        <x-discovery-agency-card :card="$agencyCard" :recent="true" />
+                    @endforeach
+                </div>
+            </section>
+
+            <section data-discovery-popular class="{{ $searchMode || count($popularAgencyCards) === 0 ? 'hidden' : 'grid' }} gap-5">
+                <div class="border-b border-[var(--account-border)] pb-4">
+                    <h2 class="text-xl font-bold text-[var(--account-text)]">{{ __('messages.agency_discovery.popular_title') }}</h2>
+                    <p class="mt-1 text-sm text-[var(--account-text-secondary)]">{{ __('messages.agency_discovery.popular_description') }}</p>
+                </div>
+                <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    @foreach ($popularAgencyCards as $agencyCard)
+                        <x-discovery-agency-card :card="$agencyCard" />
+                    @endforeach
+                </div>
+            </section>
+
+            <section data-discovery-featured class="{{ $searchMode || count($featuredAgencyCards) === 0 ? 'hidden' : 'grid' }} gap-5">
+                <div class="border-b border-[var(--account-border)] pb-4">
+                    <h2 class="text-xl font-bold text-[var(--account-text)]">{{ __('messages.agency_discovery.featured_title') }}</h2>
+                    <p class="mt-1 text-sm text-[var(--account-text-secondary)]">{{ __('messages.agency_discovery.featured_description') }}</p>
+                </div>
+                <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    @foreach ($featuredAgencyCards as $agencyCard)
+                        <x-discovery-agency-card :card="$agencyCard" :featured="true" />
+                    @endforeach
+                </div>
+            </section>
+
+            <section class="{{ $hasActiveSearch ? 'grid' : 'hidden' }} gap-5" data-discovery-results-section aria-busy="false">
+                <div class="flex flex-col gap-3 border-b border-[var(--account-border)] pb-4 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <h2 class="text-xl font-bold text-[var(--account-text)]">{{ __('messages.agency_discovery.results_title') }}</h2>
                     </div>
-                </form>
-            </div>
-        </section>
-
-        <section class="mx-auto max-w-7xl px-6 py-12 lg:px-8 lg:py-16">
-            <div class="flex flex-col justify-between gap-4 border-b border-[#dbe3e5] pb-6 sm:flex-row sm:items-center">
-                <div><p class="text-sm font-semibold text-[#173042]">{{ __('messages.all_agencies') }}</p><p class="mt-1 text-sm text-[#607985]">{{ __('messages.compare_verified_travel_experts') }}</p></div>
-            </div>
-
-            <div class="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                @forelse ($agencies as $agency)
-                    <x-agency-card
-                        :name="$agency->company_name"
-                        :saved="in_array($agency->company_name, $savedAgencyNames, true)"
-                        :countries="$agency->countries->pluck('name')->all()"
-                        :location="$agency->address"
-                        :image="$agency->logoUrl() ?? $agency->coverImageUrl()"
-                        :alt="$agency->company_name"
-                        :description="$agency->description"
-                        :service="$agency->services->first()?->name"
-                        :rating="$agency->published_reviews_count > 0 ? number_format((float) $agency->published_rating, 1) : '—'"
-                        :review-count="$agency->published_reviews_count"
-                        :trust-score="$agency->trust_score"
-                        use-real-image="true"
-                    />
-                @empty
-                    <div class="dashboard-panel col-span-full border-dashed border-[#cbd9d8] bg-transparent p-12 text-center">
-                        <p class="font-bold">{{ __('messages.no_agencies_available') }}</p>
-                    </div>
-                @endforelse
-            </div>
-
-            @if ($agencies->hasPages())
-                <div class="mt-8">{{ $agencies->onEachSide(1)->links() }}</div>
-            @endif
-
-            <div class="mt-12 border border-dashed border-[#b9c9c9] bg-[#fbfaf7] px-6 py-10 text-center"><p class="text-sm font-bold text-[#173042]">{{ __('messages.looking_for_something_specific') }}</p><p class="mt-2 text-sm text-[#607985]">{{ __('messages.use_search_above') }}</p></div>
-        </section>
-
+                </div>
+                <div data-discovery-loading class="hidden items-center gap-3 py-6 text-sm text-[var(--account-text-secondary)]" role="status" aria-live="polite">
+                    <span class="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden="true"></span>
+                    {{ __('messages.agency_discovery.loading') }}
+                </div>
+                <div data-discovery-results-content class="{{ $hasActiveSearch ? '' : 'hidden' }}">
+                    @include('discover.search-results', [
+                        'agencyCards' => $agencyCards,
+                        'hasActiveSearch' => $hasActiveSearch,
+                        'hasLocationSearch' => $hasLocationSearch,
+                        'results' => $results,
+                    ])
+                </div>
+            </section>
+        </div>
     </main>
-
 </x-account-shell>

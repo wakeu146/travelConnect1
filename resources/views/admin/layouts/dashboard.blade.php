@@ -269,7 +269,7 @@
 
         <nav class="admin-bottom-nav fixed inset-x-0 bottom-0 z-50 border-t" aria-label="{{ __('messages.admin_nav.main_navigation') }}">
             <div class="admin-bottom-scroll">
-                <div class="mx-auto flex w-max min-w-full max-w-5xl items-stretch justify-center gap-1 px-2 py-2 pb-[max(.5rem,env(safe-area-inset-bottom))] sm:px-4 xl:grid xl:w-full xl:grid-cols-6">
+                <div class="mx-auto grid w-full max-w-5xl grid-cols-6 items-stretch gap-1 px-2 py-2 pb-[max(.5rem,env(safe-area-inset-bottom))] sm:px-4">
                     @foreach ($sections as $sectionKey => $section)
                         @php
                             $sectionUrl = match ($sectionKey) {
@@ -283,7 +283,7 @@
                             aria-label="{{ __('messages.admin_nav.sections.'.$sectionKey) }}"
                             data-tooltip="{{ __('messages.admin_nav.sections.'.$sectionKey) }}"
                             @if ($activeSection === $sectionKey) aria-current="page" @endif
-                            class="admin-section-link relative flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-center text-xs font-semibold xl:min-w-0 xl:flex-col xl:gap-1 xl:px-1 xl:text-center {{ $activeSection === $sectionKey ? 'is-active' : '' }}"
+                            class="admin-section-link relative flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1.5 py-2 text-center text-xs font-semibold xl:text-center {{ $activeSection === $sectionKey ? 'is-active' : '' }}"
                         >
                             <x-admin.icon :name="$section['icon']" class="h-5 w-5" />
                             <span class="admin-section-label whitespace-nowrap">{{ __('messages.admin_nav.sections.'.$sectionKey) }}</span>

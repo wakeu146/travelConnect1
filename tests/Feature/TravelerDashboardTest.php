@@ -136,7 +136,7 @@ class TravelerDashboardTest extends TestCase
         Agency::factory()->create(['company_name' => 'Pending Agency']);
 
         $dashboard = $this->actingAs($traveler)->get(route('dashboard'));
-        $response = $this->actingAs($traveler)->get(route('discover'));
+        $response = $this->actingAs($traveler)->get(route('discover', ['search' => 'Publicly']));
 
         $dashboard->assertOk()
             ->assertSee(__('messages.view_all_agencies'))
@@ -144,15 +144,12 @@ class TravelerDashboardTest extends TestCase
             ->assertSee(route('discover', ['lang' => 'en']));
         $response->assertOk()
             ->assertSee('Publicly Listed Travel')
-            ->assertSee('Plans considered journeys around the world.')
             ->assertSee('Douala, Cameroon')
             ->assertSee('Iceland')
             ->assertSee('Guided tours')
             ->assertSee('5.0')
-            ->assertSee('5.0 out of 5 stars')
-            ->assertSee('1 traveler rating')
-            ->assertSee('Trust score: 74')
-            ->assertSee('data-agency-logo-fallback', false)
+            ->assertSee('1 traveler review')
+            ->assertSee('data-card-initials', false)
             ->assertSee('PL')
             ->assertDontSee('Pending Agency')
             ->assertDontSee('private-contact@example.test')
@@ -172,12 +169,15 @@ class TravelerDashboardTest extends TestCase
         Storage::disk('public')->put($uploadedAgency->cover_image_path, 'cover image');
         $this->createVerifiedAgency('Atlas Horizon Voyages', 80);
 
-        $response = $this->actingAs($traveler)->get(route('discover'));
+        $uploadedResponse = $this->actingAs($traveler)->get(route('discover', ['search' => 'Custom Image']));
+        $fallbackResponse = $this->actingAs($traveler)->get(route('discover', ['search' => 'Atlas Horizon']));
 
-        $response->assertSee('Custom Image Agency')
-            ->assertSee('src="/storage/agency-logos/custom/logo.png?v=', false)
-            ->assertSee('Atlas Horizon Voyages')
-            ->assertSee('src="'.asset('images/agencies/atlas-horizon.jpg').'"', false);
+        $uploadedResponse->assertSee('Custom Image Agency')
+            ->assertSee('src="/storage/agency-covers/custom/cover.jpg?v=', false)
+            ->assertSee('src="/storage/agency-logos/custom/logo.png?v=', false);
+        $fallbackResponse->assertSee('Atlas Horizon Voyages')
+            ->assertSee('data-card-cover-fallback', false)
+            ->assertSee('data-card-initials', false);
     }
 
     public function test_all_agencies_page_keeps_the_existing_authentication_boundary(): void
@@ -187,7 +187,7 @@ class TravelerDashboardTest extends TestCase
         $response->assertRedirect(route('login'));
     }
 
-    public function test_all_agencies_page_paginates_and_preserves_search_filters(): void
+    public function test_agency_search_results_are_paginated_and_preserve_search_filters(): void
     {
         $traveler = User::factory()->create(['role' => 'traveler']);
 
@@ -195,8 +195,8 @@ class TravelerDashboardTest extends TestCase
             $this->createVerifiedAgency(sprintf('Directory Agency %02d', $number), 50);
         }
 
-        $firstPage = $this->actingAs($traveler)->get(route('discover'));
-        $secondPage = $this->actingAs($traveler)->get(route('discover', ['page' => 2]));
+        $firstPage = $this->actingAs($traveler)->get(route('discover', ['search' => 'Directory']));
+        $secondPage = $this->actingAs($traveler)->get(route('discover', ['search' => 'Directory', 'page' => 2]));
         $searchPage = $this->actingAs($traveler)->get(route('discover', ['search' => 'Directory Agency 13']));
 
         $firstPage->assertOk()

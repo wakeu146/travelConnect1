@@ -252,8 +252,9 @@ document.querySelectorAll('[data-password-toggle]').forEach((toggle) => {
 	});
 });
 
-document.querySelectorAll('[data-favorite-toggle]').forEach((toggle) => {
-	toggle.addEventListener('click', async (event) => {
+document.addEventListener('click', async (event) => {
+	const toggle = event.target.closest('[data-favorite-toggle]');
+	if (toggle) {
 		event.preventDefault();
 		if (toggle.dataset.authenticated !== 'true') {
 			window.location.href = toggle.dataset.loginUrl;
@@ -262,7 +263,7 @@ document.querySelectorAll('[data-favorite-toggle]').forEach((toggle) => {
 		if (toggle.disabled) return;
 		toggle.disabled = true;
 		try {
-			const response = await fetch(`/agencies/${toggle.dataset.agencySlug}/favorite`, {
+			const response = await fetch(toggle.dataset.favoriteUrl || `/agencies/${toggle.dataset.agencySlug}/favorite`, {
 				method: 'POST',
 				headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '', Accept: 'application/json' },
 			});
@@ -276,15 +277,301 @@ document.querySelectorAll('[data-favorite-toggle]').forEach((toggle) => {
 			toggle.classList.toggle('text-[#e76f51]', saved);
 			const icon = toggle.querySelector('[data-favorite-icon]') || toggle;
 			const label = toggle.querySelector('[data-favorite-label]');
+			const savedLabel = toggle.dataset.savedLabel || 'Agency saved';
+			const unsavedLabel = toggle.dataset.unsavedLabel || 'Save agency';
+			const actionLabel = saved ? savedLabel : unsavedLabel;
 			if (icon) icon.textContent = saved ? '♥' : '♡';
-			if (label) label.textContent = saved ? 'Agency saved' : 'Save agency';
+			if (label) label.textContent = actionLabel;
+			toggle.setAttribute('aria-label', `${actionLabel} ${toggle.dataset.agencyName || ''}`.trim());
 		} catch (error) {
 			console.error(error);
 		} finally {
 			toggle.disabled = false;
 		}
-	});
+		return;
+	}
+
+	const removeRecent = event.target.closest('[data-recent-remove]');
+	if (removeRecent) {
+		event.preventDefault();
+		if (removeRecent.disabled) return;
+		removeRecent.disabled = true;
+		try {
+			const response = await fetch(removeRecent.dataset.removeUrl, {
+				method: 'DELETE',
+				headers: {
+					'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+					Accept: 'application/json',
+				},
+			});
+			if (!response.ok) throw new Error('Recent agency removal failed');
+			removeRecent.closest('[data-discovery-card]')?.remove();
+			refreshRecentSection();
+		} catch (error) {
+			console.error(error);
+			showDiscoveryHint(discoveryPage?.dataset.errorMessage || 'Agency search is temporarily unavailable. Please try again.');
+		} finally {
+			removeRecent.disabled = false;
+		}
+	}
 });
+
+const discoveryPage = document.querySelector('[data-discover-page]');
+const dashboardSearchInput = document.querySelector('[data-account-main] header input[name="search"]');
+if (discoveryPage && dashboardSearchInput) {
+	dashboardSearchInput.value = new URL(window.location.href).searchParams.get('search') || '';
+}
+
+const refreshRecentSection = () => {
+	if (!discoveryPage) return;
+	const recentSection = discoveryPage.querySelector('[data-discovery-recent]');
+	const recentGrid = discoveryPage.querySelector('[data-discovery-recent-grid]');
+	const clearRecent = discoveryPage.querySelector('[data-discovery-clear-recent]');
+	const hasRecentCards = Boolean(recentGrid?.querySelector('[data-discovery-card]'));
+	recentSection?.classList.toggle('hidden', !hasRecentCards);
+	recentSection?.classList.toggle('grid', hasRecentCards);
+	recentGrid?.classList.toggle('hidden', !hasRecentCards);
+	clearRecent?.classList.toggle('hidden', !hasRecentCards);
+	clearRecent?.classList.toggle('inline-flex', hasRecentCards);
+};
+
+const showDiscoveryHint = (message) => {
+	if (!discoveryPage) return;
+	const hint = discoveryPage.querySelector('[data-discovery-hint]');
+	if (!hint) return;
+	hint.textContent = message;
+	hint.classList.toggle('hidden', !message);
+};
+
+if (dashboardSearchInput?.form && !discoveryPage) {
+	dashboardSearchInput.addEventListener('focus', () => {
+		dashboardSearchInput.value = '';
+		const targetUrl = new URL(dashboardSearchInput.form.action, window.location.href);
+		targetUrl.searchParams.delete('search');
+		targetUrl.searchParams.delete('page');
+		targetUrl.searchParams.set('search_mode', '1');
+		targetUrl.hash = 'agency-search';
+		window.location.assign(targetUrl.href);
+	}, { once: true });
+}
+
+if (discoveryPage && dashboardSearchInput?.form) {
+	const searchForm = dashboardSearchInput.form;
+	const resultsSection = discoveryPage.querySelector('[data-discovery-results-section]');
+	const resultsContent = discoveryPage.querySelector('[data-discovery-results-content]');
+	const loadingState = discoveryPage.querySelector('[data-discovery-loading]');
+	const browseSections = [
+		discoveryPage.querySelector('[data-discovery-hero]'),
+		discoveryPage.querySelector('[data-discovery-recent]'),
+		discoveryPage.querySelector('[data-discovery-popular]'),
+		discoveryPage.querySelector('[data-discovery-featured]'),
+	].filter(Boolean);
+	let searchMode = discoveryPage.dataset.searchMode === 'true';
+	let searchDebounce;
+	let searchRequest;
+	let pointerDownWithinSearch = false;
+
+	const ensureSearchModeField = () => {
+		let field = searchForm.querySelector('input[name="search_mode"]');
+		if (!field) {
+			field = document.createElement('input');
+			field.type = 'hidden';
+			field.name = 'search_mode';
+			searchForm.append(field);
+		}
+		field.value = '1';
+	};
+
+	const updateSearchUrl = (query) => {
+		const url = new URL(window.location.href);
+		url.searchParams.set('search_mode', '1');
+		url.searchParams.delete('page');
+		if (query) {
+			url.searchParams.set('search', query);
+		} else {
+			url.searchParams.delete('search');
+		}
+		window.history.replaceState(null, '', `${url.pathname}${url.search}`);
+	};
+
+	const activateSearchMode = () => {
+		if (searchMode) return;
+		searchMode = true;
+		discoveryPage.dataset.searchMode = 'true';
+		browseSections.forEach((section) => {
+			section.classList.add('hidden');
+			section.classList.remove('grid');
+		});
+		ensureSearchModeField();
+		updateSearchUrl(dashboardSearchInput.value.trim());
+	};
+
+	const restoreBrowseSections = () => {
+		browseSections.forEach((section) => {
+			if (section.hasAttribute('data-discovery-hero')) {
+				section.classList.remove('hidden');
+				return;
+			}
+			const hasCards = Boolean(section.querySelector('[data-discovery-card]'));
+			section.classList.toggle('hidden', !hasCards);
+			section.classList.toggle('grid', hasCards);
+		});
+	};
+
+	const setResultsVisible = (isVisible) => {
+		resultsSection.classList.toggle('hidden', !isVisible);
+		resultsSection.classList.toggle('grid', isVisible);
+	};
+
+	const setLoadingState = (isLoading) => {
+		setResultsVisible(true);
+		resultsSection.setAttribute('aria-busy', String(isLoading));
+		resultsContent.classList.toggle('hidden', isLoading);
+		loadingState.classList.toggle('hidden', !isLoading);
+		loadingState.classList.toggle('flex', isLoading);
+	};
+
+	const clearSearchResults = () => {
+		window.clearTimeout(searchDebounce);
+		searchRequest?.abort();
+		searchRequest = null;
+		updateSearchUrl('');
+		setResultsVisible(false);
+		resultsSection.setAttribute('aria-busy', 'false');
+		resultsContent.replaceChildren();
+		resultsContent.classList.add('hidden');
+		loadingState.classList.add('hidden');
+		loadingState.classList.remove('flex');
+		showDiscoveryHint('');
+	};
+
+	const deactivateSearchMode = () => {
+		if (!searchMode) return;
+		window.clearTimeout(searchDebounce);
+		searchRequest?.abort();
+		searchRequest = null;
+		searchMode = false;
+		discoveryPage.dataset.searchMode = 'false';
+		dashboardSearchInput.value = '';
+		searchForm.querySelector('input[name="search_mode"]')?.remove();
+		restoreBrowseSections();
+		clearSearchResults();
+		const url = new URL(window.location.href);
+		url.searchParams.delete('search_mode');
+		window.history.replaceState(null, '', `${url.pathname}${url.search}`);
+	};
+
+	const scheduleSearchModeDeactivation = () => {
+		const pointerInteraction = pointerDownWithinSearch;
+		window.setTimeout(() => {
+			if (!searchMode || pointerInteraction || pointerDownWithinSearch) return;
+			if (dashboardSearchInput === document.activeElement || resultsSection.contains(document.activeElement)) return;
+			deactivateSearchMode();
+		}, 0);
+	};
+
+	const fetchSearchResults = async (query) => {
+		const request = new AbortController();
+		searchRequest = request;
+		const searchUrl = new URL(discoveryPage.dataset.searchUrl, window.location.href);
+		searchUrl.searchParams.set('search', query);
+		searchUrl.searchParams.delete('page');
+		searchUrl.searchParams.set('lang', getCurrentLocale());
+
+		try {
+			const response = await fetch(searchUrl, {
+				headers: { Accept: 'text/html' },
+				credentials: 'same-origin',
+				signal: request.signal,
+			});
+			if (!response.ok) throw new Error('Agency search failed');
+			const html = await response.text();
+			if (dashboardSearchInput.value.trim() !== query) return;
+			resultsContent.innerHTML = html;
+			setLoadingState(false);
+			showDiscoveryHint('');
+		} catch (error) {
+			if (error.name === 'AbortError' || dashboardSearchInput.value.trim() !== query) return;
+			console.error(error);
+			setLoadingState(false);
+			resultsContent.classList.add('hidden');
+			showDiscoveryHint(discoveryPage.dataset.errorMessage);
+		} finally {
+			if (searchRequest === request) searchRequest = null;
+		}
+	};
+
+	if (searchMode) ensureSearchModeField();
+	dashboardSearchInput.addEventListener('focus', activateSearchMode);
+	dashboardSearchInput.addEventListener('focusout', scheduleSearchModeDeactivation);
+	resultsSection.addEventListener('focusout', scheduleSearchModeDeactivation);
+	searchForm.addEventListener('submit', (event) => {
+		if (searchMode) event.preventDefault();
+	});
+	document.addEventListener('pointerdown', (event) => {
+		const target = event.target;
+		pointerDownWithinSearch = target instanceof Node
+			&& (dashboardSearchInput.contains(target) || resultsSection.contains(target));
+		if (searchMode && !pointerDownWithinSearch) deactivateSearchMode();
+	});
+	document.addEventListener('pointerup', () => {
+		pointerDownWithinSearch = false;
+	});
+	document.addEventListener('pointercancel', () => {
+		pointerDownWithinSearch = false;
+	});
+	dashboardSearchInput.addEventListener('input', () => {
+		activateSearchMode();
+		const query = dashboardSearchInput.value.trim();
+		window.clearTimeout(searchDebounce);
+		searchRequest?.abort();
+		showDiscoveryHint('');
+		updateSearchUrl(query);
+
+		if (!query) {
+			clearSearchResults();
+			return;
+		}
+
+		resultsContent.replaceChildren();
+		setLoadingState(true);
+		searchDebounce = window.setTimeout(() => fetchSearchResults(query), 240);
+	});
+
+	if (window.location.hash === '#agency-search' || searchMode || new URL(window.location.href).searchParams.has('search')) {
+		dashboardSearchInput.focus({ preventScroll: true });
+		if (window.location.hash === '#agency-search') {
+			window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+		}
+	}
+}
+
+if (discoveryPage) {
+	const recentGrid = discoveryPage.querySelector('[data-discovery-recent-grid]');
+	discoveryPage.querySelector('[data-discovery-clear-recent]')?.addEventListener('click', async (event) => {
+		const button = event.currentTarget;
+		button.disabled = true;
+		try {
+			const response = await fetch(discoveryPage.dataset.recentClearUrl, {
+				method: 'DELETE',
+				headers: {
+					'X-CSRF-TOKEN': discoveryPage.dataset.csrfToken,
+					Accept: 'application/json',
+				},
+				credentials: 'same-origin',
+			});
+			if (!response.ok) throw new Error('Recent agency history could not be cleared');
+			recentGrid.replaceChildren();
+			refreshRecentSection();
+			showDiscoveryHint('');
+		} catch (error) {
+			console.error(error);
+			showDiscoveryHint(discoveryPage.dataset.errorMessage);
+		} finally {
+			button.disabled = false;
+		}
+	});
+}
 
 document.querySelectorAll('[data-rating]').forEach((ratingButton) => {
 	ratingButton.addEventListener('click', () => {

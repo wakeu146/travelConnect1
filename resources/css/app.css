@@ -1762,13 +1762,6 @@ input:not([type='checkbox']):not([type='radio']) {
     box-shadow: var(--admin-shadow);
 }
 
-@media (max-width: 639px) {
-    .admin-section-link {
-        padding-right: 0.25rem;
-        padding-left: 0.25rem;
-    }
-}
-
 @media (min-width: 1280px) {
     .admin-section-label {
         position: static;
@@ -1776,12 +1769,6 @@ input:not([type='checkbox']):not([type='radio']) {
         height: auto;
         overflow: visible;
         clip-path: none;
-    }
-}
-
-@media (max-width: 1279px) {
-    .admin-section-link {
-        gap: 0;
     }
 }
 
