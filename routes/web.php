@@ -44,22 +44,11 @@ Route::get('/', function () {
     return view('public-home');
 })->middleware(PreventAuthenticatedWorkspaceCaching::class)->name('home');
 
-Route::middleware(['auth', PreventAuthenticatedWorkspaceCaching::class])->group(function (): void {
-    Route::get('/discover/search', [AgencyDiscoveryController::class, 'search'])->name('discover.search');
-    Route::post('/discover/agencies/{agency}/selection', [AgencyDiscoveryController::class, 'select'])
-        ->whereNumber('agency')
-        ->name('discover.selection.store');
-    Route::delete('/discover/recent', [AgencyDiscoveryController::class, 'clearRecent'])->name('discover.recent.clear');
-    Route::delete('/discover/recent/{agency}', [AgencyDiscoveryController::class, 'destroyRecent'])
-        ->whereNumber('agency')
-        ->name('discover.recent.destroy');
-});
-Route::get('/discover', [AgencyDiscoveryController::class, 'index'])
+Route::get('/discover/search', [AgencyDiscoveryController::class, 'search'])
     ->middleware(['auth', PreventAuthenticatedWorkspaceCaching::class])
-    ->name('discover');
-Route::get('/account/discover', [AgencyDiscoveryController::class, 'index'])
-    ->middleware(['auth', PreventAuthenticatedWorkspaceCaching::class])
-    ->name('account.discover');
+    ->name('discover.search');
+Route::get('/discover', [AgencyDiscoveryController::class, 'index'])->middleware('auth')->name('discover');
+Route::get('/account/discover', [AgencyDiscoveryController::class, 'index'])->middleware('auth')->name('account.discover');
 Route::get('/agencies/{slug}', function (string $slug) {
     $fallbackAgencies = [
         'atlas-horizon-voyages' => ['name' => 'Atlas Horizon Voyages', 'country' => 'France', 'service' => 'Adventure travel', 'rating' => '4.9', 'reviews' => '38', 'description' => 'Tailor-made adventures across Europe and beyond, planned by a team that knows the routes personally.', 'cover' => asset('images/agencies/atlas-horizon.jpg')],
@@ -93,10 +82,6 @@ Route::get('/agencies/{slug}', function (string $slug) {
 
     if (! $agencyModel && ! isset($fallbackAgencies[$slug])) {
         abort(404);
-    }
-
-    if ($agencyModel && $user->isTraveler() && Agency::verified()->whereKey($agencyModel->id)->exists()) {
-        $user->recordRecentAgencies(collect([$agencyModel]));
     }
 
     if ($agencyModel) {

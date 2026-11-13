@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\UserRole;
 use App\Models\IntegrationFailure;
 use App\Models\User;
+use App\Services\AdminOperationalNotificationService;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -74,8 +75,10 @@ class GoogleAuthController extends Controller
         ]);
     }
 
-    public function completeAgencyRegistration(Request $request): RedirectResponse
-    {
+    public function completeAgencyRegistration(
+        Request $request,
+        AdminOperationalNotificationService $adminNotifications,
+    ): RedirectResponse {
         $pendingRegistration = $this->pendingAgencyRegistration($request);
 
         if (! $pendingRegistration) {
@@ -99,7 +102,7 @@ class GoogleAuthController extends Controller
         }
 
         try {
-            $user = DB::transaction(function () use ($data, $pendingRegistration): User {
+            $user = DB::transaction(function () use ($data, $pendingRegistration, $adminNotifications): User {
                 $user = new User([
                     'name' => $pendingRegistration['name'],
                     'email' => $pendingRegistration['email'],
@@ -110,12 +113,14 @@ class GoogleAuthController extends Controller
                 $user->email_verified_at = Carbon::now();
                 $user->save();
 
-                $user->agency()->create([
+                $agency = $user->agency()->create([
                     'company_name' => $data['agency_name'],
                     'description' => '',
                     'license_number' => '',
                     'email' => $pendingRegistration['email'],
                 ]);
+
+                DB::afterCommit(fn () => $adminNotifications->agencyRegistered($agency));
 
                 return $user;
             });

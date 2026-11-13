@@ -49,7 +49,7 @@ class AdminAgencyManagementService
     public function listing(string $page, array $filters): array
     {
         $query = Agency::query()
-            ->with(['owner:id,name,email', 'countries:id,name'])
+            ->with(['owner:id,name,email,is_online,last_active_at', 'countries:id,name'])
             ->withCount(['documents', 'packages', 'reviews', 'bookings'])
             ->withMax('documents', 'uploaded_at');
 
@@ -138,7 +138,7 @@ class AdminAgencyManagementService
     public function profile(Agency $agency, Request $request): array
     {
         $agency->load([
-            'owner:id,name,email,phone',
+            'owner:id,name,email,phone,is_online,last_active_at',
             'countries:id,name',
             'services:id,name',
             'documents' => fn ($query) => $query->latest('uploaded_at')->latest('id'),
@@ -206,17 +206,25 @@ class AdminAgencyManagementService
             }
 
             if ($decision === 'approve') {
-                $submittedDocumentTypes = $agency->documents()
-                    ->whereIn('type', self::REQUIRED_VERIFICATION_DOCUMENT_TYPES)
+                $hasVerificationBundle = $agency->documents()
+                    ->where('type', 'other')
                     ->where('status', '!=', DocumentStatus::REJECTED->value)
-                    ->get(['type'])
-                    ->map(fn (AgencyDocument $document): string => $document->type->value)
-                    ->unique()
-                    ->all();
-                $missingDocumentTypes = array_values(array_diff(
-                    self::REQUIRED_VERIFICATION_DOCUMENT_TYPES,
-                    $submittedDocumentTypes,
-                ));
+                    ->exists();
+                $missingDocumentTypes = [];
+
+                if (! $hasVerificationBundle) {
+                    $submittedDocumentTypes = $agency->documents()
+                        ->whereIn('type', self::REQUIRED_VERIFICATION_DOCUMENT_TYPES)
+                        ->where('status', '!=', DocumentStatus::REJECTED->value)
+                        ->get(['type'])
+                        ->map(fn (AgencyDocument $document): string => $document->type->value)
+                        ->unique()
+                        ->all();
+                    $missingDocumentTypes = array_values(array_diff(
+                        self::REQUIRED_VERIFICATION_DOCUMENT_TYPES,
+                        $submittedDocumentTypes,
+                    ));
+                }
 
                 if ($missingDocumentTypes !== []) {
                     throw ValidationException::withMessages([
@@ -262,9 +270,11 @@ class AdminAgencyManagementService
         });
 
         $approved = $decision === 'approve';
-        $message = $approved
-            ? __('messages.agency_verification_approved_notification')
-            : __('messages.agency_verification_rejected_notification', ['reason' => $reason]);
+        $message = match (true) {
+            $approved => __('messages.agency_verification_approved_notification'),
+            filled($reason) => __('messages.agency_verification_rejected_notification', ['reason' => $reason]),
+            default => __('messages.agency_verification_rejected_notification_without_reason'),
+        };
         $owner = $agency->owner()->first();
 
         if (! $owner) {
@@ -282,7 +292,13 @@ class AdminAgencyManagementService
             $owner,
             $agency,
             $approved ? 'verification_approved' : 'verification_rejected',
-            $message,
+            $approved
+                ? __('messages.agency_verification_approved_email_body', ['agency' => $agency->company_name])
+                : $message,
+            $approved ? __('messages.agency_verification_approved_email_heading') : null,
+            $approved
+                ? __('messages.agency_verification_approved_email_subject', ['agency' => $agency->company_name])
+                : null,
         );
     }
 
@@ -338,7 +354,7 @@ class AdminAgencyManagementService
         );
     }
 
-    public function reinstate(Agency $agency, User $admin, string $reason): void
+    public function reinstate(Agency $agency, User $admin, ?string $reason): void
     {
         DB::transaction(function () use ($agency, $admin, $reason): void {
             $agency = Agency::query()->whereKey($agency->id)->lockForUpdate()->firstOrFail();
@@ -368,10 +384,14 @@ class AdminAgencyManagementService
 
         $agency->owner()->first()?->notify(new AgencyActivityNotification(
             __('messages.agency_moderation_notification_title'),
-            __('messages.agency_reinstated_notification', [
-                'agency' => $agency->company_name,
-                'reason' => $reason,
-            ]),
+            filled($reason)
+                ? __('messages.agency_reinstated_notification', [
+                    'agency' => $agency->company_name,
+                    'reason' => $reason,
+                ])
+                : __('messages.agency_reinstated_notification_without_reason', [
+                    'agency' => $agency->company_name,
+                ]),
             'agency_reinstated',
             route('agency.profile', ['lang' => app()->getLocale()]),
         ));
@@ -425,9 +445,10 @@ class AdminAgencyManagementService
         string $action,
         string $message,
         ?string $heading = null,
+        ?string $subject = null,
     ): bool {
         try {
-            Mail::to($owner)->send(new AgencyModerationMail($agency->company_name, $message, $heading));
+            Mail::to($owner)->send(new AgencyModerationMail($agency->company_name, $message, $heading, $subject));
         } catch (TransportExceptionInterface $exception) {
             Log::warning('Agency moderation email could not be sent.', [
                 'agency_id' => $agency->id,

@@ -15,19 +15,22 @@ use App\Models\PackageAvailability;
 use App\Models\User;
 use App\Notifications\AgencyActivityNotification;
 use App\Services\BookingService;
+use App\Services\CountryCatalogueSynchronizer;
 use App\Services\PaymentSettlementService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class BookingController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request, CountryCatalogueSynchronizer $countryCatalogue): View
     {
         $this->authorize('viewAny', Booking::class);
+        $countryCatalogue->synchronize();
 
         /** @var User $traveler */
         $traveler = $request->user();
@@ -43,14 +46,14 @@ class BookingController extends Controller
         $bookings->withQueryString();
 
         $filters = $request->validate([
-            'country_id' => ['nullable', 'integer', 'exists:countries,id'],
+            'country_id' => ['nullable', 'integer', Rule::exists('countries', 'id')->where('is_active', true)],
             'agency_id' => ['nullable', 'integer'],
             'package_id' => ['nullable', 'integer'],
         ]);
         $selectedCountryId = $filters['country_id'] ?? null;
         $selectedAgencyId = $filters['agency_id'] ?? null;
         $selectedPackageId = $filters['package_id'] ?? null;
-        $countries = Country::query()->orderBy('name')->get(['id', 'name']);
+        $countries = Country::query()->active()->orderBy('name')->get(['id', 'name']);
         $selectedCountry = $selectedCountryId !== null
             ? $countries->firstWhere('id', (int) $selectedCountryId)
             : null;
@@ -95,12 +98,17 @@ class BookingController extends Controller
         ]);
     }
 
-    public function storeFromAccount(Request $request, BookingService $bookingService, PaymentSettlementService $paymentSettlementService): RedirectResponse
-    {
+    public function storeFromAccount(
+        Request $request,
+        BookingService $bookingService,
+        PaymentSettlementService $paymentSettlementService,
+        CountryCatalogueSynchronizer $countryCatalogue,
+    ): RedirectResponse {
         $this->authorize('create', Booking::class);
+        $countryCatalogue->synchronize();
 
         $data = $request->validate([
-            'country_id' => ['required', 'integer', 'exists:countries,id'],
+            'country_id' => ['required', 'integer', Rule::exists('countries', 'id')->where('is_active', true)],
             'agency_id' => ['required', 'exists:agencies,id'],
             'package_id' => ['required', 'exists:packages,id'],
             'package_availability_id' => ['required', 'exists:package_availability,id'],

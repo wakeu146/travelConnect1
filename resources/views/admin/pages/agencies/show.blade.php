@@ -128,6 +128,29 @@
                         <dd class="text-sm admin-heading">{{ $agency->owner?->name ?? __('messages.admin_alerts.unknown_account') }}</dd>
                     </div>
                     <div class="grid gap-1 border-b pb-3 admin-border">
+                        <dt class="text-xs font-semibold admin-muted">{{ __('messages.admin_agencies.presence') }}</dt>
+                        <dd class="text-sm admin-heading">
+                            @if ($agency->owner?->isOnline())
+                                <span class="inline-flex items-center gap-2 text-xs admin-muted" data-owner-presence="online">
+                                    <span class="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true"></span>
+                                    <span>{{ __('messages.admin_agencies.online_now') }}</span>
+                                </span>
+                            @else
+                                <span class="inline-flex items-center gap-2 text-xs admin-muted" data-owner-presence="offline">
+                                    <span class="h-2 w-2 rounded-full bg-slate-400" aria-hidden="true"></span>
+                                    <span>{{ __('messages.admin_agencies.offline') }}</span>
+                                </span>
+                                <span class="block text-xs admin-muted">
+                                    @if ($agency->owner?->last_active_at)
+                                        {{ __('messages.admin_agencies.last_active', ['time' => $agency->owner->last_active_at->locale(app()->getLocale())->diffForHumans()]) }}
+                                    @else
+                                        {{ __('messages.admin_agencies.never_active') }}
+                                    @endif
+                                </span>
+                            @endif
+                        </dd>
+                    </div>
+                    <div class="grid gap-1 border-b pb-3 admin-border">
                         <dt class="text-xs font-semibold admin-muted">{{ __('messages.admin_alerts.fields.email') }}</dt>
                         <dd class="break-all text-sm admin-heading">{{ $agency->owner?->email ?? '—' }}</dd>
                     </div>
@@ -162,9 +185,13 @@
                 @foreach ($profile['requiredDocumentTypes'] as $requiredDocumentType)
                     @php
                         $matchingDocuments = $agency->documents->filter(fn ($document) => $document->type->value === $requiredDocumentType);
-                        $checkDocument = $matchingDocuments->first(fn ($document) => $document->status->value === 'approved')
+                        $bundleDocument = $agency->documents->first(fn ($document) => $document->type->value === 'other');
+                        $checkDocument = $bundleDocument && $bundleDocument->status->value !== 'rejected'
+                            ? $bundleDocument
+                            : ($matchingDocuments->first(fn ($document) => $document->status->value === 'approved')
                             ?? $matchingDocuments->first(fn ($document) => $document->status->value !== 'rejected')
-                            ?? $matchingDocuments->first();
+                            ?? $matchingDocuments->first()
+                            ?? $bundleDocument);
                         $checkStatus = $checkDocument?->status->value ?? 'missing';
                     @endphp
                     <li class="grid gap-1 border p-3 admin-border">
@@ -219,17 +246,21 @@
                     <h3 id="agency-verification-title" class="text-base font-bold admin-heading">{{ __('messages.admin_agencies.verification_workflow') }}</h3>
                     <p class="text-sm admin-muted">{{ __('messages.admin_agencies.verification_help') }}</p>
                 </div>
-                <form method="POST" action="{{ route('admin.agencies.verification', ['agency' => $agency->id, 'lang' => app()->getLocale()]) }}" class="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+                <form method="POST" action="{{ route('admin.agencies.verification', ['agency' => $agency->id, 'lang' => app()->getLocale()]) }}" class="grid gap-3 sm:grid-cols-2 sm:items-end">
                     @csrf
                     @if ($isVerificationWorkflow)
                         <input type="hidden" name="queue" value="{{ $activePage }}">
                     @endif
-                    <div class="grid gap-1.5 sm:col-span-3">
-                        <label for="verification-reason" class="text-xs font-semibold admin-heading">{{ __('messages.admin_agencies.decision_reason') }} <span aria-hidden="true">*</span></label>
-                        <textarea id="verification-reason" name="reason" rows="2" maxlength="2000" required class="admin-input w-full border px-3 py-2 text-sm" placeholder="{{ __('messages.admin_agencies.reason_placeholder') }}">{{ old('reason') }}</textarea>
-                    </div>
-                    <button name="decision" value="approve" type="submit" class="admin-nav-link inline-flex min-h-10 items-center justify-center border px-4 py-2 text-sm font-semibold">{{ __('messages.admin_agencies.approve') }}</button>
-                    <button name="decision" value="reject" type="submit" class="admin-nav-link inline-flex min-h-10 items-center justify-center border border-rose-500/40 px-4 py-2 text-sm font-semibold text-rose-800 dark:text-rose-200">{{ __('messages.admin_agencies.reject') }}</button>
+                    <label class="grid gap-1.5 text-xs font-semibold admin-heading">{{ __('messages.admin_agencies.verification_decision') }}
+                        <select name="decision" required class="admin-input min-h-10 w-full border px-3 text-sm">
+                            <option value="approve" @selected(old('decision') === 'approve')>{{ __('messages.admin_agencies.approve') }}</option>
+                            <option value="reject" @selected(old('decision') === 'reject')>{{ __('messages.admin_agencies.reject') }}</option>
+                        </select>
+                    </label>
+                    <label for="verification-reason" class="grid gap-1.5 text-xs font-semibold admin-heading">{{ __('messages.custom_requests.reason_optional') }}
+                        <textarea id="verification-reason" name="reason" rows="2" maxlength="2000" class="admin-input w-full border px-3 py-2 text-sm" placeholder="{{ __('messages.admin_agencies.reason_placeholder') }}">{{ old('reason') }}</textarea>
+                    </label>
+                    <button type="submit" class="admin-nav-link inline-flex min-h-10 w-fit items-center justify-center border px-4 py-2 text-sm font-semibold sm:col-span-2">{{ __('messages.custom_requests.save_moderation_action') }}</button>
                 </form>
             </section>
         @endif
@@ -250,8 +281,8 @@
                 <form method="POST" action="{{ route('admin.agencies.reinstate', ['agency' => $agency->id, 'lang' => app()->getLocale()]) }}" class="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
                     @csrf
                     <div class="grid gap-1.5">
-                        <label for="reinstate-reason" class="text-xs font-semibold admin-heading">{{ __('messages.admin_agencies.reinstate_reason') }}</label>
-                        <textarea id="reinstate-reason" name="reason" rows="2" required minlength="10" maxlength="2000" class="admin-input w-full border px-3 py-2 text-sm" placeholder="{{ __('messages.admin_agencies.reinstate_reason_placeholder') }}"></textarea>
+                        <label for="reinstate-reason" class="text-xs font-semibold admin-heading">{{ __('messages.custom_requests.reason_optional') }}</label>
+                        <textarea id="reinstate-reason" name="reason" rows="2" minlength="10" maxlength="2000" class="admin-input w-full border px-3 py-2 text-sm" placeholder="{{ __('messages.admin_agencies.reinstate_reason_placeholder') }}"></textarea>
                     </div>
                     <button type="submit" class="admin-nav-link inline-flex min-h-10 items-center justify-center border px-4 py-2 text-sm font-semibold transition hover:bg-slate-100 dark:hover:border-slate-500 dark:hover:bg-slate-700">{{ __('messages.admin_agencies.reinstate') }}</button>
                 </form>

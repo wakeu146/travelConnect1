@@ -56,16 +56,33 @@ class AdminReviewReportControllerTest extends TestCase
 
         $this->get(route('admin.dashboard.page', ['page' => 'reviews_ratings', 'lang' => 'en']))
             ->assertSee('data-admin-reviews', false)
+            ->assertSee('<table', false)
+            ->assertSee(route('admin.reviews.show', ['review' => $reportedReview->id, 'lang' => 'en']), false)
+            ->assertSee(__('messages.admin_users.view_details', [], 'en'))
             ->assertSee('data-admin-review-report-navigation', false)
             ->assertSee('aria-current="page"', false)
-            ->assertSee($reportedReview->comment)
             ->assertSee($reportedReview->user->name)
             ->assertSee($reportedReview->agency->company_name)
-            ->assertSee($policyReview->comment)
-            ->assertSee($plainReview->comment)
             ->assertSee('data-review-signal="report"', false)
             ->assertSee('data-review-signal="policy"', false)
             ->assertSee('data-admin-review-id="'.$plainReview->id.'" data-review-signal-count="0"', false);
+
+        $this->get(route('admin.reviews.show', [
+            'review' => $reportedReview->id,
+            'lang' => 'en',
+            'search' => 'personal information',
+        ]))
+            ->assertSee('data-admin-review-detail', false)
+            ->assertSee(__('messages.trust_safety.review_content', [], 'en'))
+            ->assertSee($reportedReview->comment)
+            ->assertSee($reportedReview->user->email)
+            ->assertSee($reportedReview->agency->company_name)
+            ->assertSee(__('messages.trust_safety.related_reports', [], 'en'))
+            ->assertSee(route('admin.dashboard.page', [
+                'page' => 'reviews_ratings',
+                'lang' => 'en',
+                'search' => 'personal information',
+            ]));
     }
 
     public function test_each_trust_safety_subpage_highlights_its_active_navigation_link(): void
@@ -96,7 +113,14 @@ class AdminReviewReportControllerTest extends TestCase
         $this->post(route('admin.reviews.moderation', ['review' => $review->id, 'lang' => 'en']), [
             'decision' => 'hide',
             'reason' => 'This review exposes private contact information.',
-        ])->assertRedirect(route('admin.dashboard.page', ['page' => 'reviews_ratings', 'lang' => 'en']));
+            'search' => 'specific review',
+            'status' => 'published',
+        ])->assertRedirect(route('admin.reviews.show', [
+            'review' => $review->id,
+            'lang' => 'en',
+            'search' => 'specific review',
+            'status' => 'published',
+        ]));
 
         $this->assertDatabaseHas('reviews', [
             'id' => $review->id,
@@ -113,7 +137,7 @@ class AdminReviewReportControllerTest extends TestCase
         $this->post(route('admin.reviews.moderation', ['review' => $review->id, 'lang' => 'en']), [
             'decision' => 'restore',
             'reason' => 'The review was rechecked and may be shown again.',
-        ])->assertRedirect(route('admin.dashboard.page', ['page' => 'reviews_ratings', 'lang' => 'en']));
+        ])->assertRedirect(route('admin.reviews.show', ['review' => $review->id, 'lang' => 'en']));
 
         $this->assertDatabaseHas('reviews', [
             'id' => $review->id,
@@ -143,7 +167,7 @@ class AdminReviewReportControllerTest extends TestCase
 
         $this->post(route('admin.reviews.moderation', ['review' => $review->id, 'lang' => 'en']), [
             'decision' => 'hide',
-        ])->assertRedirect(route('admin.dashboard.page', ['page' => 'reviews_ratings', 'lang' => 'en']));
+        ])->assertRedirect(route('admin.reviews.show', ['review' => $review->id, 'lang' => 'en']));
 
         $this->assertDatabaseHas('reviews', [
             'id' => $review->id,
@@ -158,7 +182,7 @@ class AdminReviewReportControllerTest extends TestCase
 
         $this->post(route('admin.reviews.moderation', ['review' => $review->id, 'lang' => 'en']), [
             'decision' => 'restore',
-        ])->assertRedirect(route('admin.dashboard.page', ['page' => 'reviews_ratings', 'lang' => 'en']));
+        ])->assertRedirect(route('admin.reviews.show', ['review' => $review->id, 'lang' => 'en']));
 
         $this->assertDatabaseHas('reviews', [
             'id' => $review->id,
@@ -202,15 +226,41 @@ class AdminReviewReportControllerTest extends TestCase
 
         $this->get(route('admin.dashboard.page', ['page' => 'reported_content', 'lang' => 'en']))
             ->assertSee('data-admin-reported-content', false)
+            ->assertSee('<table', false)
+            ->assertSee(route('admin.reports.show', ['report' => $report->id, 'lang' => 'en']), false)
+            ->assertSee($report->reason)
+            ->assertSee($report->reporter->name)
+            ->assertDontSee($report->evidence)
+            ->assertDontSee($review->comment);
+
+        $this->get(route('admin.reports.show', [
+            'report' => $report->id,
+            'lang' => 'en',
+            'search' => 'private information',
+        ]))
+            ->assertSee('data-admin-report-detail', false)
             ->assertSee($report->reason)
             ->assertSee($report->evidence)
             ->assertSee($review->comment)
-            ->assertSee($report->reporter->name);
+            ->assertSee($report->reporter->name)
+            ->assertSee(__('messages.trust_safety.audit_history', [], 'en'))
+            ->assertSee(route('admin.dashboard.page', [
+                'page' => 'reported_content',
+                'lang' => 'en',
+                'search' => 'private information',
+            ]));
 
         $this->post(route('admin.reports.action', ['report' => $report->id, 'lang' => 'en']), [
             'action' => 'restrict',
             'reason' => 'The reported review violates the privacy policy.',
-        ])->assertRedirect(route('admin.dashboard.page', ['page' => 'reported_content', 'lang' => 'en']));
+            'search' => 'private information',
+            'status' => 'open',
+        ])->assertRedirect(route('admin.reports.show', [
+            'report' => $report->id,
+            'lang' => 'en',
+            'search' => 'private information',
+            'status' => 'open',
+        ]));
 
         $this->assertDatabaseHas('content_reports', [
             'id' => $report->id,
@@ -247,6 +297,8 @@ class AdminReviewReportControllerTest extends TestCase
         ]);
 
         $this->get(route('admin.dashboard.page', ['page' => 'user_agency_complaints', 'lang' => 'en']))
+            ->assertSee('<table', false)
+            ->assertSee('<details', false)
             ->assertSee($traveler->name)
             ->assertSee($issue->subject)
             ->assertSee($issue->description)
@@ -287,6 +339,63 @@ class AdminReviewReportControllerTest extends TestCase
             'actor_id' => $admin->id,
             'action' => 'resolve',
             'status_after' => 'resolved',
+        ]);
+    }
+
+    public function test_report_and_complaint_actions_accept_an_empty_reason(): void
+    {
+        $admin = $this->actAsVerifiedAdmin();
+        $review = Review::factory()->create(['status' => 'published']);
+        $report = ContentReport::query()->create([
+            'review_id' => $review->id,
+            'reporter_id' => User::factory()->create()->id,
+            'reason' => 'This review includes private information.',
+            'evidence' => 'A personal phone number is visible.',
+        ]);
+        $traveler = User::factory()->create();
+        $issue = $traveler->travelerIssues()->create([
+            'type' => 'service',
+            'subject' => 'Custom request has not been answered',
+            'description' => 'The agency has not responded to the custom travel request.',
+            'status' => 'open',
+        ]);
+
+        $this->post(route('admin.reports.action', ['report' => $report->id, 'lang' => 'en']), [
+            'action' => 'dismiss',
+        ])->assertRedirect(route('admin.reports.show', ['report' => $report->id, 'lang' => 'en']));
+
+        $this->assertDatabaseHas('content_reports', [
+            'id' => $report->id,
+            'status' => 'dismissed',
+            'outcome_reason' => null,
+        ]);
+        $this->assertDatabaseHas('trust_safety_events', [
+            'source_type' => 'content_report',
+            'source_id' => $report->id,
+            'actor_id' => $admin->id,
+            'action' => 'dismiss',
+            'reason' => null,
+        ]);
+
+        $this->post(route('admin.complaints.action', ['issue' => $issue->id, 'lang' => 'en']), [
+            'action' => 'assign',
+            'assignee_id' => $admin->id,
+        ])->assertRedirect(route('admin.dashboard.page', [
+            'page' => 'user_agency_complaints',
+            'lang' => 'en',
+        ]));
+
+        $this->assertDatabaseHas('traveler_issues', [
+            'id' => $issue->id,
+            'assigned_to' => $admin->id,
+            'status' => 'open',
+        ]);
+        $this->assertDatabaseHas('trust_safety_events', [
+            'source_type' => 'traveler_issue',
+            'source_id' => $issue->id,
+            'actor_id' => $admin->id,
+            'action' => 'assign',
+            'reason' => null,
         ]);
     }
 

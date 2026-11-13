@@ -18,6 +18,7 @@ class AgencyModerationMail extends Mailable
         public readonly string $agencyName,
         public readonly string $body,
         ?string $heading = null,
+        private readonly ?string $subjectLine = null,
     ) {
         $this->heading = $heading ?? __('messages.agency_moderation_email_heading');
     }
@@ -25,7 +26,7 @@ class AgencyModerationMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: __('messages.agency_moderation_email_subject', [
+            subject: $this->subjectLine ?? __('messages.agency_moderation_email_subject', [
                 'agency' => $this->agencyName,
             ]),
         );

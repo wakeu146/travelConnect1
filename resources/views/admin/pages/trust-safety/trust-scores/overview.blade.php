@@ -33,63 +33,65 @@
         </div>
     @endif
 
-    <div class="grid min-w-0 gap-4 md:grid-cols-2" data-trust-score-list>
-        @forelse ($agencies as $agency)
-            @php
-                $latestCalculation = $agency->latestTrustScoreLog;
-                $hasCurrentCalculation = $latestCalculation && $latestCalculation->score === $agency->trust_score;
-                $factors = $hasCurrentCalculation ? $latestCalculation->factors : [];
-            @endphp
-            <article class="admin-empty-state grid min-w-0 content-start gap-4 border p-4 sm:p-5" data-trust-score-agency="{{ $agency->id }}">
-                <header class="flex min-w-0 flex-wrap items-start justify-between gap-3">
-                    <div class="grid min-w-0 gap-1">
-                        <h2 class="break-words text-base font-bold admin-heading">{{ $agency->company_name }}</h2>
-                        <a href="{{ route('admin.agencies.show', ['agency' => $agency->id, 'lang' => app()->getLocale()]) }}" class="w-fit break-words text-xs font-semibold admin-accent underline decoration-current/30 underline-offset-4">
-                            {{ __('messages.trust_scores.open_agency') }}
-                        </a>
-                    </div>
-                    <div class="grid shrink-0 justify-items-end gap-1">
-                        <span class="text-3xl font-extrabold tabular-nums admin-heading">{{ $agency->trust_score }}</span>
-                        <span class="text-[11px] admin-muted">{{ __('messages.trust_scores.score_out_of_100') }}</span>
-                    </div>
-                </header>
-
-                @if ($hasCurrentCalculation)
-                    <dl class="grid min-w-0 gap-3 border-t pt-4 admin-border sm:grid-cols-2">
-                        @if (array_key_exists('average_published_rating', $factors) && $factors['average_published_rating'] !== null)
-                            <div class="grid min-w-0 gap-1">
-                                <dt class="text-xs font-semibold admin-muted">{{ __('messages.trust_scores.average_published_rating') }}</dt>
-                                <dd class="break-words text-sm font-semibold admin-heading">{{ number_format((float) $factors['average_published_rating'], 2) }} / 5</dd>
-                            </div>
-                        @endif
-                        @if (array_key_exists('published_review_count', $factors))
-                            <div class="grid min-w-0 gap-1">
-                                <dt class="text-xs font-semibold admin-muted">{{ __('messages.trust_scores.published_review_count') }}</dt>
-                                <dd class="break-words text-sm font-semibold admin-heading">{{ $factors['published_review_count'] }}</dd>
-                            </div>
-                        @endif
-                        <div class="grid min-w-0 gap-1 sm:col-span-2">
-                            <dt class="text-xs font-semibold admin-muted">{{ __('messages.trust_scores.calculated_at') }}</dt>
-                            <dd class="break-words text-sm admin-heading"><time datetime="{{ $latestCalculation->calculated_at->toIso8601String() }}">{{ $latestCalculation->calculated_at->locale(app()->getLocale())->isoFormat('LLL') }}</time></dd>
-                        </div>
-                        @if (($factors['calculation'] ?? null) === 'average_rating_x_20')
-                            <div class="grid min-w-0 gap-1 sm:col-span-2">
-                                <dt class="text-xs font-semibold admin-muted">{{ __('messages.trust_scores.calculation') }}</dt>
-                                <dd class="break-words text-sm leading-5 admin-heading">{{ __('messages.trust_scores.average_rating_x_20') }}</dd>
-                            </div>
-                        @endif
-                    </dl>
-                @elseif ($latestCalculation)
-                    <p class="border-t pt-4 text-sm leading-5 admin-muted admin-border">
-                        {{ __('messages.trust_scores.calculation_mismatch', ['score' => $latestCalculation->score, 'date' => $latestCalculation->calculated_at->locale(app()->getLocale())->isoFormat('LLL')]) }}
-                    </p>
-                @else
-                    <p class="border-t pt-4 text-sm leading-5 admin-muted admin-border">{{ __('messages.trust_scores.no_calculation_record') }}</p>
-                @endif
-            </article>
-        @empty
-            <p class="admin-empty-state border p-6 text-sm admin-muted md:col-span-2">{{ __('messages.trust_scores.no_agencies') }}</p>
-        @endforelse
+    <div class="admin-empty-state overflow-x-auto border" data-trust-score-list>
+        <table class="w-full min-w-[64rem] text-left text-sm">
+            <thead class="border-b admin-border">
+                <tr class="text-xs uppercase tracking-wide admin-muted">
+                    <th scope="col" class="px-4 py-3">{{ __('messages.trust_scores.agency') }}</th>
+                    <th scope="col" class="px-4 py-3">{{ __('messages.trust_scores.score_out_of_100') }}</th>
+                    <th scope="col" class="px-4 py-3">{{ __('messages.trust_scores.average_published_rating') }}</th>
+                    <th scope="col" class="px-4 py-3">{{ __('messages.trust_scores.published_review_count') }}</th>
+                    <th scope="col" class="px-4 py-3">{{ __('messages.trust_scores.calculated_at') }}</th>
+                    <th scope="col" class="px-4 py-3">{{ __('messages.admin_users.actions') }}</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y admin-border">
+                @forelse ($agencies as $agency)
+                    @php
+                        $latestCalculation = $agency->latestTrustScoreLog;
+                        $hasCurrentCalculation = $latestCalculation && $latestCalculation->score === $agency->trust_score;
+                        $factors = $hasCurrentCalculation ? $latestCalculation->factors : [];
+                    @endphp
+                    <tr data-trust-score-agency="{{ $agency->id }}">
+                        <td class="px-4 py-3 font-semibold admin-heading">{{ $agency->company_name }}</td>
+                        <td class="whitespace-nowrap px-4 py-3 font-bold tabular-nums admin-heading">{{ $agency->trust_score }} / 100</td>
+                        <td class="px-4 py-3 admin-heading">
+                            @if ($hasCurrentCalculation && array_key_exists('average_published_rating', $factors) && $factors['average_published_rating'] !== null)
+                                {{ number_format((float) $factors['average_published_rating'], 2) }} / 5
+                            @else
+                                <span class="admin-muted">—</span>
+                            @endif
+                        </td>
+                        <td class="px-4 py-3 admin-heading">
+                            @if ($hasCurrentCalculation && array_key_exists('published_review_count', $factors))
+                                {{ $factors['published_review_count'] }}
+                            @else
+                                <span class="admin-muted">—</span>
+                            @endif
+                        </td>
+                        <td class="px-4 py-3 text-xs admin-muted">
+                            @if ($hasCurrentCalculation)
+                                <time datetime="{{ $latestCalculation->calculated_at->toIso8601String() }}">{{ $latestCalculation->calculated_at->locale(app()->getLocale())->isoFormat('LLL') }}</time>
+                                @if (($factors['calculation'] ?? null) === 'average_rating_x_20')
+                                    <span class="mt-1 block max-w-64">{{ __('messages.trust_scores.average_rating_x_20') }}</span>
+                                @endif
+                            @elseif ($latestCalculation)
+                                <span>{{ __('messages.trust_scores.calculation_mismatch', ['score' => $latestCalculation->score, 'date' => $latestCalculation->calculated_at->locale(app()->getLocale())->isoFormat('LLL')]) }}</span>
+                            @else
+                                {{ __('messages.trust_scores.no_calculation_record') }}
+                            @endif
+                        </td>
+                        <td class="px-4 py-3">
+                            <a href="{{ route('admin.agencies.show', ['agency' => $agency->id, 'lang' => app()->getLocale()]) }}" class="admin-nav-link inline-flex min-h-9 items-center border px-3 py-1.5 text-xs font-semibold">
+                                {{ __('messages.trust_scores.open_agency') }}
+                            </a>
+                        </td>
+                    </tr>
+                @empty
+                    <tr><td colspan="6" class="p-8 text-center admin-muted">{{ __('messages.trust_scores.no_agencies') }}</td></tr>
+                @endforelse
+            </tbody>
+        </table>
     </div>
 
     <div class="min-w-0 overflow-x-auto">{{ $agencies->links() }}</div>

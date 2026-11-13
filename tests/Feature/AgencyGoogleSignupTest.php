@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\UserRole;
 use App\Models\Agency;
 use App\Models\User;
+use App\Notifications\AdminAgencyRegistered;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
@@ -79,6 +80,7 @@ class AgencyGoogleSignupTest extends TestCase
 
     public function test_completed_google_agency_signup_creates_owner_and_supports_password_and_google_login(): void
     {
+        $admin = User::factory()->withRole(UserRole::ADMIN)->create();
         $this->withSession(['pending_google_agency_registration' => $this->pendingGoogleIdentity()]);
 
         $response = $this->post(route('google.agency.complete'), [
@@ -94,7 +96,7 @@ class AgencyGoogleSignupTest extends TestCase
 
         $response->assertRedirect(route('auth.success'));
         $this->assertAuthenticated();
-        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseCount('users', 2);
         $user = User::query()->where('email', 'agency@example.com')->firstOrFail();
         $this->assertSame('agency-google-id', $user->google_id);
         $this->assertSame('Google Agency Contact', $user->name);
@@ -107,6 +109,13 @@ class AgencyGoogleSignupTest extends TestCase
             'email' => 'agency@example.com',
         ]);
         $this->assertInstanceOf(Agency::class, $user->fresh()->agency);
+        $notification = $admin->notifications()
+            ->where('type', AdminAgencyRegistered::class)
+            ->firstOrFail();
+        $this->assertSame([
+            'agency_id' => $user->agency->id,
+            'agency_name' => 'Summit Travel Co',
+        ], $notification->data);
         $response->assertSessionMissing('pending_google_agency_registration');
         $this->assertSame(route('login'), session('success_redirect'));
 
@@ -131,7 +140,7 @@ class AgencyGoogleSignupTest extends TestCase
 
         $googleLogin->assertRedirect(route('auth.success'));
         $this->assertAuthenticatedAs($user);
-        $this->assertSame(1, User::query()->count());
+        $this->assertSame(2, User::query()->count());
     }
 
     public function test_agency_signup_refuses_an_existing_email_without_changing_the_user(): void

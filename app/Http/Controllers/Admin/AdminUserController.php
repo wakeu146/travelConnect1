@@ -362,7 +362,17 @@ class AdminUserController extends Controller
         $filters = $this->validateFilters($request);
 
         $query = $this->queryForPage($page, $filters, $lockedRole, $deactivatedOnly)
-            ->select(['id', 'name', 'email', 'profile_photo_path', 'role', 'created_at', 'deleted_at']);
+            ->select([
+                'id',
+                'name',
+                'email',
+                'profile_photo_path',
+                'role',
+                'is_online',
+                'last_active_at',
+                'created_at',
+                'deleted_at',
+            ]);
 
         if ($page === 'agency_owners') {
             $query->with([

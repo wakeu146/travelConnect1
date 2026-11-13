@@ -15,6 +15,7 @@
     <article class="admin-empty-state grid gap-6 border p-5 sm:p-7">
         <header class="flex flex-wrap items-start justify-between gap-4">
             <div class="grid gap-2">
+
                 <h2 class="text-2xl font-bold admin-heading">{{ $package->title }}</h2>
                 <p class="text-sm admin-muted">{{ $package->agency?->company_name ?? __('messages.not_available') }} · {{ $package->agency?->owner?->name ?? __('messages.not_available') }} · {{ $package->agency?->owner?->email ?? __('messages.not_available') }}</p>
             </div>
@@ -67,7 +68,7 @@
             <input type="hidden" name="decision" value="restrict">
             <label for="package-restriction-reason" class="grid gap-1.5 text-xs font-semibold admin-heading">
                 {{ __('messages.admin_travel.moderation_reason') }}
-                <textarea id="package-restriction-reason" name="reason" required minlength="10" maxlength="2000" rows="3" class="admin-input w-full border p-3 text-sm">{{ old('reason') }}</textarea>
+                <textarea id="package-restriction-reason" name="reason" minlength="10" maxlength="2000" rows="3" class="admin-input w-full border p-3 text-sm">{{ old('reason') }}</textarea>
             </label>
             <button type="submit" class="inline-flex min-h-10 w-fit items-center border border-rose-500/50 px-4 py-2 text-sm font-semibold text-rose-800 dark:text-rose-200">{{ __('messages.admin_travel.restrict_action') }}</button>
         </form>
@@ -79,7 +80,7 @@
             <input type="hidden" name="decision" value="restore">
             <label for="package-restore-reason" class="grid gap-1.5 text-xs font-semibold admin-heading">
                 {{ __('messages.admin_travel.moderation_reason') }}
-                <textarea id="package-restore-reason" name="reason" required minlength="10" maxlength="2000" rows="3" class="admin-input w-full border p-3 text-sm">{{ old('reason') }}</textarea>
+                <textarea id="package-restore-reason" name="reason" minlength="10" maxlength="2000" rows="3" class="admin-input w-full border p-3 text-sm">{{ old('reason') }}</textarea>
             </label>
             <button type="submit" class="admin-nav-link inline-flex min-h-10 w-fit items-center border px-4 py-2 text-sm font-semibold">{{ __('messages.admin_travel.restore_action') }}</button>
         </form>

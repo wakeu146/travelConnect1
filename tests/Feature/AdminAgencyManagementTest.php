@@ -18,10 +18,12 @@ use App\Models\PackageAvailability;
 use App\Models\Review;
 use App\Models\TrustScoreLog;
 use App\Models\User;
+use App\Notifications\AdminAgencyDocumentReceived;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Mockery;
 use Symfony\Component\Mailer\Exception\TransportException;
@@ -206,6 +208,45 @@ class AdminAgencyManagementTest extends TestCase
         $this->get(route('admin.dashboard.page', ['page' => 'verified_agencies', 'lang' => 'en']))
             ->assertSee($otherAgency->company_name)
             ->assertDontSee($matchingAgency->company_name);
+    }
+
+    public function test_admin_agency_pages_show_owner_online_and_last_active_status(): void
+    {
+        $this->travelTo('2026-11-08 12:00:00');
+        $this->actAsVerifiedAdmin();
+        $onlineAgency = Agency::factory()->create([
+            'company_name' => 'Online Agency',
+            'verification_status' => VerificationStatus::VERIFIED,
+        ]);
+        $onlineAgency->owner->forceFill([
+            'is_online' => true,
+            'last_active_at' => now(),
+        ])->save();
+        $offlineAgency = Agency::factory()->create([
+            'company_name' => 'Offline Agency',
+            'verification_status' => VerificationStatus::VERIFIED,
+        ]);
+        $offlineAgency->owner->forceFill([
+            'is_online' => false,
+            'last_active_at' => now()->subHours(2),
+        ])->save();
+
+        $directory = $this->get(route('admin.dashboard.page', ['page' => 'all_agencies', 'lang' => 'en']));
+
+        $directory->assertSee('data-owner-presence="online"', false)
+            ->assertSee(__('messages.admin_agencies.online_now'))
+            ->assertSee('data-owner-presence="offline"', false)
+            ->assertSee('h-2 w-2 rounded-full bg-emerald-500', false)
+            ->assertSee('h-2 w-2 rounded-full bg-slate-400', false)
+            ->assertSee('inline-flex items-center gap-2 text-xs admin-muted', false)
+            ->assertSee(__('messages.admin_agencies.last_active', [
+                'time' => $offlineAgency->owner->last_active_at->locale('en')->diffForHumans(),
+            ]));
+
+        $this->get(route('admin.agencies.show', ['agency' => $offlineAgency->id, 'lang' => 'en']))
+            ->assertSee(__('messages.admin_agencies.last_active', [
+                'time' => $offlineAgency->owner->last_active_at->locale('en')->diffForHumans(),
+            ]));
     }
 
     public function test_agency_directory_uses_distinct_colors_for_verification_states(): void
@@ -418,12 +459,6 @@ class AdminAgencyManagementTest extends TestCase
 
         $this->post(route('admin.agencies.verification', ['agency' => $agency->id, 'lang' => 'en']), [
             'decision' => 'approve',
-        ])->assertSessionHasErrors('reason');
-
-        $this->assertSame(VerificationStatus::PENDING, $agency->fresh()->verification_status);
-
-        $this->post(route('admin.agencies.verification', ['agency' => $agency->id, 'lang' => 'en']), [
-            'decision' => 'approve',
             'reason' => 'Documents checked and business details matched.',
             'queue' => 'verification_pending',
         ])->assertRedirect(route('admin.agencies.show', [
@@ -455,7 +490,9 @@ class AdminAgencyManagementTest extends TestCase
             AgencyModerationMail::class,
             fn (AgencyModerationMail $mail): bool => $mail->hasTo($owner->email)
                 && $mail->agencyName === $agency->company_name
-                && $mail->body === __('messages.agency_verification_approved_notification'),
+                && $mail->heading === __('messages.agency_verification_approved_email_heading')
+                && $mail->body === __('messages.agency_verification_approved_email_body', ['agency' => $agency->company_name])
+                && $mail->envelope()->subject === __('messages.agency_verification_approved_email_subject', ['agency' => $agency->company_name]),
         );
 
         $this->actingAs($owner)
@@ -467,16 +504,41 @@ class AdminAgencyManagementTest extends TestCase
             ->assertSee(route('agency.profile', ['lang' => 'en']), false);
     }
 
-    public function test_admin_rejection_requires_a_reason_and_records_the_decision(): void
+    public function test_admin_can_approve_a_combined_verification_pdf_after_reviewing_it(): void
+    {
+        $this->actAsVerifiedAdmin();
+        $agency = Agency::factory()->create(['verification_status' => VerificationStatus::PENDING]);
+        $document = AgencyDocument::factory()->for($agency)->create([
+            'type' => 'other',
+            'status' => DocumentStatus::PENDING,
+        ]);
+
+        $this->get(route('admin.agencies.show', ['agency' => $agency->id, 'lang' => 'en']))
+            ->assertSee(__('messages.admin_agencies.document_types.other'))
+            ->assertSee('data-required-document-status="pending"', false)
+            ->assertSee('name="decision"', false)
+            ->assertSee('name="reason"', false)
+            ->assertDontSee('name="reason" required', false);
+
+        $this->post(route('admin.agencies.verification', ['agency' => $agency->id, 'lang' => 'en']), [
+            'decision' => 'approve',
+        ])->assertRedirect();
+
+        $this->assertSame(VerificationStatus::VERIFIED, $agency->fresh()->verification_status);
+        $this->assertSame(DocumentStatus::APPROVED, $document->fresh()->status);
+        $this->assertDatabaseHas('agency_moderation_events', [
+            'agency_id' => $agency->id,
+            'action' => 'verification_approved',
+            'reason' => null,
+        ]);
+    }
+
+    public function test_admin_rejection_with_a_reason_records_the_decision(): void
     {
         $admin = $this->actAsVerifiedAdmin();
         $agency = Agency::factory()->create(['verification_status' => VerificationStatus::PENDING]);
         $owner = $agency->owner;
         Mail::fake();
-
-        $this->post(route('admin.agencies.verification', ['agency' => $agency->id, 'lang' => 'en']), [
-            'decision' => 'reject',
-        ])->assertSessionHasErrors('reason');
 
         $this->post(route('admin.agencies.verification', ['agency' => $agency->id, 'lang' => 'en']), [
             'decision' => 'reject',
@@ -506,6 +568,27 @@ class AdminAgencyManagementTest extends TestCase
                     'reason' => 'The submitted business details do not match the registration.',
                 ]),
         );
+    }
+
+    public function test_admin_can_reject_verification_without_a_reason(): void
+    {
+        $admin = $this->actAsVerifiedAdmin();
+        $agency = Agency::factory()->create(['verification_status' => VerificationStatus::PENDING]);
+        Mail::fake();
+
+        $this->post(route('admin.agencies.verification', ['agency' => $agency->id, 'lang' => 'en']), [
+            'decision' => 'reject',
+        ])->assertRedirect();
+
+        $this->assertSame(VerificationStatus::REJECTED, $agency->fresh()->verification_status);
+        $this->assertDatabaseHas('agency_moderation_events', [
+            'agency_id' => $agency->id,
+            'actor_id' => $admin->id,
+            'action' => 'verification_rejected',
+            'reason' => null,
+        ]);
+        $this->assertSame(1, $agency->owner->notifications()->count());
+        Mail::assertSent(AgencyModerationMail::class);
     }
 
     public function test_suspension_hides_an_agency_from_public_pages_and_blocks_new_bookings(): void
@@ -655,8 +738,10 @@ class AdminAgencyManagementTest extends TestCase
     public function test_rejected_agency_document_resubmission_reopens_verification_and_records_the_owner(): void
     {
         Storage::fake('public');
+        Notification::fake();
+        $admin = User::factory()->withRole(UserRole::ADMIN)->create();
         $agency = Agency::factory()->create(['verification_status' => VerificationStatus::REJECTED]);
-        $agency->documents()->create([
+        $rejectedDocument = $agency->documents()->create([
             'type' => 'license',
             'file_path' => 'agency-documents/previous-license.pdf',
             'status' => DocumentStatus::REJECTED,
@@ -665,12 +750,17 @@ class AdminAgencyManagementTest extends TestCase
 
         $this->actingAs($agency->owner)
             ->post(route('agency.documents.store', ['lang' => 'en']), [
-                'type' => 'license',
-                'document' => UploadedFile::fake()->create('updated-license.pdf', 100, 'application/pdf'),
+                'document' => UploadedFile::fake()->create('updated-verification-bundle.pdf', 100, 'application/pdf'),
             ])
             ->assertRedirect(route('agency.profile', ['lang' => 'en']));
 
         $this->assertSame(VerificationStatus::PENDING, $agency->fresh()->verification_status);
+        $this->assertSame(DocumentStatus::REJECTED, $rejectedDocument->fresh()->status);
+        $this->assertDatabaseHas('agency_documents', [
+            'agency_id' => $agency->id,
+            'type' => 'other',
+            'status' => DocumentStatus::PENDING->value,
+        ]);
         $this->assertDatabaseHas('agency_moderation_events', [
             'agency_id' => $agency->id,
             'actor_id' => $agency->owner->id,
@@ -678,6 +768,44 @@ class AdminAgencyManagementTest extends TestCase
             'previous_verification_status' => VerificationStatus::REJECTED->value,
             'new_verification_status' => VerificationStatus::PENDING->value,
         ]);
+        Notification::assertSentTo($admin, AdminAgencyDocumentReceived::class);
+    }
+
+    public function test_agency_cannot_submit_again_after_a_second_verification_rejection(): void
+    {
+        Storage::fake('public');
+        $agency = Agency::factory()->create(['verification_status' => VerificationStatus::REJECTED]);
+
+        foreach (range(1, 2) as $rejectionNumber) {
+            $agency->moderationEvents()->create([
+                'action' => 'verification_rejected',
+                'previous_verification_status' => VerificationStatus::PENDING->value,
+                'new_verification_status' => VerificationStatus::REJECTED->value,
+                'previous_operating_status' => 'active',
+                'new_operating_status' => 'active',
+                'reason' => 'Verification documents were insufficient.',
+                'created_at' => now()->subMinutes($rejectionNumber),
+                'updated_at' => now()->subMinutes($rejectionNumber),
+            ]);
+        }
+
+        $this->actingAs($agency->owner)
+            ->get(route('agency.profile', ['lang' => 'en']))
+            ->assertSee(__('messages.verification_resubmission_limit_reached'))
+            ->assertDontSee(__('messages.submit_verification_bundle'));
+
+        $this->actingAs($agency->owner)
+            ->from(route('agency.profile', ['lang' => 'en']))
+            ->post(route('agency.documents.store', ['lang' => 'en']), [
+                'document' => UploadedFile::fake()->create('third-verification-bundle.pdf', 100, 'application/pdf'),
+            ])
+            ->assertRedirect(route('agency.profile', ['lang' => 'en']))
+            ->assertSessionHasErrors([
+                'document' => __('messages.verification_resubmission_limit_reached'),
+            ]);
+
+        $this->assertDatabaseCount('agency_documents', 0);
+        $this->assertSame(VerificationStatus::REJECTED, $agency->fresh()->verification_status);
     }
 
     public function test_suspended_agency_owner_cannot_create_packages_but_keeps_their_account(): void

@@ -191,7 +191,7 @@ class AdminReviewReportManagementService
         });
     }
 
-    public function actOnReport(ContentReport $report, User $actor, string $action, ?int $assigneeId, string $reason): void
+    public function actOnReport(ContentReport $report, User $actor, string $action, ?int $assigneeId, ?string $reason): void
     {
         DB::transaction(function () use ($report, $actor, $action, $assigneeId, $reason): void {
             $lockedReport = ContentReport::query()->lockForUpdate()->findOrFail($report->id);
@@ -248,7 +248,7 @@ class AdminReviewReportManagementService
         User $actor,
         string $action,
         ?int $assigneeId,
-        string $reason,
+        ?string $reason,
     ): void {
         DB::transaction(function () use ($issue, $actor, $action, $assigneeId, $reason): void {
             $lockedIssue = TravelerIssue::query()->lockForUpdate()->findOrFail($issue->id);

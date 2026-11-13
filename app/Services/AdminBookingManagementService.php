@@ -52,7 +52,7 @@ class AdminBookingManagementService
                 'agency:id,company_name',
                 'package:id,title,destination,duration_days',
                 'customRequest:id,title,destination,travel_date',
-                'customProposal:id,reference,price,currency,quote_snapshot',
+                'customProposal:id,reference,price,currency',
                 'availability:id,package_id,departure_date,capacity,status',
             ])
             ->withCount([
@@ -163,7 +163,7 @@ class AdminBookingManagementService
         return $summary;
     }
 
-    public function transition(Booking $booking, User $actor, BookingStatus $status, string $reason): Booking
+    public function transition(Booking $booking, User $actor, BookingStatus $status, ?string $reason): Booking
     {
         abort_unless($actor->isAdmin(), 403);
 

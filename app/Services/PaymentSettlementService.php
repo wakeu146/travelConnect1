@@ -14,6 +14,39 @@ use RuntimeException;
 
 class PaymentSettlementService
 {
+    public function recordAgencyReportedOfflinePayment(Booking $booking): ?BookingPaymentTransaction
+    {
+        return DB::transaction(function () use ($booking): ?BookingPaymentTransaction {
+            $lockedBooking = Booking::query()->lockForUpdate()->findOrFail($booking->id);
+            $successfulTransactions = $lockedBooking->paymentTransactions()
+                ->where('status', PaymentTransactionStatus::SUCCEEDED->value);
+            $chargesCents = (int) round((float) (clone $successfulTransactions)
+                ->where('type', PaymentTransactionType::CHARGE->value)
+                ->sum('amount') * 100);
+            $refundsCents = (int) round((float) (clone $successfulTransactions)
+                ->where('type', PaymentTransactionType::REFUND->value)
+                ->sum('amount') * 100);
+            $outstandingCents = max(
+                0,
+                (int) round((float) $lockedBooking->total_amount * 100) - max(0, $chargesCents - $refundsCents),
+            );
+
+            if ($outstandingCents === 0) {
+                return null;
+            }
+
+            return $this->record(
+                $lockedBooking,
+                'agency-reported-offline',
+                PaymentTransactionType::CHARGE,
+                PaymentTransactionStatus::SUCCEEDED,
+                number_format($outstandingCents / 100, 2, '.', ''),
+                $lockedBooking->currency,
+                paymentMethod: 'offline',
+            );
+        });
+    }
+
     public function record(
         Booking $booking,
         string $provider,

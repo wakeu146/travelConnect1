@@ -136,7 +136,7 @@ class TravelerDashboardTest extends TestCase
         Agency::factory()->create(['company_name' => 'Pending Agency']);
 
         $dashboard = $this->actingAs($traveler)->get(route('dashboard'));
-        $response = $this->actingAs($traveler)->get(route('discover', ['search' => 'Publicly']));
+        $response = $this->actingAs($traveler)->get(route('discover'));
 
         $dashboard->assertOk()
             ->assertSee(__('messages.view_all_agencies'))
@@ -144,17 +144,36 @@ class TravelerDashboardTest extends TestCase
             ->assertSee(route('discover', ['lang' => 'en']));
         $response->assertOk()
             ->assertSee('Publicly Listed Travel')
+            ->assertSee('Plans considered journeys around the world.')
             ->assertSee('Douala, Cameroon')
             ->assertSee('Iceland')
             ->assertSee('Guided tours')
             ->assertSee('5.0')
-            ->assertSee('1 traveler review')
-            ->assertSee('data-card-initials', false)
+            ->assertSee('5.0 out of 5 stars')
+            ->assertSee('1 traveler rating')
+            ->assertSee('Trust score: 74')
+            ->assertSee('data-agency-logo-fallback', false)
             ->assertSee('PL')
             ->assertDontSee('Pending Agency')
             ->assertDontSee('private-contact@example.test')
             ->assertDontSee('private-phone-value')
             ->assertDontSee('private-license-value');
+    }
+
+    public function test_verified_agency_without_an_approved_document_record_appears_in_discovery_and_dashboard(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        $agency = Agency::factory()->create([
+            'company_name' => 'Verified Agency Without Document History',
+            'verification_status' => 'verified',
+            'trust_score' => 80,
+        ]);
+
+        $dashboard = $this->actingAs($traveler)->get(route('dashboard', ['lang' => 'en']));
+        $discovery = $this->actingAs($traveler)->get(route('discover', ['lang' => 'en']));
+
+        $dashboard->assertSee($agency->company_name);
+        $discovery->assertSee($agency->company_name);
     }
 
     public function test_discover_shows_uploaded_agency_images_and_static_images_when_no_upload_exists(): void
@@ -169,25 +188,85 @@ class TravelerDashboardTest extends TestCase
         Storage::disk('public')->put($uploadedAgency->cover_image_path, 'cover image');
         $this->createVerifiedAgency('Atlas Horizon Voyages', 80);
 
-        $uploadedResponse = $this->actingAs($traveler)->get(route('discover', ['search' => 'Custom Image']));
-        $fallbackResponse = $this->actingAs($traveler)->get(route('discover', ['search' => 'Atlas Horizon']));
+        $response = $this->actingAs($traveler)->get(route('discover'));
 
-        $uploadedResponse->assertSee('Custom Image Agency')
-            ->assertSee('src="/storage/agency-covers/custom/cover.jpg?v=', false)
-            ->assertSee('src="/storage/agency-logos/custom/logo.png?v=', false);
-        $fallbackResponse->assertSee('Atlas Horizon Voyages')
-            ->assertSee('data-card-cover-fallback', false)
-            ->assertSee('data-card-initials', false);
+        $response->assertSee('Custom Image Agency')
+            ->assertSee('src="/storage/agency-logos/custom/logo.png?v=', false)
+            ->assertSee('Atlas Horizon Voyages')
+            ->assertSee('src="'.asset('images/agencies/atlas-horizon.jpg').'"', false);
     }
 
     public function test_all_agencies_page_keeps_the_existing_authentication_boundary(): void
     {
         $response = $this->get(route('discover'));
+        $suggestionsResponse = $this->getJson(route('discover.search', ['search' => 'Japan']));
 
         $response->assertRedirect(route('login'));
+        $suggestionsResponse->assertUnauthorized();
     }
 
-    public function test_agency_search_results_are_paginated_and_preserve_search_filters(): void
+    public function test_discovery_uses_the_header_search_without_a_duplicate_page_search(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+
+        $response = $this->actingAs($traveler)->get(route('discover'));
+
+        $response->assertOk()
+            ->assertDontSee('data-discover-search', false)
+            ->assertSee("accountProfileLink?.classList.add('sm:hidden')", false);
+        $this->assertSame(1, substr_count($response->getContent(), 'type="search"'));
+    }
+
+    public function test_agency_suggestions_return_matching_verified_agencies_without_private_details(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        $japan = Country::factory()->create(['name' => 'Japan']);
+        $service = Service::factory()->create(['name' => 'Guided tours']);
+        $matchingAgency = $this->createVerifiedAgency('Japan Journey Co', 80, [
+            'description' => 'Private agency description',
+            'address' => 'Kyoto, Japan',
+            'email' => 'private@example.test',
+            'phone' => 'private-phone-value',
+            'license_number' => 'private-license-value',
+        ]);
+        $matchingAgency->countries()->attach($japan);
+        $matchingAgency->services()->attach($service);
+        $this->createVerifiedAgency('Alpine Routes', 70);
+        Agency::factory()->create([
+            'company_name' => 'Japan Pending Agency',
+            'verification_status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($traveler)->getJson(route('discover.search', [
+            'lang' => 'en',
+            'search' => 'Japan',
+        ]));
+
+        $response->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.name', 'Japan Journey Co')
+            ->assertJsonPath('data.0.location', 'Kyoto, Japan')
+            ->assertJsonPath('data.0.destinations.0', 'Japan')
+            ->assertJsonPath('data.0.service', 'Guided tours')
+            ->assertJsonPath('data.0.url', route('agency.show', ['slug' => 'japan-journey-co', 'lang' => 'en']))
+            ->assertJsonMissing(['email' => 'private@example.test'])
+            ->assertJsonMissing(['phone' => 'private-phone-value'])
+            ->assertJsonMissing(['license_number' => 'private-license-value'])
+            ->assertJsonMissing(['name' => 'Alpine Routes'])
+            ->assertJsonMissing(['name' => 'Japan Pending Agency']);
+    }
+
+    public function test_agency_suggestions_require_at_least_two_search_characters(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+
+        $this->actingAs($traveler)
+            ->getJson(route('discover.search', ['lang' => 'en', 'search' => 'J']))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('search');
+    }
+
+    public function test_all_agencies_page_paginates_and_preserves_search_filters(): void
     {
         $traveler = User::factory()->create(['role' => 'traveler']);
 
@@ -195,8 +274,8 @@ class TravelerDashboardTest extends TestCase
             $this->createVerifiedAgency(sprintf('Directory Agency %02d', $number), 50);
         }
 
-        $firstPage = $this->actingAs($traveler)->get(route('discover', ['search' => 'Directory']));
-        $secondPage = $this->actingAs($traveler)->get(route('discover', ['search' => 'Directory', 'page' => 2]));
+        $firstPage = $this->actingAs($traveler)->get(route('discover'));
+        $secondPage = $this->actingAs($traveler)->get(route('discover', ['page' => 2]));
         $searchPage = $this->actingAs($traveler)->get(route('discover', ['search' => 'Directory Agency 13']));
 
         $firstPage->assertOk()
@@ -352,6 +431,21 @@ class TravelerDashboardTest extends TestCase
             'currency' => 'XAF',
         ]);
         $this->assertSame(1, $agency->owner->notifications()->whereJsonContains('data->type', 'booking')->count());
+    }
+
+    public function test_booking_filters_do_not_offer_removed_countries(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        $country = Country::factory()->create(['name' => 'Japan', 'is_active' => false]);
+
+        $this->actingAs($traveler)
+            ->get(route('account.bookings', ['lang' => 'en']))
+            ->assertOk()
+            ->assertDontSee('<option value="'.$country->id.'"', false);
+
+        $this->actingAs($traveler)
+            ->get(route('account.bookings', ['lang' => 'en', 'country_id' => $country->id]))
+            ->assertSessionHasErrors('country_id');
     }
 
     public function test_booking_page_lists_only_packages_with_upcoming_departures_in_the_selected_country(): void

@@ -11,15 +11,13 @@ use Illuminate\Validation\Rule;
 
 class AdminTravelCatalogueController extends Controller
 {
-    public function storeCountry(Request $request): RedirectResponse
+    public function addCountry(Request $request): RedirectResponse
     {
-        $request->merge(['code' => strtoupper((string) $request->input('code'))]);
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:191', 'unique:countries,name'],
-            'code' => ['required', 'alpha:ascii', 'size:2', 'unique:countries,code'],
+            'country_id' => ['required', 'integer', 'exists:countries,id'],
         ]);
-
-        Country::query()->create($data);
+        $country = Country::query()->where('is_active', false)->findOrFail($data['country_id']);
+        $country->update(['is_active' => true]);
 
         return redirect()->route('admin.dashboard.page', [
             'page' => 'countries',
@@ -27,15 +25,9 @@ class AdminTravelCatalogueController extends Controller
         ])->with('status', __('messages.admin_travel.country_saved'));
     }
 
-    public function updateCountry(Request $request, Country $country): RedirectResponse
+    public function removeCountry(Country $country): RedirectResponse
     {
-        $request->merge(['code' => strtoupper((string) $request->input('code'))]);
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:191', Rule::unique('countries', 'name')->ignore($country)],
-            'code' => ['required', 'alpha:ascii', 'size:2', Rule::unique('countries', 'code')->ignore($country)],
-        ]);
-
-        $country->update($data);
+        $country->update(['is_active' => false]);
 
         return redirect()->route('admin.dashboard.page', [
             'page' => 'countries',

@@ -7,8 +7,11 @@ use App\Enums\UserRole;
 use App\Models\Agency;
 use App\Models\AgencyDocument;
 use App\Models\TravelerIssue;
+use App\Models\TravelRequest;
 use App\Models\User;
 use App\Notifications\AdminAgencyDocumentReceived;
+use App\Notifications\AdminAgencyRegistered;
+use App\Notifications\AdminCustomRequestReceived;
 use App\Notifications\AdminTravelerIssueReceived;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -42,6 +45,7 @@ class AdminNotificationControllerTest extends TestCase
 
         $this->get(route('admin.dashboard', ['lang' => 'en']))
             ->assertSee('data-admin-notification-count="1"', false)
+            ->assertSee('admin-notification-count absolute -right-1.5 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full', false)
             ->assertSee($issue->subject)
             ->assertSee(__('messages.admin_nav.traveler_issue_notification_title', [
                 'type' => __('messages.admin_alerts.categories.booking_dispute'),
@@ -66,7 +70,6 @@ class AdminNotificationControllerTest extends TestCase
         $agency = Agency::factory()->create(['company_name' => 'Atlas Travel Agency']);
 
         $this->actingAs($agency->owner)->post(route('agency.documents.store', ['lang' => 'en']), [
-            'type' => 'license',
             'document' => UploadedFile::fake()->create('license.pdf', 100, 'application/pdf'),
         ])->assertRedirect(route('agency.profile', ['lang' => 'en']));
 
@@ -80,7 +83,7 @@ class AdminNotificationControllerTest extends TestCase
                 'agency_id' => $agency->id,
                 'agency_name' => $agency->company_name,
                 'document_id' => $document->id,
-                'document_type' => 'license',
+                'document_type' => 'other',
             ], $notification->data);
             $this->assertNull($notification->read_at);
         }
@@ -91,7 +94,7 @@ class AdminNotificationControllerTest extends TestCase
             ->assertSee('data-admin-notification-type="agency_document"', false)
             ->assertSee(__('messages.admin_nav.agency_document_notification_title'))
             ->assertSee($agency->company_name)
-            ->assertSee(__('messages.admin_nav.agency_document_types.license'));
+            ->assertSee(__('messages.admin_nav.agency_document_types.other'));
     }
 
     public function test_opening_an_agency_document_notification_marks_it_read_and_opens_the_agency_profile(): void
@@ -115,6 +118,70 @@ class AdminNotificationControllerTest extends TestCase
             'id' => $notification->id,
             'notifiable_id' => $admin->id,
         ]);
+        $this->assertDatabaseMissing('notifications', [
+            'id' => $notification->id,
+            'read_at' => null,
+        ]);
+    }
+
+    public function test_opening_an_agency_registration_notification_marks_it_read_and_opens_the_agency_profile(): void
+    {
+        $admin = $this->actAsVerifiedAdmin();
+        $agency = Agency::factory()->create(['company_name' => 'New Horizon Travel']);
+        $admin->notify(new AdminAgencyRegistered($agency));
+        $notification = $admin->notifications()->firstOrFail();
+
+        $this->get(route('admin.dashboard', ['lang' => 'en']))
+            ->assertSee('data-admin-notification-count="1"', false)
+            ->assertSee('data-admin-notification-type="agency_registration"', false)
+            ->assertSee(__('messages.admin_nav.agency_registration_notification_title'))
+            ->assertSee($agency->company_name)
+            ->assertSee(route('admin.notifications.open', [
+                'notification' => $notification->id,
+                'lang' => 'en',
+            ]), false);
+
+        $this->get(route('admin.notifications.open', [
+            'notification' => $notification->id,
+            'lang' => 'en',
+        ]))->assertRedirect(route('admin.agencies.show', [
+            'agency' => $agency->id,
+            'lang' => 'en',
+        ]));
+
+        $this->assertDatabaseMissing('notifications', [
+            'id' => $notification->id,
+            'read_at' => null,
+        ]);
+    }
+
+    public function test_opening_a_custom_request_notification_marks_it_read_and_opens_the_request(): void
+    {
+        $admin = $this->actAsVerifiedAdmin();
+        $travelRequest = TravelRequest::factory()->create([
+            'reference' => 'TC-ADMIN-REQUEST-100',
+        ]);
+        $admin->notify(new AdminCustomRequestReceived($travelRequest));
+        $notification = $admin->notifications()->firstOrFail();
+
+        $this->get(route('admin.dashboard', ['lang' => 'en']))
+            ->assertSee('data-admin-notification-count="1"', false)
+            ->assertSee('data-admin-notification-type="custom_request"', false)
+            ->assertSee(__('messages.admin_nav.custom_request_notification_title'))
+            ->assertSee($travelRequest->reference)
+            ->assertSee(route('admin.notifications.open', [
+                'notification' => $notification->id,
+                'lang' => 'en',
+            ]), false);
+
+        $this->get(route('admin.notifications.open', [
+            'notification' => $notification->id,
+            'lang' => 'en',
+        ]))->assertRedirect(route('admin.custom-requests.show', [
+            'travelRequest' => $travelRequest->id,
+            'lang' => 'en',
+        ]));
+
         $this->assertDatabaseMissing('notifications', [
             'id' => $notification->id,
             'read_at' => null,
@@ -147,19 +214,25 @@ class AdminNotificationControllerTest extends TestCase
         $this->assertNull($notification->read_at);
     }
 
-    public function test_marking_all_admin_notifications_as_read_includes_agency_documents(): void
+    public function test_marking_all_admin_notifications_as_read_includes_operational_notifications(): void
     {
         $admin = $this->actAsVerifiedAdmin();
         $agency = Agency::factory()->create();
         $document = AgencyDocument::factory()->for($agency)->create();
         $document->setRelation('agency', $agency);
         $admin->notify(new AdminAgencyDocumentReceived($document));
+        $admin->notify(new AdminAgencyRegistered($agency));
+        $admin->notify(new AdminCustomRequestReceived(TravelRequest::factory()->create()));
 
         $this->patch(route('admin.notifications.read-all', ['lang' => 'en']))->assertRedirect();
 
-        $this->assertSame(0, $admin->unreadNotifications()
-            ->where('type', AdminAgencyDocumentReceived::class)
-            ->count());
+        foreach ([
+            AdminAgencyDocumentReceived::class,
+            AdminAgencyRegistered::class,
+            AdminCustomRequestReceived::class,
+        ] as $notificationType) {
+            $this->assertSame(0, $admin->unreadNotifications()->where('type', $notificationType)->count());
+        }
     }
 
     public function test_opening_a_notification_marks_it_read_and_opens_its_alert_record(): void

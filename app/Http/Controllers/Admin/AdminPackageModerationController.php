@@ -33,14 +33,14 @@ class AdminPackageModerationController extends Controller
     ): RedirectResponse {
         $data = $request->validate([
             'decision' => ['required', Rule::in(['restrict', 'restore'])],
-            'reason' => ['required', 'string', 'min:10', 'max:2000'],
+            'reason' => ['nullable', 'string', 'min:10', 'max:2000'],
         ]);
 
         $travelManagement->moderatePackage(
             $package,
             (int) $request->user()->id,
             $data['decision'],
-            $data['reason'],
+            $data['reason'] ?? null,
         );
 
         return redirect()->route('admin.packages.show', [

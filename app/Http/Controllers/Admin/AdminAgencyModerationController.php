@@ -21,7 +21,7 @@ class AdminAgencyModerationController extends Controller
     ): RedirectResponse {
         $data = $request->validate([
             'decision' => ['required', Rule::in(['approve', 'reject'])],
-            'reason' => ['required', 'string', 'max:2000'],
+            'reason' => ['nullable', 'string', 'max:2000'],
             'queue' => ['nullable', Rule::in(['verification_pending', 'approved', 'rejected'])],
         ]);
 
@@ -76,10 +76,10 @@ class AdminAgencyModerationController extends Controller
         AdminAgencyManagementService $agencyManagement,
     ): RedirectResponse {
         $data = $request->validate([
-            'reason' => ['required', 'string', 'min:10', 'max:2000'],
+            'reason' => ['nullable', 'string', 'min:10', 'max:2000'],
         ]);
 
-        $agencyManagement->reinstate($agency, $request->user(), $data['reason']);
+        $agencyManagement->reinstate($agency, $request->user(), $data['reason'] ?? null);
 
         return redirect()->route('admin.agencies.show', [
             'agency' => $agency->id,

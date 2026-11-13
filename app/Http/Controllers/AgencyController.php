@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Enums\DocumentStatus;
-use App\Enums\DocumentType;
 use App\Enums\InquiryStatus;
 use App\Enums\PackageStatus;
 use App\Enums\UserRole;
@@ -21,6 +20,7 @@ use App\Notifications\AdminAgencyDocumentReceived;
 use App\Notifications\AgencyActivityNotification;
 use App\Services\BookingService;
 use App\Services\ConversationService;
+use App\Services\CountryCatalogueSynchronizer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -106,16 +106,26 @@ class AgencyController extends Controller
         ]);
     }
 
-    public function profile(): View
+    public function profile(CountryCatalogueSynchronizer $countryCatalogue): View
     {
+        $countryCatalogue->synchronize();
         $agency = $this->currentAgency();
         $agency->load(['owner', 'countries', 'services', 'documents']);
 
         return view('agencies.profile', [
             'agency' => $agency,
-            'countries' => Country::orderBy('name')->get(),
+            'countries' => Country::query()
+                ->where(function ($query) use ($agency): void {
+                    $query->active()
+                        ->orWhereIn('id', $agency->countries()->select('countries.id'));
+                })
+                ->orderBy('name')
+                ->get(),
             'services' => Service::orderBy('name')->get(),
             'latestVerificationDocument' => $agency->documents->sortByDesc('uploaded_at')->first(),
+            'verificationRejectionCount' => $agency->moderationEvents()
+                ->where('action', 'verification_rejected')
+                ->count(),
         ]);
     }
 
@@ -207,9 +217,13 @@ class AgencyController extends Controller
             ->with('inquiry_delete_status', 'The closed inquiry was deleted.');
     }
 
-    public function updateProfile(Request $request): RedirectResponse
+    public function updateProfile(Request $request, CountryCatalogueSynchronizer $countryCatalogue): RedirectResponse
     {
+        $countryCatalogue->synchronize();
         $agency = $this->currentAgency();
+        $inactiveCountryIds = $agency->countries()
+            ->where('is_active', false)
+            ->pluck('countries.id');
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -223,7 +237,10 @@ class AgencyController extends Controller
             'agency_email' => ['nullable', 'email', 'max:191'],
             'website' => ['nullable', 'url', 'max:255'],
             'countries' => ['nullable', 'array'],
-            'countries.*' => ['exists:countries,id'],
+            'countries.*' => [Rule::exists('countries', 'id')->where(function ($query) use ($inactiveCountryIds): void {
+                $query->where('is_active', true)
+                    ->orWhereIn('id', $inactiveCountryIds);
+            })],
             'services' => ['nullable', 'array'],
             'services.*' => ['exists:services,id'],
             'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:2048'],
@@ -290,14 +307,17 @@ class AgencyController extends Controller
 
         try {
             $owner = $agency->owner;
-            DB::transaction(function () use ($owner, $agency, $data, $agencyUpdates): void {
+            DB::transaction(function () use ($owner, $agency, $data, $agencyUpdates, $inactiveCountryIds): void {
                 $owner->update([
                     'name' => $data['name'],
                     'email' => $data['email'],
                     'phone' => $data['phone'] ?? $owner->phone,
                 ]);
                 $agency->update($agencyUpdates);
-                $agency->countries()->sync($data['countries'] ?? []);
+                $agency->countries()->sync(collect($data['countries'] ?? [])
+                    ->merge($inactiveCountryIds)
+                    ->unique()
+                    ->all());
                 $agency->services()->sync($data['services'] ?? []);
             });
         } catch (\Throwable $exception) {
@@ -316,15 +336,21 @@ class AgencyController extends Controller
     {
         $agency = $this->currentAgency();
 
-        $data = $request->validate([
-            'type' => ['required', 'in:'.implode(',', array_column(DocumentType::cases(), 'value'))],
-            'document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:4096'],
+        $request->validate([
+            'document' => ['required', 'file', 'mimes:pdf', 'max:8192'],
         ]);
 
-        $latestDocument = $agency->documents()->latest('uploaded_at')->first();
+        if ($agency->verification_status === VerificationStatus::VERIFIED) {
+            return back()->withErrors(['document' => __('messages.verification_already_approved')]);
+        }
 
-        if ($latestDocument && $latestDocument->canBeModified()) {
-            return back()->withErrors(['document' => __('messages.document_update_locked')])->withInput();
+        if ($agency->moderationEvents()->where('action', 'verification_rejected')->count() >= 2) {
+            return back()->withErrors(['document' => __('messages.verification_resubmission_limit_reached')]);
+        }
+
+        if ($agency->verification_status === VerificationStatus::PENDING
+            && $agency->documents()->exists()) {
+            return back()->withErrors(['document' => __('messages.document_submission_locked')]);
         }
 
         $filePath = $request->file('document')->store('agency-documents', 'public');
@@ -332,10 +358,21 @@ class AgencyController extends Controller
             return back()->withErrors(['document' => __('messages.upload_failed')])->withInput();
         }
 
-        $document = DB::transaction(function () use ($agency, $request, $data, $filePath): AgencyDocument {
+        $disk = Storage::disk('public');
+        $document = DB::transaction(function () use ($agency, $request, $filePath, $disk): ?AgencyDocument {
             $lockedAgency = Agency::query()->whereKey($agency->id)->lockForUpdate()->firstOrFail();
+
+            if ($lockedAgency->verification_status === VerificationStatus::VERIFIED
+                || $lockedAgency->moderationEvents()->where('action', 'verification_rejected')->count() >= 2
+                || ($lockedAgency->verification_status === VerificationStatus::PENDING
+                    && $lockedAgency->documents()->exists())) {
+                $disk->delete($filePath);
+
+                return null;
+            }
+
             $document = $lockedAgency->documents()->create([
-                'type' => $data['type'],
+                'type' => 'other',
                 'file_path' => $filePath,
                 'status' => DocumentStatus::PENDING->value,
                 'uploaded_at' => now(),
@@ -360,6 +397,16 @@ class AgencyController extends Controller
             return $document;
         });
 
+        if (! $document) {
+            return back()->withErrors([
+                'document' => $agency->moderationEvents()->where('action', 'verification_rejected')->count() >= 2
+                    ? __('messages.verification_resubmission_limit_reached')
+                    : ($agency->verification_status === VerificationStatus::VERIFIED
+                        ? __('messages.verification_already_approved')
+                        : __('messages.document_submission_locked')),
+            ]);
+        }
+
         $this->notifyAdminsOfDocument($document);
 
         return redirect()->route('agency.profile', ['lang' => app()->getLocale()])->with('status', __('messages.document_uploaded'));
@@ -371,25 +418,36 @@ class AgencyController extends Controller
 
         abort_unless($document->agency_id === $agency->id, 403);
 
-        if (! $document->canBeModified()) {
+        if ($agency->verification_status === VerificationStatus::REJECTED) {
+            return $this->storeDocument($request);
+        }
+
+        if ($agency->verification_status !== VerificationStatus::PENDING || ! $document->canBeModified()) {
             return back()->withErrors(['document' => __('messages.document_update_locked')]);
         }
 
-        $data = $request->validate([
-            'document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:4096'],
+        $request->validate([
+            'document' => ['required', 'file', 'mimes:pdf', 'max:8192'],
         ]);
 
         $disk = Storage::disk('public');
-
-        if ($document->file_path && $disk->exists($document->file_path)) {
-            $disk->delete($document->file_path);
+        $oldFilePath = $document->file_path;
+        $filePath = $request->file('document')->store('agency-documents', 'public');
+        if (! $filePath) {
+            return back()->withErrors(['document' => __('messages.upload_failed')])->withInput();
         }
 
         $document->update([
-            'file_path' => $request->file('document')->store('agency-documents', 'public'),
+            'type' => 'other',
+            'file_path' => $filePath,
             'status' => DocumentStatus::PENDING->value,
             'uploaded_at' => now(),
         ]);
+
+        if ($oldFilePath !== $filePath && $disk->exists($oldFilePath)) {
+            $disk->delete($oldFilePath);
+        }
+
         $document->load('agency:id,company_name');
         $this->notifyAdminsOfDocument($document);
 
@@ -402,7 +460,9 @@ class AgencyController extends Controller
 
         abort_unless($document->agency_id === $agency->id, 403);
 
-        if (! $document->canBeModified()) {
+        if ($agency->verification_status !== VerificationStatus::PENDING
+            || $document->status !== DocumentStatus::PENDING
+            || ! $document->canBeModified()) {
             return back()->withErrors(['document' => __('messages.document_update_locked')]);
         }
 
@@ -457,21 +517,26 @@ class AgencyController extends Controller
         ])->with('experience_deleted', true);
     }
 
-    public function createPackage(): View
+    public function createPackage(CountryCatalogueSynchronizer $countryCatalogue): View
     {
+        $countryCatalogue->synchronize();
         $agency = $this->currentAgency();
 
         return view('agencies.packages.form', [
             'agency' => $agency,
-            'destinations' => $agency->countries()->orderBy('countries.name')->pluck('countries.name'),
+            'destinations' => $agency->countries()
+                ->where('countries.is_active', true)
+                ->orderBy('countries.name')
+                ->pluck('countries.name'),
             'package' => null,
             'canCreatePackage' => $agency->verification_status === VerificationStatus::VERIFIED
                 && $agency->operating_status === 'active',
         ]);
     }
 
-    public function storePackage(Request $request): RedirectResponse
+    public function storePackage(Request $request, CountryCatalogueSynchronizer $countryCatalogue): RedirectResponse
     {
+        $countryCatalogue->synchronize();
         $agency = $this->currentAgency();
 
         if ($agency->operating_status === 'suspended') {
@@ -490,7 +555,10 @@ class AgencyController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'summary' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'destination' => ['required', 'string', Rule::in($agency->countries()->pluck('countries.name')->all())],
+            'destination' => ['required', 'string', Rule::in($agency->countries()
+                ->where('countries.is_active', true)
+                ->pluck('countries.name')
+                ->all())],
             'price_from' => ['required', 'numeric', 'min:0'],
             'duration_days' => ['required', 'integer', 'min:1', 'max:365'],
             'status' => ['required', 'in:'.implode(',', array_map(fn ($status) => $status->value, PackageStatus::cases()))],
@@ -527,10 +595,14 @@ class AgencyController extends Controller
         $this->authorize('update', $package);
 
         $agency = $this->currentAgency();
+        $destinations = $agency->countries()
+            ->where('countries.is_active', true)
+            ->pluck('countries.name');
+        $destinations->push($package->destination);
 
         return view('agencies.packages.form', [
             'agency' => $agency,
-            'destinations' => $agency->countries()->orderBy('countries.name')->pluck('countries.name'),
+            'destinations' => $destinations->unique()->sort()->values(),
             'package' => $package->load(['images'])
                 ->loadCount(['bookings', 'availabilities as upcoming_departures_count' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>', today()->toDateString())])
                 ->loadSum('bookings as travelers_booked', 'traveler_count'),
@@ -543,6 +615,12 @@ class AgencyController extends Controller
     {
         $this->authorize('update', $package);
         $this->ensurePackageOwnership($package);
+        $destinations = $package->agency->countries()
+            ->where('countries.is_active', true)
+            ->pluck('countries.name')
+            ->push($package->destination)
+            ->unique()
+            ->all();
         if ($package->agency->operating_status === 'suspended'
             && $request->input('status') === PackageStatus::PUBLISHED->value) {
             return back()
@@ -554,7 +632,7 @@ class AgencyController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'summary' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'destination' => ['required', 'string', Rule::in($package->agency->countries()->pluck('countries.name')->all())],
+            'destination' => ['required', 'string', Rule::in($destinations)],
             'price_from' => ['required', 'numeric', 'min:0'],
             'duration_days' => ['required', 'integer', 'min:1', 'max:365'],
             'status' => ['required', 'in:'.implode(',', array_map(fn ($status) => $status->value, PackageStatus::cases()))],

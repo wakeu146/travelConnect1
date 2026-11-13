@@ -76,6 +76,60 @@ class AdminUserControllerTest extends TestCase
         $this->assertFalse(app('router')->has('admin.users.export'));
     }
 
+    public function test_user_list_shows_online_status_for_all_account_roles_and_stale_users_as_offline(): void
+    {
+        $this->travelTo('2026-11-08 12:00:00');
+        $this->verifiedAdmin();
+        $onlineTraveler = User::factory()->create([
+            'name' => 'Online Traveler',
+            'role' => UserRole::TRAVELER,
+        ]);
+        $onlineTraveler->forceFill([
+            'is_online' => true,
+            'last_active_at' => now(),
+        ])->save();
+        $offlineTraveler = User::factory()->create([
+            'name' => 'Offline Traveler',
+            'role' => UserRole::TRAVELER,
+        ]);
+        $offlineTraveler->forceFill([
+            'is_online' => true,
+            'last_active_at' => now()->subMinutes(6),
+        ])->save();
+        $agency = Agency::factory()->create(['company_name' => 'Presence Agency']);
+
+        $response = $this->get(route('admin.users.index', ['lang' => 'en']));
+
+        $response->assertSee($onlineTraveler->name)
+            ->assertSee($offlineTraveler->name)
+            ->assertSee($agency->owner->name)
+            ->assertSee(__('messages.admin_users.presence'))
+            ->assertSee(__('messages.admin_users.online_now'))
+            ->assertSee(__('messages.admin_users.offline'))
+            ->assertSee('data-user-presence-cell="online"', false)
+            ->assertSee('data-user-presence-cell="offline"', false)
+            ->assertSee('h-2 w-2 rounded-full bg-emerald-500', false)
+            ->assertSee('h-2 w-2 rounded-full bg-slate-400', false)
+            ->assertSee('inline-flex items-center gap-2 text-xs admin-muted', false)
+            ->assertDontSee('rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.12em]', false)
+            ->assertSee('data-user-presence="online"', false)
+            ->assertSee('data-user-presence="offline"', false)
+            ->assertDontSee('admin-badge inline-flex items-center gap-1.5 border px-2 py-1 text-xs font-bold border-emerald-500/50', false)
+            ->assertSee(__('messages.admin_users.last_active', [
+                'time' => $offlineTraveler->last_active_at->locale('en')->diffForHumans(),
+            ]));
+
+        $this->get(route('admin.users.show', [
+            'userId' => $offlineTraveler->id,
+            'lang' => 'en',
+        ]))
+            ->assertSee('data-user-presence="offline"', false)
+            ->assertSee(__('messages.admin_users.offline'))
+            ->assertSee(__('messages.admin_users.last_active', [
+                'time' => $offlineTraveler->last_active_at->locale('en')->diffForHumans(),
+            ]));
+    }
+
     public function test_administrator_can_permanently_delete_a_user_and_keep_the_list_context(): void
     {
         $this->verifiedAdmin();

@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Enums\UserRole;
 use App\Models\Agency;
 use App\Models\User;
+use App\Notifications\AdminAgencyRegistered;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -13,6 +15,8 @@ class AgencyRegistrationTest extends TestCase
 
     public function test_agency_registration_creates_an_agency_profile_for_the_owner(): void
     {
+        $admin = User::factory()->withRole(UserRole::ADMIN)->create();
+
         $response = $this->post(route('register.agency.store'), [
             'agency_name' => 'North Star Travel',
             'name' => 'Alex Morgan',
@@ -35,5 +39,13 @@ class AgencyRegistrationTest extends TestCase
             'verification_status' => 'pending',
         ]);
         $this->assertInstanceOf(Agency::class, $user->fresh()->agency);
+
+        $notification = $admin->notifications()
+            ->where('type', AdminAgencyRegistered::class)
+            ->firstOrFail();
+        $this->assertSame([
+            'agency_id' => $user->agency->id,
+            'agency_name' => 'North Star Travel',
+        ], $notification->data);
     }
 }

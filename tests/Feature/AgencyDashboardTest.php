@@ -781,6 +781,33 @@ class AgencyDashboardTest extends TestCase
         $public->assertSee('Rail journeys');
     }
 
+    public function test_agency_profile_keeps_a_removed_country_link_when_saving_profile_changes(): void
+    {
+        $agency = Agency::factory()->create();
+        $country = Country::factory()->create(['name' => 'Japan', 'is_active' => false]);
+        $agency->countries()->attach($country);
+
+        $this->actingAs($agency->owner)
+            ->get(route('agency.profile', ['lang' => 'en']))
+            ->assertOk()
+            ->assertSee('<input type="checkbox" name="countries[]" value="'.$country->id.'" checked>', false);
+
+        $this->actingAs($agency->owner)
+            ->put(route('agency.settings.update', ['lang' => 'en']), [
+                'name' => $agency->owner->name,
+                'email' => $agency->owner->email,
+                'company_name' => $agency->company_name,
+                'countries' => [$country->id],
+            ])
+            ->assertRedirect(route('agency.profile', ['lang' => 'en']))
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('agency_country', [
+            'agency_id' => $agency->id,
+            'country_id' => $country->id,
+        ]);
+    }
+
     public function test_an_agency_owner_can_update_a_new_profile_with_blank_optional_phone_numbers(): void
     {
         $agency = Agency::factory()->create(['phone' => null]);
@@ -870,9 +897,16 @@ class AgencyDashboardTest extends TestCase
         Storage::fake('local');
         $agency = Agency::factory()->create();
 
+        $this->actingAs($agency->owner)
+            ->get(route('agency.profile', ['lang' => 'en']))
+            ->assertOk()
+            ->assertSee(__('messages.verification_help_text'))
+            ->assertSee(__('messages.verification_bundle'))
+            ->assertSee('accept="application/pdf"', false)
+            ->assertDontSee('name="type"', false);
+
         $document = $this->actingAs($agency->owner)->post(route('agency.documents.store'), [
-            'type' => 'license',
-            'document' => UploadedFile::fake()->create('license.pdf', 100, 'application/pdf'),
+            'document' => UploadedFile::fake()->create('verification-bundle.pdf', 100, 'application/pdf'),
         ]);
         $document->assertRedirect();
 
@@ -884,7 +918,7 @@ class AgencyDashboardTest extends TestCase
         ]);
         $experience->assertRedirect();
 
-        $this->assertDatabaseHas('agency_documents', ['agency_id' => $agency->id, 'type' => 'license', 'status' => 'pending']);
+        $this->assertDatabaseHas('agency_documents', ['agency_id' => $agency->id, 'type' => 'other', 'status' => 'pending']);
         $this->assertDatabaseHas('agency_experiences', ['agency_id' => $agency->id, 'destination' => 'Tokyo']);
 
         $agencyProfile = $this->actingAs($agency->owner)->get(route('agency.show', ['slug' => Str::slug($agency->company_name), 'lang' => 'en']));
@@ -893,6 +927,50 @@ class AgencyDashboardTest extends TestCase
         $travelerProfile = $this->actingAs(User::factory()->create(['role' => 'traveler']))
             ->get(route('agency.show', ['slug' => Str::slug($agency->company_name), 'lang' => 'en']));
         $travelerProfile->assertOk()->assertDontSee('data-experience-delete-icon', false);
+    }
+
+    public function test_agency_document_upload_rejects_non_pdf_files(): void
+    {
+        Storage::fake('public');
+        $agency = Agency::factory()->create();
+
+        $this->actingAs($agency->owner)
+            ->from(route('agency.profile', ['lang' => 'en']))
+            ->post(route('agency.documents.store', ['lang' => 'en']), [
+                'document' => UploadedFile::fake()->image('identity.png'),
+            ])
+            ->assertRedirect(route('agency.profile', ['lang' => 'en']))
+            ->assertSessionHasErrors('document');
+
+        $this->assertDatabaseCount('agency_documents', 0);
+    }
+
+    public function test_agency_cannot_submit_another_pdf_while_the_current_submission_is_under_review(): void
+    {
+        Storage::fake('public');
+        $agency = Agency::factory()->create(['verification_status' => 'pending']);
+        AgencyDocument::factory()->for($agency)->create([
+            'type' => 'other',
+            'status' => 'pending',
+            'uploaded_at' => now()->subMinutes(3),
+        ]);
+
+        $this->actingAs($agency->owner)
+            ->get(route('agency.profile', ['lang' => 'en']))
+            ->assertSee(__('messages.document_submission_locked'))
+            ->assertDontSee(__('messages.submit_verification_bundle'));
+
+        $this->actingAs($agency->owner)
+            ->from(route('agency.profile', ['lang' => 'en']))
+            ->post(route('agency.documents.store', ['lang' => 'en']), [
+                'document' => UploadedFile::fake()->create('extra-verification-bundle.pdf', 100, 'application/pdf'),
+            ])
+            ->assertRedirect(route('agency.profile', ['lang' => 'en']))
+            ->assertSessionHasErrors([
+                'document' => __('messages.document_submission_locked'),
+            ]);
+
+        $this->assertDatabaseCount('agency_documents', 1);
     }
 
     public function test_an_agency_owner_can_delete_their_own_travel_experience(): void
@@ -947,20 +1025,73 @@ class AgencyDashboardTest extends TestCase
         Storage::disk('public')->assertExists($imagePath);
     }
 
-    public function test_verified_agency_scope_requires_approved_documents(): void
+    public function test_verified_agency_scope_uses_verification_and_operating_status(): void
     {
         $agency = Agency::factory()->create(['verification_status' => 'verified']);
 
-        $this->assertFalse(Agency::verified()->whereKey($agency->id)->exists());
+        $this->assertTrue(Agency::verified()->whereKey($agency->id)->exists());
 
-        AgencyDocument::factory()->create([
-            'agency_id' => $agency->id,
-            'status' => 'approved',
-            'uploaded_at' => now(),
-            'file_path' => 'agency-documents/license-approved.pdf',
+        $agency->forceFill(['operating_status' => 'suspended'])->save();
+
+        $this->assertFalse(Agency::verified()->whereKey($agency->id)->exists());
+    }
+
+    public function test_verified_agency_without_document_record_is_visible_to_travelers(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+        $agency = Agency::factory()->create([
+            'company_name' => 'Verified Without Document Record',
+            'verification_status' => 'verified',
         ]);
 
-        $this->assertTrue(Agency::verified()->whereKey($agency->id)->exists());
+        $response = $this->actingAs($traveler)->get(route('discover', ['lang' => 'en']));
+
+        $response->assertSee($agency->company_name);
+        $this->assertDatabaseCount('agency_documents', 0);
+    }
+
+    public function test_authenticated_owner_activity_is_online_until_logout_then_remains_in_last_active_history(): void
+    {
+        $this->freezeTime();
+        $agency = Agency::factory()->create();
+
+        $this->actingAs($agency->owner)->get(route('agency.dashboard', ['lang' => 'en']))->assertOk();
+
+        $owner = $agency->owner->fresh();
+        $this->assertTrue($owner->is_online);
+        $this->assertTrue($owner->isOnline());
+        $this->assertSame(now()->toDateTimeString(), $owner->last_active_at->toDateTimeString());
+
+        $this->post(route('logout', ['lang' => 'en']))->assertRedirect(route('home'));
+
+        $owner->refresh();
+        $this->assertFalse($owner->is_online);
+        $this->assertFalse($owner->isOnline());
+        $this->assertSame(now()->toDateTimeString(), $owner->last_active_at->toDateTimeString());
+    }
+
+    public function test_authenticated_traveler_is_marked_offline_after_logout(): void
+    {
+        $this->freezeTime();
+        $traveler = User::factory()->create(['role' => 'traveler']);
+
+        $this->actingAs($traveler)->get(route('dashboard', ['lang' => 'en']))->assertOk();
+        $this->assertTrue($traveler->fresh()->isOnline());
+
+        $this->post(route('logout', ['lang' => 'en']))->assertRedirect(route('home'));
+
+        $this->assertFalse($traveler->fresh()->isOnline());
+        $this->assertSame(now()->toDateTimeString(), $traveler->fresh()->last_active_at->toDateTimeString());
+    }
+
+    public function test_owner_with_stale_activity_is_not_reported_online(): void
+    {
+        $owner = User::factory()->create([
+            'is_online' => true,
+            'last_active_at' => now()->subMinutes(6),
+        ]);
+
+        $this->assertFalse($owner->isOnline());
     }
 
     public function test_agency_phone_requires_cameroon_prefix(): void

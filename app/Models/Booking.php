@@ -151,7 +151,7 @@ class Booking extends Model
     public function isActiveReservation(): bool
     {
         return in_array($this->status, [BookingStatus::PENDING, BookingStatus::CONFIRMED], true)
-            && ! ($this->status === BookingStatus::PENDING && $this->expires_at && $this->expires_at->isPast());
+            && ! ($this->status === BookingStatus::PENDING && $this->expires_at && $this->expires_at->lte(now()));
     }
 
     public function scopeReservesCapacity(Builder $query): Builder

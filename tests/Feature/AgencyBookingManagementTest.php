@@ -74,7 +74,7 @@ class AgencyBookingManagementTest extends TestCase
         ]);
         $availability = PackageAvailability::create([
             'package_id' => $package->id,
-            'departure_date' => '2026-11-05',
+            'departure_date' => now()->addMonths(2)->toDateString(),
             'capacity' => 10,
             'status' => 'active',
         ]);
@@ -198,7 +198,112 @@ class AgencyBookingManagementTest extends TestCase
 
         $booking->refresh();
         $this->assertSame('completed', $booking->status->value);
+        $this->assertSame(PaymentStatus::PAID, $booking->payment_status);
+        $this->assertDatabaseHas('booking_payment_transactions', [
+            'booking_id' => $booking->id,
+            'provider' => 'agency-reported-offline',
+            'payment_method' => 'offline',
+            'type' => PaymentTransactionType::CHARGE->value,
+            'status' => PaymentTransactionStatus::SUCCEEDED->value,
+            'amount' => '1200.00',
+            'currency' => 'XAF',
+        ]);
         $this->assertSame(2, $traveler->notifications()->whereJsonContains('data->type', 'booking')->count());
+    }
+
+    public function test_agency_completion_records_only_the_remaining_offline_payment_balance(): void
+    {
+        $agency = Agency::factory()->create();
+        $package = Package::factory()->create(['agency_id' => $agency->id, 'price_from' => 200]);
+        $availability = PackageAvailability::create([
+            'package_id' => $package->id,
+            'departure_date' => now()->addMonth()->toDateString(),
+            'capacity' => 5,
+            'status' => 'active',
+        ]);
+        $booking = $this->createBooking(
+            $agency,
+            $package,
+            $availability,
+            User::factory()->create(['role' => 'traveler']),
+            'TC-OFFLINE-PARTIAL-000001',
+            [
+                'status' => BookingStatus::CONFIRMED->value,
+                'unit_price' => 200,
+                'total_amount' => 200,
+            ],
+        );
+        (new PaymentSettlementService)->record(
+            $booking,
+            'test-provider',
+            PaymentTransactionType::CHARGE,
+            PaymentTransactionStatus::SUCCEEDED,
+            '80.00',
+            'XAF',
+            'provider-partial-charge-001',
+            'mobile_money',
+        );
+
+        $this->actingAs($agency->owner)
+            ->patch(route('agency.bookings.complete', ['booking' => $booking->id]))
+            ->assertRedirect();
+
+        $this->assertSame(PaymentStatus::PAID, $booking->fresh()->payment_status);
+        $this->assertDatabaseHas('booking_payment_transactions', [
+            'booking_id' => $booking->id,
+            'provider' => 'agency-reported-offline',
+            'payment_method' => 'offline',
+            'type' => PaymentTransactionType::CHARGE->value,
+            'status' => PaymentTransactionStatus::SUCCEEDED->value,
+            'amount' => '120.00',
+            'currency' => 'XAF',
+        ]);
+        $this->assertDatabaseCount('booking_payment_transactions', 2);
+    }
+
+    public function test_agency_completion_does_not_duplicate_a_fully_paid_booking(): void
+    {
+        $agency = Agency::factory()->create();
+        $package = Package::factory()->create(['agency_id' => $agency->id, 'price_from' => 200]);
+        $availability = PackageAvailability::create([
+            'package_id' => $package->id,
+            'departure_date' => now()->addMonth()->toDateString(),
+            'capacity' => 5,
+            'status' => 'active',
+        ]);
+        $booking = $this->createBooking(
+            $agency,
+            $package,
+            $availability,
+            User::factory()->create(['role' => 'traveler']),
+            'TC-OFFLINE-PAID-000001',
+            [
+                'status' => BookingStatus::CONFIRMED->value,
+                'unit_price' => 200,
+                'total_amount' => 200,
+            ],
+        );
+        (new PaymentSettlementService)->record(
+            $booking,
+            'test-provider',
+            PaymentTransactionType::CHARGE,
+            PaymentTransactionStatus::SUCCEEDED,
+            '200.00',
+            'XAF',
+            'provider-full-charge-001',
+            'mobile_money',
+        );
+
+        $this->actingAs($agency->owner)
+            ->patch(route('agency.bookings.complete', ['booking' => $booking->id]))
+            ->assertRedirect();
+
+        $this->assertSame(PaymentStatus::PAID, $booking->fresh()->payment_status);
+        $this->assertDatabaseMissing('booking_payment_transactions', [
+            'booking_id' => $booking->id,
+            'provider' => 'agency-reported-offline',
+        ]);
+        $this->assertDatabaseCount('booking_payment_transactions', 1);
     }
 
     public function test_booking_payment_status_tracks_verified_charges_and_refunds(): void
@@ -368,6 +473,7 @@ class AgencyBookingManagementTest extends TestCase
 
     public function test_agency_cannot_confirm_an_expired_pending_booking(): void
     {
+        $this->travelTo('2026-11-10 10:23:00');
         $agency = Agency::factory()->create();
         $package = Package::factory()->create(['agency_id' => $agency->id, 'status' => PackageStatus::PUBLISHED]);
         $availability = PackageAvailability::create([
@@ -378,16 +484,18 @@ class AgencyBookingManagementTest extends TestCase
         ]);
         $traveler = User::factory()->create(['role' => 'traveler']);
         $booking = $this->createBooking($agency, $package, $availability, $traveler, 'TC-EXPIRED-000001', [
-            'expires_at' => now()->subMinute(),
+            'expires_at' => '2026-11-10 09:49:00',
         ]);
 
         $detail = $this->actingAs($agency->owner)->get(route('agency.bookings.show', ['booking' => $booking->id]));
         $detail->assertOk()
             ->assertSee(__('messages.booking_expired_notice'))
             ->assertSee(__('messages.booking_expiry_deadline'))
+            ->assertSee('UTC')
             ->assertDontSee(__('messages.timeline_expired'))
             ->assertDontSee(route('agency.bookings.confirm', ['booking' => $booking->id]), false)
             ->assertDontSee(route('agency.bookings.reject', ['booking' => $booking->id]), false);
+        $this->assertSame('pending', $booking->fresh()->status->value);
 
         $response = $this->actingAs($agency->owner)
             ->patch(route('agency.bookings.confirm', ['booking' => $booking->id]));
@@ -396,6 +504,35 @@ class AgencyBookingManagementTest extends TestCase
             ->assertSessionHasErrors('status');
         $this->assertSame('expired', $booking->fresh()->status->value);
         $this->assertSame(1, $traveler->notifications()->whereJsonContains('data->type', 'booking')->count());
+    }
+
+    public function test_agency_booking_does_not_show_expired_notice_before_its_deadline(): void
+    {
+        $this->travelTo('2026-11-10 09:48:59');
+        $agency = Agency::factory()->create();
+        $package = Package::factory()->create(['agency_id' => $agency->id, 'status' => PackageStatus::PUBLISHED]);
+        $availability = PackageAvailability::create([
+            'package_id' => $package->id,
+            'departure_date' => now()->addMonth()->toDateString(),
+            'capacity' => 5,
+            'status' => 'active',
+        ]);
+        $booking = $this->createBooking(
+            $agency,
+            $package,
+            $availability,
+            User::factory()->create(['role' => 'traveler']),
+            'TC-NOT-EXPIRED-000001',
+            ['expires_at' => '2026-11-10 09:49:00'],
+        );
+
+        $this->actingAs($agency->owner)
+            ->get(route('agency.bookings.show', ['booking' => $booking->id]))
+            ->assertOk()
+            ->assertDontSee(__('messages.booking_expired_notice'))
+            ->assertSee('UTC');
+
+        $this->assertSame('pending', $booking->fresh()->status->value);
     }
 
     public function test_rejected_and_agency_cancelled_bookings_notify_the_traveler(): void

@@ -3,7 +3,7 @@
             @php
                 $bookingStatus = $booking->status->value;
                 $paymentStatus = $booking->payment_status->value;
-                $isPendingExpired = $bookingStatus === 'pending' && $booking->expires_at && $booking->expires_at->isPast();
+                $isPendingExpired = $bookingStatus === 'pending' && $booking->expires_at && $booking->expires_at->lte(now());
             @endphp
             <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
@@ -36,7 +36,7 @@
                     <div class="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-[#607985]">
                         <p>{{ __('messages.created') }} <time datetime="{{ $booking->created_at->toIso8601String() }}">{{ $booking->created_at->translatedFormat('d M Y, H:i') }}</time></p>
                         @if (in_array($bookingStatus, ['pending', 'expired'], true) && $booking->expires_at)
-                            <p>{{ __('messages.booking_expiry_deadline') }} <time datetime="{{ $booking->expires_at->toIso8601String() }}">{{ $booking->expires_at->translatedFormat('d M Y, H:i') }}</time></p>
+                            <p>{{ __('messages.booking_expiry_deadline') }} <time datetime="{{ $booking->expires_at->toIso8601String() }}">{{ $booking->expires_at->translatedFormat('d M Y, H:i') }} {{ $booking->expires_at->format('T') }}</time></p>
                         @endif
                     </div>
                     @if ($isPendingExpired)

@@ -154,7 +154,11 @@
                         <h2 class="text-lg font-bold">{{ __('messages.verification_documents') }}</h2>
                         <p class="mt-2 text-xs leading-5 text-[#607985]">{{ __('messages.verification_help_text') }}</p>
 
-                        @if ($latestVerificationDocument)
+                        @if ($verificationRejectionCount >= 2)
+                            <p class="mt-4 rounded-xl border border-rose-300 bg-rose-50 p-4 text-sm leading-6 text-rose-800">{{ __('messages.verification_resubmission_limit_reached') }}</p>
+                        @elseif ($agency->verification_status->value === 'verified')
+                            <p class="mt-4 rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-sm leading-6 text-emerald-800">{{ __('messages.verification_already_approved') }}</p>
+                        @elseif ($latestVerificationDocument && $agency->verification_status->value === 'pending')
                             <div class="mt-4 rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] p-4">
                                 <div class="flex items-center justify-between gap-3">
                                     <div>
@@ -167,44 +171,34 @@
                                 @if ($latestVerificationDocument->canBeModified())
                                     <div class="mt-4 space-y-3">
                                         <div>
-                                            <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.document_type') }}</label>
-                                            <select form="agency-document-update" name="type" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-white px-4 py-3 text-sm outline-none focus:border-[#e76f51]">
-                                                <option value="license" {{ $latestVerificationDocument->type->value === 'license' ? 'selected' : '' }}>{{ __('messages.license') }}</option>
-                                                <option value="id_proof" {{ $latestVerificationDocument->type->value === 'id_proof' ? 'selected' : '' }}>{{ __('messages.id_proof') }}</option>
-                                                <option value="business_registration" {{ $latestVerificationDocument->type->value === 'business_registration' ? 'selected' : '' }}>{{ __('messages.business_registration') }}</option>
-                                            </select>
+                                            <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.verification_bundle') }}</label>
                                         </div>
                                         <div>
                                             <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.choose_document') }}</label>
-                                            <input form="agency-document-update" type="file" name="document" class="mt-2 block w-full text-sm text-[#607985] file:mr-4 file:rounded-xl file:border-0 file:bg-[#f1f6f4] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[#173042]" required>
+                                            <input form="agency-document-update" type="file" name="document" accept="application/pdf" class="mt-2 block w-full text-sm text-[#607985] file:mr-4 file:rounded-xl file:border-0 file:bg-[#f1f6f4] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[#173042]" required>
                                         </div>
                                         <div class="flex flex-wrap gap-3">
-                                            <button type="submit" form="agency-document-update" class="inline-flex items-center justify-center rounded-xl bg-[#173042] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0f2431]">{{ __('messages.update_profile') }}</button>
+                                            <button type="submit" form="agency-document-update" class="inline-flex items-center justify-center rounded-xl bg-[#173042] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0f2431]">{{ __('messages.replace_verification_bundle') }}</button>
                                             <button type="submit" form="agency-document-delete-{{ $latestVerificationDocument->id }}" data-document-delete-icon class="delete-icon-button" aria-label="{{ __('messages.delete_verification_document') }}" title="{{ __('messages.delete_verification_document') }}">
                                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 14h12l1-14M9 7V4h6v3"/></svg>
                                             </button>
                                         </div>
                                     </div>
                                 @else
-                                    <p class="mt-3 text-xs leading-5 text-[#607985]">{{ __('messages.document_update_locked') }}</p>
+                                    <p class="mt-3 text-xs leading-5 text-[#607985]">{{ __('messages.document_submission_locked') }}</p>
                                 @endif
                             </div>
                         @else
                             <div class="mt-4 space-y-4">
                                 <div>
-                                    <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.document_type') }}</label>
-                                    <select form="agency-document-upload" name="type" class="mt-2 w-full rounded-xl border border-[#dbe3e5] bg-[#f7f8f6] px-4 py-3 text-sm outline-none focus:border-[#e76f51]">
-                                        <option value="license">{{ __('messages.license') }}</option>
-                                        <option value="id_proof">{{ __('messages.id_proof') }}</option>
-                                        <option value="business_registration">{{ __('messages.business_registration') }}</option>
-                                    </select>
+                                    <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.verification_bundle') }}</label>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-semibold text-[#173042]">{{ __('messages.choose_document') }}</label>
-                                    <input form="agency-document-upload" type="file" name="document" class="mt-2 block w-full text-sm text-[#607985] file:mr-4 file:rounded-xl file:border-0 file:bg-[#f1f6f4] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[#173042]" required>
+                                    <input form="agency-document-upload" type="file" name="document" accept="application/pdf" class="mt-2 block w-full text-sm text-[#607985] file:mr-4 file:rounded-xl file:border-0 file:bg-[#f1f6f4] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[#173042]" required>
                                 </div>
                                 <button type="submit" form="agency-document-upload" class="inline-flex items-center justify-center rounded-xl bg-[#173042] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0f2431]">
-                                    {{ __('messages.upload_document') }}
+                                    {{ __('messages.submit_verification_bundle') }}
                                 </button>
                             </div>
                         @endif
@@ -215,7 +209,7 @@
                                 @forelse ($agency->documents->sortByDesc('uploaded_at') as $document)
                                     @php $documentStatus = $document->status->value ?? $document->status; @endphp
                                     <div class="agency-panel-muted flex items-center justify-between gap-3 rounded-xl border p-3">
-                                        <span class="min-w-0"><span class="agency-text-primary block truncate text-sm font-semibold">{{ __('messages.'.$document->type->value) }}</span><span class="agency-text-subtle mt-1 block text-xs">{{ $document->uploaded_at?->translatedFormat('d M Y') }}</span></span>
+                                        <span class="min-w-0"><span class="agency-text-primary block truncate text-sm font-semibold">{{ $document->type->value === 'other' ? __('messages.verification_bundle') : __('messages.'.$document->type->value) }}</span><span class="agency-text-subtle mt-1 block text-xs">{{ $document->uploaded_at?->translatedFormat('d M Y') }}</span></span>
                                         <div class="flex shrink-0 items-center gap-2">
                                             <x-agency.status-badge :label="__('messages.document_status_'.$documentStatus)" :tone="$documentStatus === 'approved' ? 'success' : ($documentStatus === 'rejected' ? 'danger' : 'warning')" />
                                             @if ($document->canBeModified() && $document->id !== $latestVerificationDocument?->id)

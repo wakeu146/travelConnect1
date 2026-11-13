@@ -20,6 +20,10 @@ use Illuminate\Support\Str;
 
 class CustomTravelRequestService
 {
+    public function __construct(
+        private readonly AdminOperationalNotificationService $adminNotifications,
+    ) {}
+
     public function eligibleAgencies(): Builder
     {
         return Agency::verified()
@@ -76,6 +80,8 @@ class CustomTravelRequestService
             ]);
 
             DB::afterCommit(function () use ($recipients, $request, $traveler): void {
+                $this->adminNotifications->customRequestReceived($request);
+
                 $traveler->notify(new AgencyActivityNotification(
                     __('messages.custom_requests.notification_published_title'),
                     __('messages.custom_requests.notification_published_traveler', ['reference' => $request->reference]),
@@ -299,7 +305,7 @@ class CustomTravelRequestService
         });
     }
 
-    public function moderate(TravelRequest $request, User $admin, string $action, string $reason): TravelRequest
+    public function moderate(TravelRequest $request, User $admin, string $action, ?string $reason): TravelRequest
     {
         return DB::transaction(function () use ($request, $admin, $action, $reason): TravelRequest {
             $request = TravelRequest::query()->lockForUpdate()->findOrFail($request->id);

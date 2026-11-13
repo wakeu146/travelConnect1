@@ -6,20 +6,27 @@ use App\Http\Controllers\Controller;
 use App\Models\Agency;
 use App\Models\Package;
 use App\Notifications\AdminAgencyDocumentReceived;
+use App\Notifications\AdminAgencyRegistered;
+use App\Notifications\AdminCustomRequestReceived;
 use App\Notifications\AdminSecurityAlertReceived;
 use App\Notifications\AdminTravelerIssueReceived;
 use App\Services\AdminAgencyManagementService;
 use App\Services\AdminAlertQueue;
+use App\Services\AdminAnalyticsManagementService;
+use App\Services\AdminFinanceManagementService;
 use App\Services\AdminOverviewData;
 use App\Services\AdminReviewReportManagementService;
 use App\Services\AdminTravelManagementService;
 use App\Services\AdminTrustScoreManagementService;
+use App\Services\CountryCatalogueSynchronizer;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AdminDashboardController extends Controller
 {
@@ -36,6 +43,41 @@ class AdminDashboardController extends Controller
         return $this->renderDashboard($request, $section);
     }
 
+    public function exportAnalytics(
+        Request $request,
+        AdminAnalyticsManagementService $analyticsManagement,
+    ): StreamedResponse {
+        $filters = $this->analyticsFilters($request);
+        $format = $request->validate([
+            'format' => ['required', Rule::in(['csv', 'json'])],
+        ])['format'];
+        $analyticsData = $analyticsManagement->pageData($filters);
+        $filename = 'app-analytics-'.$analyticsData['from'].'-'.$analyticsData['to'].'.'.$format;
+
+        if ($format === 'json') {
+            return response()->streamDownload(function () use ($analyticsData): void {
+                echo json_encode([
+                    'from' => $analyticsData['from'],
+                    'to' => $analyticsData['to'],
+                    'daily' => $analyticsData['daily'],
+                ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
+            }, $filename, ['Content-Type' => 'application/json; charset=UTF-8']);
+        }
+
+        return response()->streamDownload(function () use ($analyticsManagement, $analyticsData): void {
+            $stream = fopen('php://output', 'wb');
+            if ($stream === false) {
+                throw new \RuntimeException('Unable to open the analytics export stream.');
+            }
+
+            fwrite($stream, "\xEF\xBB\xBF");
+            foreach ($analyticsManagement->csvRows($analyticsData) as $row) {
+                fputcsv($stream, $row);
+            }
+            fclose($stream);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
     public function page(
         Request $request,
         string $page,
@@ -43,13 +85,26 @@ class AdminDashboardController extends Controller
         AdminAlertQueue $alertQueue,
         AdminAgencyManagementService $agencyManagement,
         AdminTravelManagementService $travelManagement,
+        CountryCatalogueSynchronizer $countryCatalogue,
         AdminReviewReportManagementService $reviewReportManagement,
         AdminTrustScoreManagementService $trustScoreManagement,
+        AdminFinanceManagementService $financeManagement,
+        AdminAnalyticsManagementService $analyticsManagement,
     ): View|RedirectResponse {
         $pageRoute = config("admin_dashboard.page_routes.{$page}");
         if ($pageRoute !== null) {
             $query = $request->query();
             unset($query['lang']);
+            if (in_array($page, [
+                'all_requests',
+                'new_requests',
+                'in_progress_requests',
+                'quoted_requests',
+                'accepted_converted_requests',
+                'closed_requests',
+            ], true)) {
+                $query['queue'] = $page;
+            }
 
             return redirect()->route($pageRoute, [
                 'lang' => app()->getLocale(),
@@ -69,6 +124,8 @@ class AdminDashboardController extends Controller
                     $travelManagementData = null;
                     $reviewReportData = null;
                     $trustScoreData = null;
+                    $financeData = null;
+                    $analyticsData = null;
 
                     if ($page === 'alerts') {
                         $filterOptions = $alertQueue->filterOptions();
@@ -141,7 +198,7 @@ class AdminDashboardController extends Controller
                         $travelManagementData = $travelManagement->services($filters);
                     } elseif ($page === 'countries') {
                         $filters = $request->validate(['search' => ['nullable', 'string', 'max:120']]);
-                        $travelManagementData = $travelManagement->countries($filters);
+                        $travelManagementData = $travelManagement->countries($filters, $countryCatalogue);
                     } elseif ($page === 'destinations') {
                         $travelManagementData = $travelManagement->destinations();
                     } elseif (in_array($page, ['reviews_ratings', 'reported_content', 'user_agency_complaints'], true)) {
@@ -160,6 +217,39 @@ class AdminDashboardController extends Controller
                             'search' => ['nullable', 'string', 'max:120'],
                         ]);
                         $trustScoreData = $trustScoreManagement->pageData($page, $filters['search'] ?? null);
+                    } elseif (in_array($page, [
+                        'financial_overview',
+                        'all_transactions',
+                        'successful_payments',
+                        'pending_failed_payments',
+                        'refunds',
+                        'payment_disputes',
+                        'financial_reports',
+                    ], true)) {
+                        $filters = $request->validate([
+                            'created_from' => ['nullable', 'date'],
+                            'created_to' => ['nullable', 'date'],
+                        ]);
+                        if (isset($filters['created_from'], $filters['created_to'])
+                            && $filters['created_from'] > $filters['created_to']) {
+                            throw ValidationException::withMessages([
+                                'created_to' => __('messages.admin_finance.filter_date_error'),
+                            ]);
+                        }
+                        $financeData = $financeManagement->pageData($page, $filters);
+                    }
+
+                    if (in_array($page, [
+                        'platform_performance',
+                        'user_growth',
+                        'agency_growth',
+                        'booking_analytics',
+                        'popular_destinations',
+                        'package_performance',
+                        'trust_verification_statistics',
+                        'export_reports',
+                    ], true)) {
+                        $analyticsData = $analyticsManagement->pageData($this->analyticsFilters($request));
                     }
 
                     return $this->renderDashboard(
@@ -174,6 +264,8 @@ class AdminDashboardController extends Controller
                         travelManagementData: $travelManagementData,
                         reviewReportData: $reviewReportData,
                         trustScoreData: $trustScoreData,
+                        financeData: $financeData,
+                        analyticsData: $analyticsData,
                     );
                 }
             }
@@ -278,6 +370,28 @@ class AdminDashboardController extends Controller
     }
 
     /**
+     * Render an individual review or report within the administrator dashboard shell.
+     *
+     * @param  array<string, mixed>  $detailData
+     */
+    public function renderReviewReportDetail(
+        Request $request,
+        string $page,
+        string $view,
+        array $detailData,
+        string $pageTitle,
+    ): View {
+        return $this->renderDashboard(
+            $request,
+            'trust_safety',
+            $page,
+            'reviews_reports',
+            reviewReportData: ['detailView' => $view, ...$detailData],
+            pageTitleOverride: $pageTitle,
+        );
+    }
+
+    /**
      * @return array<string, array{icon: string, groups: array<int, array<string, mixed>>}>
      */
     private function sections(): array
@@ -302,6 +416,8 @@ class AdminDashboardController extends Controller
         ?string $pageTitleOverride = null,
         ?array $bookingPageData = null,
         ?array $customRequestData = null,
+        ?array $financeData = null,
+        ?array $analyticsData = null,
     ): View {
         $sections = $this->sections();
         $adminNotifications = $request->user()
@@ -310,6 +426,8 @@ class AdminDashboardController extends Controller
                 AdminSecurityAlertReceived::class,
                 AdminTravelerIssueReceived::class,
                 AdminAgencyDocumentReceived::class,
+                AdminAgencyRegistered::class,
+                AdminCustomRequestReceived::class,
             ])
             ->latest()
             ->limit(5)
@@ -347,6 +465,8 @@ class AdminDashboardController extends Controller
             'customRequestData' => $customRequestData,
             'reviewReportData' => $reviewReportData,
             'trustScoreData' => $trustScoreData,
+            'financeData' => $financeData,
+            'analyticsData' => $analyticsData,
             'adminNotifications' => $adminNotifications,
             'unreadAdminSecurityNotificationCount' => $request->user()
                 ->unreadNotifications()
@@ -358,14 +478,39 @@ class AdminDashboardController extends Controller
                     AdminSecurityAlertReceived::class,
                     AdminTravelerIssueReceived::class,
                     AdminAgencyDocumentReceived::class,
+                    AdminAgencyRegistered::class,
+                    AdminCustomRequestReceived::class,
                 ])
                 ->count(),
         ]);
     }
 
+    private function analyticsFilters(Request $request): array
+    {
+        $filters = $request->validate([
+            'created_from' => ['nullable', 'date'],
+            'created_to' => ['nullable', 'date'],
+        ]);
+
+        $to = isset($filters['created_to'])
+            ? CarbonImmutable::parse($filters['created_to'])
+            : CarbonImmutable::instance(now());
+        $from = isset($filters['created_from'])
+            ? CarbonImmutable::parse($filters['created_from'])
+            : $to->subDays(29);
+
+        if ($from->greaterThan($to)) {
+            throw ValidationException::withMessages([
+                'created_to' => __('messages.admin_analytics.filter_date_error'),
+            ]);
+        }
+
+        return $filters;
+    }
+
     /**
      * @param  array<string, array{icon: string, groups: array<int, array<string, mixed>>}>  $sections
-     * @return array<int, array{label: string, url: string}>
+     * @return array<int, array{label: string, context: ?string, url: string}>
      */
     private function navigationSearchItems(array $sections): array
     {
@@ -375,15 +520,23 @@ class AdminDashboardController extends Controller
         foreach ($sections as $sectionKey => $section) {
             $items[] = [
                 'label' => __("messages.admin_nav.sections.{$sectionKey}"),
+                'context' => null,
                 'url' => $sectionKey === 'main'
                     ? route('admin.dashboard', ['lang' => $locale])
                     : route('admin.dashboard.section', ['section' => $sectionKey, 'lang' => $locale]),
             ];
 
             foreach ($section['groups'] as $group) {
+                $context = __("messages.admin_nav.sections.{$sectionKey}");
+
+                if (isset($group['label'])) {
+                    $context .= ' / '.__("messages.admin_nav.groups.{$group['label']}");
+                }
+
                 foreach ($group['pages'] ?? [$group['page']] as $page) {
                     $items[] = [
                         'label' => __("messages.admin_nav.pages.{$page}"),
+                        'context' => $context,
                         'url' => isset(config('admin_dashboard.page_routes')[$page])
                             ? route(config("admin_dashboard.page_routes.{$page}"), ['lang' => $locale])
                             : route('admin.dashboard.page', ['page' => $page, 'lang' => $locale]),

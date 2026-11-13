@@ -144,3 +144,7 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - Run `vendor/bin/phpunit` to call the test runner directly. It accepts the same file path and `--filter=testName` arguments.
 
 </laravel-boost-guidelines>
+
+## UI Corner Style
+
+- For new or modified UI in this project, use square corners for bordered containers and controls. Do not add rounded-corner utilities to cards, chart containers, filter groups, or inputs.

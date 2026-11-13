@@ -116,7 +116,10 @@ class TravelerCustomRequestController extends Controller
             'services',
             'recipients.agency',
             'proposals' => fn ($query) => $query->with(['agency.services', 'agency.reviews' => fn ($reviews) => $reviews->where('status', 'published')])->latest('submitted_at'),
-            'booking',
+            'booking.package:id,title,destination',
+            'booking.availability:id,departure_date',
+            'booking.agency:id,company_name',
+            'booking.review',
             'events.actor',
         ]);
 
@@ -140,9 +143,12 @@ class TravelerCustomRequestController extends Controller
             return back()->withErrors(['proposal' => $exception->getMessage()]);
         }
 
-        return redirect()->route('bookings.show', [
-            'booking' => $booking->id,
+        return redirect()->route('account.custom-requests.show', [
+            'travelRequest' => $travelRequest->id,
             'lang' => app()->getLocale(),
-        ])->with('status', __('messages.custom_requests.booking_created'));
+        ])->with([
+            'status' => __('messages.custom_requests.booking_created'),
+            'booking_created' => true,
+        ]);
     }
 }

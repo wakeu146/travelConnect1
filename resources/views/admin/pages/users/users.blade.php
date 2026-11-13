@@ -160,6 +160,7 @@
                         <th scope="col" class="px-4 py-3 font-semibold">{{ __('messages.admin_users.email') }}</th>
                         <th scope="col" class="px-4 py-3 font-semibold">{{ __('messages.admin_users.role') }}</th>
                         <th scope="col" class="px-4 py-3 font-semibold">{{ __('messages.admin_users.status') }}</th>
+                        <th scope="col" class="px-4 py-3 font-semibold">{{ __('messages.admin_users.presence') }}</th>
                         @if ($agencyOwnersPage)
                             <th scope="col" class="px-4 py-3 font-semibold">{{ __('messages.admin_users.agency') }}</th>
                         @endif
@@ -202,6 +203,20 @@
                                 <span class="admin-badge inline-flex border px-2 py-1 text-xs font-bold {{ $user->deleted_at ? 'border-rose-500/40 bg-rose-500/10 text-rose-800 dark:text-rose-200' : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200' }}">
                                     {{ $user->deleted_at ? __('messages.admin_users.statuses.deactivated') : __('messages.admin_users.statuses.active') }}
                                 </span>
+                            </td>
+                            @php
+                                $isUserOnline = ! $user->deleted_at && $user->isOnline();
+                            @endphp
+                            <td class="px-4 py-4" data-user-presence-cell="{{ $isUserOnline ? 'online' : 'offline' }}">
+                                <span class="inline-flex items-center gap-2 text-xs admin-muted" data-user-presence="{{ $isUserOnline ? 'online' : 'offline' }}">
+                                    <span class="h-2 w-2 rounded-full {{ $isUserOnline ? 'bg-emerald-500' : 'bg-slate-400' }}" aria-hidden="true"></span>
+                                    <span>{{ $isUserOnline ? __('messages.admin_users.online_now') : __('messages.admin_users.offline') }}</span>
+                                </span>
+                                @if (! $isUserOnline && $user->last_active_at)
+                                    <span class="mt-1 block text-xs admin-muted">{{ __('messages.admin_users.last_active', ['time' => $user->last_active_at->locale(app()->getLocale())->diffForHumans()]) }}</span>
+                                @elseif (! $isUserOnline)
+                                    <span class="mt-1 block text-xs admin-muted">{{ __('messages.admin_users.never_active') }}</span>
+                                @endif
                             </td>
                             @if ($agencyOwnersPage)
                                 <td class="px-4 py-4 admin-muted">

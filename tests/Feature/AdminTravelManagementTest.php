@@ -14,6 +14,8 @@ use App\Models\PackageModerationEvent;
 use App\Models\Service;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Mockery;
 use Tests\TestCase;
 
@@ -125,10 +127,17 @@ class AdminTravelManagementTest extends TestCase
         $this->assertSame(2, PackageModerationEvent::query()->where('package_id', $package->id)->count());
     }
 
-    public function test_package_moderation_requires_a_reason_and_only_admins_can_access_it(): void
+    public function test_package_moderation_allows_an_empty_reason_but_rejects_short_reasons_and_non_admins(): void
     {
-        $package = Package::factory()->create();
+        $package = Package::factory()->create([
+            'status' => PackageStatus::PUBLISHED,
+            'published_at' => now(),
+        ]);
         $admin = $this->actAsVerifiedAdmin();
+
+        $this->get(route('admin.packages.show', ['package' => $package->id, 'lang' => 'en']))
+            ->assertSee(__('messages.admin_travel.moderation_reason'))
+            ->assertDontSee('Reason (required)');
 
         $this->from(route('admin.packages.show', ['package' => $package->id, 'lang' => 'en']))
             ->post(route('admin.packages.moderation', ['package' => $package->id, 'lang' => 'en']), [
@@ -137,8 +146,20 @@ class AdminTravelManagementTest extends TestCase
             ])
             ->assertSessionHasErrors('reason');
 
-        $this->assertSame(PackageStatus::DRAFT, $package->fresh()->status);
+        $this->assertSame(PackageStatus::PUBLISHED, $package->fresh()->status);
         $this->assertDatabaseCount('package_moderation_events', 0);
+
+        $this->post(route('admin.packages.moderation', ['package' => $package->id, 'lang' => 'en']), [
+            'decision' => 'restrict',
+        ])->assertRedirect(route('admin.packages.show', ['package' => $package->id, 'lang' => 'en']));
+
+        $this->assertSame(PackageStatus::ARCHIVED, $package->fresh()->status);
+        $this->assertDatabaseHas('package_moderation_events', [
+            'package_id' => $package->id,
+            'actor_id' => $admin->id,
+            'action' => 'restrict',
+            'reason' => null,
+        ]);
 
         $this->actingAs(User::factory()->create())
             ->post(route('admin.packages.moderation', ['package' => $package->id, 'lang' => 'en']), [
@@ -178,9 +199,10 @@ class AdminTravelManagementTest extends TestCase
             ->assertSee(__('messages.not_available'));
     }
 
-    public function test_shared_country_and_service_catalogues_can_be_created_and_renamed(): void
+    public function test_country_catalogue_syncs_api_defaults_and_admins_can_add_or_remove_countries(): void
     {
         $this->actAsVerifiedAdmin();
+        $this->fakeCountryApi();
         $agency = Agency::factory()->create();
         $country = Country::factory()->create(['name' => 'Cameroun', 'code' => 'CM']);
         $service = Service::factory()->create(['name' => 'Airport transfer']);
@@ -190,15 +212,22 @@ class AdminTravelManagementTest extends TestCase
         $this->get(route('admin.dashboard.page', ['page' => 'countries', 'lang' => 'en']))
             ->assertOk()
             ->assertSee('data-admin-travel-countries', false)
-            ->assertSee('Cameroun')
-            ->assertSee('CM');
+            ->assertSee('Cameroon')
+            ->assertSee('CM')
+            ->assertSee('France');
 
-        $this->patch(route('admin.catalogue.countries.update', ['country' => $country->id, 'lang' => 'en']), [
-            'name' => 'Cameroon',
-            'code' => 'cm',
-        ])->assertRedirect(route('admin.dashboard.page', ['page' => 'countries', 'lang' => 'en']));
-        $this->assertDatabaseHas('countries', ['id' => $country->id, 'name' => 'Cameroon', 'code' => 'CM']);
+        $this->assertDatabaseHas('countries', ['name' => 'France', 'code' => 'FR', 'is_active' => true]);
+        $this->delete(route('admin.catalogue.countries.destroy', ['country' => $country->id, 'lang' => 'en']))
+            ->assertRedirect(route('admin.dashboard.page', ['page' => 'countries', 'lang' => 'en']));
+        $this->assertDatabaseHas('countries', ['id' => $country->id, 'is_active' => false]);
         $this->assertTrue($agency->fresh()->countries->contains('id', $country->id));
+
+        $this->post(route('admin.catalogue.countries.store', ['lang' => 'en']), [
+            'country_id' => $country->id,
+        ])
+            ->assertRedirect(route('admin.dashboard.page', ['page' => 'countries', 'lang' => 'en']))
+            ->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('countries', ['id' => $country->id, 'is_active' => true]);
 
         $this->post(route('admin.catalogue.services.store', ['lang' => 'en']), [
             'name' => 'Guided tours',
@@ -209,6 +238,96 @@ class AdminTravelManagementTest extends TestCase
         $this->assertDatabaseHas('services', ['name' => 'Guided tours']);
         $this->assertDatabaseHas('services', ['id' => $service->id, 'name' => 'Airport pickup']);
         $this->assertTrue($agency->fresh()->services->contains('id', $service->id));
+
+        $this->get(route('admin.dashboard.page', ['page' => 'travel_services', 'lang' => 'en']))
+            ->assertOk()
+            ->assertSee('Save changes')
+            ->assertDontSee('messages.admin_travel.save_catalogue_entry');
+    }
+
+    public function test_country_catalogue_shows_saved_countries_when_api_is_unavailable(): void
+    {
+        $this->actAsVerifiedAdmin();
+        Cache::forget('country-catalogue.restcountries');
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://restcountries.com/v3.1/all*' => Http::failedConnection(),
+        ]);
+        Country::factory()->create(['name' => 'France', 'code' => 'FR']);
+
+        $this->get(route('admin.dashboard.page', ['page' => 'countries', 'lang' => 'en']))
+            ->assertOk()
+            ->assertSee(__('messages.admin_travel.country_api_unavailable'))
+            ->assertSee('Andorra');
+        $this->assertGreaterThanOrEqual(200, Country::query()->active()->count());
+        $this->get(route('admin.dashboard.page', ['page' => 'countries', 'lang' => 'en', 'search' => 'France']))
+            ->assertOk()
+            ->assertSee('France');
+    }
+
+    public function test_country_catalogue_preserves_explicitly_disabled_countries_when_syncing_api_data(): void
+    {
+        $this->actAsVerifiedAdmin();
+        Cache::forget('country-catalogue.restcountries');
+        Cache::forget('country-catalogue.api-unavailable');
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://restcountries.com/v3.1/all*' => Http::response([
+                ['name' => ['common' => 'Cameroon'], 'cca2' => 'CM'],
+                ['name' => ['common' => 'France'], 'cca2' => 'FR'],
+            ]),
+        ]);
+        $country = Country::factory()->create(['name' => 'Cameroon', 'code' => 'CM', 'is_active' => false]);
+
+        $this->get(route('admin.dashboard.page', ['page' => 'countries', 'lang' => 'en']))
+            ->assertOk();
+
+        $this->assertDatabaseHas('countries', ['id' => $country->id, 'is_active' => false]);
+        $this->assertDatabaseHas('countries', ['name' => 'France', 'code' => 'FR', 'is_active' => true]);
+    }
+
+    public function test_agency_profile_loads_default_countries_when_country_api_is_unavailable(): void
+    {
+        Cache::forget('country-catalogue.restcountries');
+        Cache::forget('country-catalogue.api-unavailable');
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://restcountries.com/v3.1/all*' => Http::failedConnection(),
+        ]);
+        $agency = Agency::factory()->create();
+
+        $this->actingAs($agency->owner)
+            ->get(route('agency.profile', ['lang' => 'en']))
+            ->assertOk()
+            ->assertSee('Cameroon')
+            ->assertSee('France')
+            ->assertSee('Japan');
+    }
+
+    public function test_country_catalogue_explains_when_api_is_unavailable_and_no_countries_are_saved(): void
+    {
+        $this->actAsVerifiedAdmin();
+        Cache::forget('country-catalogue.restcountries');
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://restcountries.com/v3.1/all*' => Http::response([], 503),
+        ]);
+
+        $this->get(route('admin.dashboard.page', ['page' => 'countries', 'lang' => 'en']))
+            ->assertOk()
+            ->assertSee(__('messages.admin_travel.country_api_unavailable'))
+            ->assertSee('Andorra');
+    }
+
+    public function test_only_administrators_can_remove_a_country(): void
+    {
+        $country = Country::factory()->create();
+
+        $this->actingAs(User::factory()->create())
+            ->delete(route('admin.catalogue.countries.destroy', ['country' => $country->id, 'lang' => 'en']))
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('countries', ['id' => $country->id, 'is_active' => true]);
     }
 
     public function test_destinations_are_browsed_from_package_values_without_creating_a_second_catalogue(): void
@@ -236,5 +355,17 @@ class AdminTravelManagementTest extends TestCase
         ]);
 
         return $admin;
+    }
+
+    private function fakeCountryApi(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://restcountries.com/v3.1/all*' => Http::response([
+                ['name' => ['common' => 'France'], 'cca2' => 'FR'],
+                ['name' => ['common' => 'Cameroon'], 'cca2' => 'CM'],
+                ['name' => ['common' => 'Japan'], 'cca2' => 'JP'],
+            ]),
+        ]);
     }
 }

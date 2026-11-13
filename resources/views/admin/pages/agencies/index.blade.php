@@ -160,6 +160,24 @@
                             <td class="px-4 py-4">
                                 <p class="font-semibold admin-heading">{{ $agency->owner?->name ?? __('messages.admin_alerts.unknown_account') }}</p>
                                 <p class="mt-1 text-xs admin-muted">{{ $agency->owner?->email ?? '—' }}</p>
+                                @if ($agency->owner?->isOnline())
+                                    <span class="mt-2 inline-flex items-center gap-2 text-xs admin-muted" data-owner-presence="online">
+                                        <span class="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true"></span>
+                                        <span>{{ __('messages.admin_agencies.online_now') }}</span>
+                                    </span>
+                                @else
+                                    <span class="mt-2 inline-flex items-center gap-2 text-xs admin-muted" data-owner-presence="offline">
+                                        <span class="h-2 w-2 rounded-full bg-slate-400" aria-hidden="true"></span>
+                                        <span>{{ __('messages.admin_agencies.offline') }}</span>
+                                    </span>
+                                    <span class="block text-xs admin-muted">
+                                        @if ($agency->owner?->last_active_at)
+                                            {{ __('messages.admin_agencies.last_active', ['time' => $agency->owner->last_active_at->locale(app()->getLocale())->diffForHumans()]) }}
+                                        @else
+                                            {{ __('messages.admin_agencies.never_active') }}
+                                        @endif
+                                    </span>
+                                @endif
                             </td>
                             @if ($isVerificationWorkflow)
                                 <td class="px-4 py-4">
@@ -179,9 +197,13 @@
                                         @foreach ($directory['requiredDocumentTypes'] as $requiredDocumentType)
                                             @php
                                                 $matchingDocuments = $agency->documents->filter(fn ($document) => $document->type->value === $requiredDocumentType);
-                                                $checkDocument = $matchingDocuments->first(fn ($document) => $document->status->value === 'approved')
+                                                $bundleDocument = $agency->documents->first(fn ($document) => $document->type->value === 'other');
+                                                $checkDocument = $bundleDocument && $bundleDocument->status->value !== 'rejected'
+                                                    ? $bundleDocument
+                                                    : ($matchingDocuments->first(fn ($document) => $document->status->value === 'approved')
                                                     ?? $matchingDocuments->first(fn ($document) => $document->status->value !== 'rejected')
-                                                    ?? $matchingDocuments->first();
+                                                    ?? $matchingDocuments->first()
+                                                    ?? $bundleDocument);
                                                 $checkStatus = $checkDocument?->status->value ?? 'missing';
                                             @endphp
                                             <li class="grid gap-0.5">

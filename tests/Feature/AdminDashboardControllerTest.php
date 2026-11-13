@@ -15,6 +15,8 @@ use App\Models\Package;
 use App\Models\PackageAvailability;
 use App\Models\Review;
 use App\Models\TravelRequest;
+use App\Models\TravelRequestProposal;
+use App\Models\TravelRequestRecipient;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
@@ -86,6 +88,10 @@ class AdminDashboardControllerTest extends TestCase
                     ->assertSee(__('messages.admin_nav.switch_language_to_french'))
                     ->assertSee('data-admin-locale="en"', false)
                     ->assertSee('data-admin-locale="fr"', false)
+                    ->assertSee(
+                        'data-admin-search-context="'.e(__('messages.admin_nav.sections.business_insights').' / '.__('messages.admin_nav.groups.finance')).'"',
+                        false,
+                    )
                     ->assertSee('data-admin-overview', false);
             } else {
                 $sectionResponse->assertOk()
@@ -154,7 +160,18 @@ class AdminDashboardControllerTest extends TestCase
 
                     $pageRoute = config("admin_dashboard.page_routes.{$page}");
                     if ($pageRoute !== null) {
-                        $pageResponse->assertRedirect(route($pageRoute, ['lang' => 'en']));
+                        $routeParameters = ['lang' => 'en'];
+                        if (in_array($page, [
+                            'all_requests',
+                            'new_requests',
+                            'in_progress_requests',
+                            'quoted_requests',
+                            'accepted_converted_requests',
+                            'closed_requests',
+                        ], true)) {
+                            $routeParameters['queue'] = $page;
+                        }
+                        $pageResponse->assertRedirect(route($pageRoute, $routeParameters));
                         $directResponse = $this->get(route($pageRoute, ['lang' => 'en']))
                             ->assertOk()
                             ->assertDontSee(__('messages.admin_nav.page_in_preparation'));
@@ -231,6 +248,27 @@ class AdminDashboardControllerTest extends TestCase
                         } elseif ($page === 'agencies_requiring_attention') {
                             $pageResponse->assertSee('data-admin-agencies-requiring-attention', false)
                                 ->assertSee('data-admin-trust-score-navigation', false);
+                        } elseif (in_array($page, [
+                            'platform_performance',
+                            'user_growth',
+                            'agency_growth',
+                            'booking_analytics',
+                            'popular_destinations',
+                            'package_performance',
+                            'trust_verification_statistics',
+                            'export_reports',
+                        ], true)) {
+                            $pageResponse->assertSee('data-admin-analytics', false);
+                        } elseif (in_array($page, [
+                            'financial_overview',
+                            'all_transactions',
+                            'successful_payments',
+                            'pending_failed_payments',
+                            'refunds',
+                            'payment_disputes',
+                            'financial_reports',
+                        ], true)) {
+                            $pageResponse->assertSee('data-admin-finance', false);
                         } else {
                             $pageResponse->assertSee(__('messages.admin_nav.page_in_preparation'));
                         }
@@ -249,6 +287,79 @@ class AdminDashboardControllerTest extends TestCase
             ->assertSee('aria-pressed="true"', false)
             ->assertSee('data-admin-locale="en"', false)
             ->assertSee('data-admin-locale="fr"', false);
+    }
+
+    public function test_custom_request_queue_links_redirect_to_filtered_queues_and_keep_the_selected_queue_active(): void
+    {
+        $admin = User::factory()->withRole(UserRole::ADMIN)->create();
+        $this->actingAs($admin)->withSession([
+            'admin_login.verified_user_id' => $admin->id,
+            'admin_login.session_version' => $admin->admin_session_version,
+            'admin_login.verified_at' => now()->timestamp,
+            'admin_login.last_activity' => now()->timestamp,
+        ]);
+
+        $requests = [
+            'new_requests' => TravelRequest::factory()->create([
+                'reference' => 'TC-QUEUE-NEW',
+                'title' => 'Queue marker: new request',
+                'status' => 'open',
+            ]),
+            'in_progress_requests' => TravelRequest::factory()->create([
+                'reference' => 'TC-QUEUE-PROGRESS',
+                'title' => 'Queue marker: in progress request',
+                'status' => 'open',
+            ]),
+            'quoted_requests' => TravelRequest::factory()->create([
+                'reference' => 'TC-QUEUE-QUOTED',
+                'title' => 'Queue marker: quoted request',
+                'status' => 'open',
+            ]),
+            'accepted_converted_requests' => TravelRequest::factory()->create([
+                'reference' => 'TC-QUEUE-CONVERTED',
+                'title' => 'Queue marker: converted request',
+                'status' => 'converted',
+            ]),
+            'closed_requests' => TravelRequest::factory()->create([
+                'reference' => 'TC-QUEUE-CLOSED',
+                'title' => 'Queue marker: closed request',
+                'status' => 'closed',
+            ]),
+        ];
+        TravelRequestRecipient::factory()
+            ->for($requests['in_progress_requests'])
+            ->create(['first_viewed_at' => now()]);
+        TravelRequestProposal::factory()
+            ->for($requests['quoted_requests'])
+            ->create(['status' => 'submitted']);
+
+        $allRequestsUrl = route('admin.dashboard.page', ['page' => 'all_requests', 'lang' => 'en']);
+        $this->get($allRequestsUrl)
+            ->assertRedirect(route('admin.custom-requests.index', ['lang' => 'en', 'queue' => 'all_requests']));
+        $allRequestsResponse = $this->get(route('admin.custom-requests.index', [
+            'lang' => 'en',
+            'queue' => 'all_requests',
+        ]))->assertSee('data-admin-custom-requests-queue="all_requests"', false);
+        foreach ($requests as $expectedRequest) {
+            $allRequestsResponse->assertSee($expectedRequest->reference);
+        }
+
+        foreach ($requests as $queue => $expectedRequest) {
+            $queueUrl = route('admin.dashboard.page', ['page' => $queue, 'lang' => 'en']);
+            $this->get($queueUrl)
+                ->assertRedirect(route('admin.custom-requests.index', ['lang' => 'en', 'queue' => $queue]));
+
+            $response = $this->get(route('admin.custom-requests.index', ['lang' => 'en', 'queue' => $queue]))
+                ->assertSee('data-admin-custom-requests-queue="'.$queue.'"', false)
+                ->assertSee($expectedRequest->reference)
+                ->assertSee($queueUrl, false);
+
+            foreach ($requests as $otherQueue => $otherRequest) {
+                if ($otherQueue !== $queue) {
+                    $response->assertDontSee($otherRequest->reference);
+                }
+            }
+        }
     }
 
     public function test_overview_shows_current_counts_attention_items_and_recent_activity(): void
@@ -326,6 +437,38 @@ class AdminDashboardControllerTest extends TestCase
             ->assertSee(route('admin.dashboard.page', ['page' => 'reviews_ratings', 'lang' => 'en']), false)
             ->assertSee(route('admin.dashboard.page', ['page' => 'reported_content', 'lang' => 'en']), false)
             ->assertSee(route('admin.dashboard.page', ['page' => 'new_requests', 'lang' => 'en']), false);
+    }
+
+    public function test_overview_shows_online_user_count_for_recently_active_accounts(): void
+    {
+        $this->travelTo('2026-11-08 12:00:00');
+        $admin = User::factory()->withRole(UserRole::ADMIN)->create();
+        $this->actingAs($admin)->withSession([
+            'admin_login.verified_user_id' => $admin->id,
+            'admin_login.session_version' => $admin->admin_session_version,
+            'admin_login.verified_at' => now()->timestamp,
+            'admin_login.last_activity' => now()->timestamp,
+        ]);
+        User::factory()->create([
+            'role' => UserRole::TRAVELER,
+            'is_online' => true,
+            'last_active_at' => now(),
+        ]);
+        $agency = Agency::factory()->create();
+        $agency->owner->forceFill([
+            'is_online' => true,
+            'last_active_at' => now(),
+        ])->save();
+        User::factory()->create([
+            'role' => UserRole::TRAVELER,
+            'is_online' => true,
+            'last_active_at' => now()->subMinutes(6),
+        ]);
+
+        $this->get(route('admin.dashboard', ['lang' => 'en']))
+            ->assertSee('data-overview-metric-value="online-users">3</span>', false)
+            ->assertSee(__('messages.admin_overview.online_users'))
+            ->assertSee(route('admin.dashboard.page', ['page' => 'all_users', 'lang' => 'en']), false);
     }
 
     public function test_overview_shows_zero_counts_and_empty_states_without_platform_activity(): void

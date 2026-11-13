@@ -30,6 +30,10 @@ Route::get('/dashboard/pages/{page}', [AdminDashboardController::class, 'page'])
     ->middleware(['auth', EnsureAdminSession::class])
     ->name('dashboard.page');
 
+Route::get('/dashboard/analytics/export', [AdminDashboardController::class, 'exportAnalytics'])
+    ->middleware(['auth', EnsureAdminSession::class])
+    ->name('analytics.export');
+
 Route::get('/dashboard/agencies/{agency}', [AdminDashboardController::class, 'agency'])
     ->middleware(['auth', EnsureAdminSession::class])
     ->whereNumber('agency')
@@ -46,6 +50,12 @@ Route::post('/dashboard/packages/{package}/moderation', [AdminPackageModerationC
     ->name('packages.moderation');
 
 Route::middleware(['auth', EnsureAdminSession::class])->group(function (): void {
+    Route::get('/dashboard/reviews/{review}', [AdminReviewReportController::class, 'showReview'])
+        ->whereNumber('review')
+        ->name('reviews.show');
+    Route::get('/dashboard/reports/{report}', [AdminReviewReportController::class, 'showReport'])
+        ->whereNumber('report')
+        ->name('reports.show');
     Route::post('/dashboard/reviews/{review}/moderation', [AdminReviewReportController::class, 'moderateReview'])
         ->whereNumber('review')
         ->middleware('throttle:admin.users.actions')
@@ -60,14 +70,14 @@ Route::middleware(['auth', EnsureAdminSession::class])->group(function (): void 
         ->name('complaints.action');
 });
 
-Route::post('/dashboard/catalogue/countries', [AdminTravelCatalogueController::class, 'storeCountry'])
+Route::post('/dashboard/catalogue/countries', [AdminTravelCatalogueController::class, 'addCountry'])
     ->middleware(['auth', EnsureAdminSession::class])
     ->name('catalogue.countries.store');
 
-Route::patch('/dashboard/catalogue/countries/{country}', [AdminTravelCatalogueController::class, 'updateCountry'])
+Route::delete('/dashboard/catalogue/countries/{country}', [AdminTravelCatalogueController::class, 'removeCountry'])
     ->middleware(['auth', EnsureAdminSession::class])
     ->whereNumber('country')
-    ->name('catalogue.countries.update');
+    ->name('catalogue.countries.destroy');
 
 Route::post('/dashboard/catalogue/services', [AdminTravelCatalogueController::class, 'storeService'])
     ->middleware(['auth', EnsureAdminSession::class])
@@ -158,6 +168,8 @@ Route::prefix('custom-requests')->name('custom-requests.')->middleware(['auth', 
     Route::get('/', [AdminCustomRequestController::class, 'index'])->name('index');
     Route::get('/export', [AdminCustomRequestController::class, 'export'])->name('export');
     Route::get('/{travelRequest}', [AdminCustomRequestController::class, 'show'])->whereNumber('travelRequest')->name('show');
+    Route::post('/{travelRequest}/moderate', [AdminCustomRequestController::class, 'moderate'])
+        ->whereNumber('travelRequest')->name('moderate.submit');
     Route::post('/{travelRequest}/moderate/{action}', [AdminCustomRequestController::class, 'moderate'])
         ->whereNumber('travelRequest')->whereIn('action', ['hold', 'restore', 'reject', 'close', 'reopen'])->name('moderate');
     Route::post('/{travelRequest}/notes', [AdminCustomRequestController::class, 'note'])->whereNumber('travelRequest')->name('notes.store');

@@ -231,9 +231,23 @@ class BookingService
         });
     }
 
+    public function completeByAgency(
+        Booking $booking,
+        string $reason,
+        User $actor,
+        PaymentSettlementService $paymentSettlement,
+    ): Booking {
+        return DB::transaction(function () use ($booking, $reason, $actor, $paymentSettlement): Booking {
+            $completedBooking = $this->transitionStatus($booking, BookingStatus::COMPLETED, $reason, $actor);
+            $paymentSettlement->recordAgencyReportedOfflinePayment($completedBooking);
+
+            return $completedBooking->refresh();
+        });
+    }
+
     private function assertCanConfirm(Booking $booking): void
     {
-        if ($booking->expires_at?->isPast()) {
+        if ($booking->expires_at?->lte(now())) {
             throw new \RuntimeException('This pending booking has expired.');
         }
 

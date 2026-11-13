@@ -39,6 +39,7 @@ class AgencyPackageManagementTest extends TestCase
         $package = Package::factory()->create(['agency_id' => $agency->id]);
 
         $this->actingAs($traveler)->get(route('agency.packages.index'))->assertRedirect(route('dashboard', ['lang' => 'en']));
+        $this->actingAs($traveler)->get(route('agency.packages.search', ['lang' => 'en', 'search' => 'package']))->assertRedirect(route('dashboard', ['lang' => 'en']));
         $this->actingAs($traveler)->get(route('agency.packages.edit', ['package' => $package->id]))->assertRedirect(route('dashboard', ['lang' => 'en']));
     }
 
@@ -56,6 +57,33 @@ class AgencyPackageManagementTest extends TestCase
             ->assertSee('<option value="France"', false)
             ->assertSee('>France</option>', false)
             ->assertDontSee('<option value="Japan"', false);
+    }
+
+    public function test_removed_country_is_not_available_for_new_package_destinations(): void
+    {
+        $agency = Agency::factory()->create(['verification_status' => 'verified']);
+        $removedCountry = Country::factory()->create(['name' => 'Japan', 'is_active' => false]);
+        $agency->countries()->attach($removedCountry);
+
+        $this->actingAs($agency->owner)
+            ->get(route('agency.packages.create', ['lang' => 'en']))
+            ->assertOk()
+            ->assertDontSee('<option value="Japan"', false);
+
+        $this->actingAs($agency->owner)
+            ->from(route('agency.packages.create', ['lang' => 'en']))
+            ->post(route('agency.packages.store', ['lang' => 'en']), [
+                'title' => 'Japan Discovery',
+                'summary' => 'A thoughtful journey through Japan',
+                'destination' => 'Japan',
+                'price_from' => 900,
+                'duration_days' => 8,
+                'status' => PackageStatus::DRAFT->value,
+            ])
+            ->assertRedirect(route('agency.packages.create', ['lang' => 'en']))
+            ->assertSessionHasErrors('destination');
+
+        $this->assertDatabaseMissing('packages', ['agency_id' => $agency->id, 'title' => 'Japan Discovery']);
     }
 
     public function test_unverified_agency_sees_notice_and_cannot_create_package(): void

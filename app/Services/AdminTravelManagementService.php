@@ -10,6 +10,7 @@ use App\Models\PackageModerationEvent;
 use App\Models\Service;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -84,7 +85,7 @@ class AdminTravelManagementService
         ];
     }
 
-    public function moderatePackage(Package $package, int $actorId, string $decision, string $reason): void
+    public function moderatePackage(Package $package, int $actorId, string $decision, ?string $reason): void
     {
         DB::transaction(function () use ($package, $actorId, $decision, $reason): void {
             $lockedPackage = Package::query()->lockForUpdate()->findOrFail($package->id);
@@ -116,19 +117,29 @@ class AdminTravelManagementService
 
     /**
      * @param  array<string, mixed>  $filters
-     * @return array{countries: LengthAwarePaginator<int, Country>, filters: array<string, mixed>}
+     * @return array{countries: LengthAwarePaginator<int, Country>, availableCountries: Collection<int, Country>, countryApiAvailable: bool, filters: array<string, mixed>}
      */
-    public function countries(array $filters): array
+    public function countries(array $filters, CountryCatalogueSynchronizer $countryCatalogue): array
     {
-        $query = Country::query()->withCount(['agencies']);
+        $countryApiAvailable = $countryCatalogue->synchronize();
+
+        $query = Country::query()->active()->withCount(['agencies']);
 
         if (($filters['search'] ?? '') !== '') {
-            $query->where('name', 'like', '%'.$filters['search'].'%')
-                ->orWhere('code', 'like', '%'.$filters['search'].'%');
+            $query->where(function (Builder $searchQuery) use ($filters): void {
+                $search = '%'.$filters['search'].'%';
+                $searchQuery->where('name', 'like', $search)
+                    ->orWhere('code', 'like', $search);
+            });
         }
 
         return [
             'countries' => $query->orderBy('name')->orderBy('id')->paginate(20)->withQueryString(),
+            'availableCountries' => Country::query()
+                ->where('is_active', false)
+                ->orderBy('name')
+                ->get(['id', 'name', 'code']),
+            'countryApiAvailable' => $countryApiAvailable,
             'filters' => $filters,
         ];
     }

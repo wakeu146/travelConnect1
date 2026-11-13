@@ -4,6 +4,7 @@ use App\Http\Middleware\EnsureAdminSession;
 use App\Http\Middleware\EnsureAgencyOwner;
 use App\Http\Middleware\EnsurePendingAdminLogin;
 use App\Http\Middleware\SetLocale;
+use App\Http\Middleware\UpdateUserPresence;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -24,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->append(SetLocale::class);
+        $middleware->appendToGroup('web', UpdateUserPresence::class);
         $middleware->alias([
             'agency-owner' => EnsureAgencyOwner::class,
             'admin.pending' => EnsurePendingAdminLogin::class,

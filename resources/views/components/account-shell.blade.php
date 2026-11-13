@@ -16,6 +16,26 @@
     </div>
     <script>
         const accountShell = document.querySelector('[data-account-shell]');
+        const accountAgencySearch = document.querySelector('[data-account-main] header form[action*="/account/discover"]');
+        if (accountAgencySearch) {
+            accountAgencySearch.dataset.agencySearch = 'true';
+            accountAgencySearch.dataset.searchUrl = @json(route('discover.search', ['lang' => app()->getLocale()]));
+            accountAgencySearch.dataset.searchLoading = @json(__('messages.agency_search_loading'));
+            accountAgencySearch.dataset.searchEmpty = @json(__('messages.agency_search_empty'));
+            accountAgencySearch.dataset.searchError = @json(__('messages.agency_search_error'));
+            accountAgencySearch.dataset.savedLabel = @json(__('messages.agency_saved'));
+            const accountAgencySearchInput = accountAgencySearch.querySelector('input[name="search"]');
+            accountAgencySearchInput.value = new URLSearchParams(window.location.search).get('search') ?? '';
+            accountAgencySearchInput.setAttribute('aria-label', @json(__('messages.search_agencies_or_destinations')));
+            accountAgencySearchInput?.setAttribute('aria-controls', 'account-agency-search-results');
+            accountAgencySearchInput?.setAttribute('aria-expanded', 'false');
+            accountAgencySearchInput?.setAttribute('aria-autocomplete', 'list');
+            accountAgencySearchInput?.setAttribute('autocomplete', 'off');
+        }
+        const accountProfileLink = Array.from(document.querySelectorAll('[data-account-main] header a[aria-label]'))
+            .find((link) => link.getAttribute('aria-label') === @json(__('messages.settings')));
+        accountProfileLink?.setAttribute('data-account-profile-mobile', '');
+        accountProfileLink?.classList.add('sm:hidden');
         const accountSidebar = document.querySelector('[data-account-sidebar]');
         const accountBackdrop = document.querySelector('[data-account-backdrop]');
         const setAccountMenu = (open) => { accountSidebar?.classList.toggle('-translate-x-full', !open); accountSidebar?.classList.toggle('translate-x-0', open); accountBackdrop?.classList.toggle('hidden', !open); accountBackdrop?.classList.toggle('opacity-0', !open); accountBackdrop?.classList.toggle('opacity-100', open); document.body.classList.toggle('overflow-hidden', open); };

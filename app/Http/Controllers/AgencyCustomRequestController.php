@@ -80,7 +80,7 @@ class AgencyCustomRequestController extends Controller
         if ($recipient->status === 'active' && $travelRequest->status === 'open') {
             $customRequests->markViewed($recipient);
         }
-        $travelRequest->load(['services', 'traveler:id,name', 'booking']);
+        $travelRequest->load(['services', 'traveler:id,name', 'booking'])->loadCount('recipients');
         $proposal = $travelRequest->proposals()->where('agency_id', $agency->id)->first();
 
         return view('agencies.custom-requests.show', compact('travelRequest', 'recipient', 'proposal'));

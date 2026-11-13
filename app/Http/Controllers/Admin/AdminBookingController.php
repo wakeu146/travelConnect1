@@ -130,10 +130,10 @@ class AdminBookingController extends Controller
                 BookingStatus::CANCELLED->value,
                 BookingStatus::COMPLETED->value,
             ])],
-            'reason' => ['required', 'string', 'min:10', 'max:1000'],
+            'reason' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $management->transition($booking, $request->user(), BookingStatus::from($data['status']), $data['reason']);
+        $management->transition($booking, $request->user(), BookingStatus::from($data['status']), $data['reason'] ?? null);
 
         return redirect()
             ->route('admin.bookings.show', ['booking' => $booking->id, 'lang' => app()->getLocale()])

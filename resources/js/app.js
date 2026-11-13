@@ -252,9 +252,8 @@ document.querySelectorAll('[data-password-toggle]').forEach((toggle) => {
 	});
 });
 
-document.addEventListener('click', async (event) => {
-	const toggle = event.target.closest('[data-favorite-toggle]');
-	if (toggle) {
+document.querySelectorAll('[data-favorite-toggle]').forEach((toggle) => {
+	toggle.addEventListener('click', async (event) => {
 		event.preventDefault();
 		if (toggle.dataset.authenticated !== 'true') {
 			window.location.href = toggle.dataset.loginUrl;
@@ -263,7 +262,7 @@ document.addEventListener('click', async (event) => {
 		if (toggle.disabled) return;
 		toggle.disabled = true;
 		try {
-			const response = await fetch(toggle.dataset.favoriteUrl || `/agencies/${toggle.dataset.agencySlug}/favorite`, {
+			const response = await fetch('/agencies/' + toggle.dataset.agencySlug + '/favorite', {
 				method: 'POST',
 				headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '', Accept: 'application/json' },
 			});
@@ -277,301 +276,15 @@ document.addEventListener('click', async (event) => {
 			toggle.classList.toggle('text-[#e76f51]', saved);
 			const icon = toggle.querySelector('[data-favorite-icon]') || toggle;
 			const label = toggle.querySelector('[data-favorite-label]');
-			const savedLabel = toggle.dataset.savedLabel || 'Agency saved';
-			const unsavedLabel = toggle.dataset.unsavedLabel || 'Save agency';
-			const actionLabel = saved ? savedLabel : unsavedLabel;
-			if (icon) icon.textContent = saved ? '♥' : '♡';
-			if (label) label.textContent = actionLabel;
-			toggle.setAttribute('aria-label', `${actionLabel} ${toggle.dataset.agencyName || ''}`.trim());
+			if (icon) icon.textContent = saved ? '?' : '?';
+			if (label) label.textContent = saved ? 'Agency saved' : 'Save agency';
 		} catch (error) {
 			console.error(error);
 		} finally {
 			toggle.disabled = false;
 		}
-		return;
-	}
-
-	const removeRecent = event.target.closest('[data-recent-remove]');
-	if (removeRecent) {
-		event.preventDefault();
-		if (removeRecent.disabled) return;
-		removeRecent.disabled = true;
-		try {
-			const response = await fetch(removeRecent.dataset.removeUrl, {
-				method: 'DELETE',
-				headers: {
-					'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
-					Accept: 'application/json',
-				},
-			});
-			if (!response.ok) throw new Error('Recent agency removal failed');
-			removeRecent.closest('[data-discovery-card]')?.remove();
-			refreshRecentSection();
-		} catch (error) {
-			console.error(error);
-			showDiscoveryHint(discoveryPage?.dataset.errorMessage || 'Agency search is temporarily unavailable. Please try again.');
-		} finally {
-			removeRecent.disabled = false;
-		}
-	}
+	});
 });
-
-const discoveryPage = document.querySelector('[data-discover-page]');
-const dashboardSearchInput = document.querySelector('[data-account-main] header input[name="search"]');
-if (discoveryPage && dashboardSearchInput) {
-	dashboardSearchInput.value = new URL(window.location.href).searchParams.get('search') || '';
-}
-
-const refreshRecentSection = () => {
-	if (!discoveryPage) return;
-	const recentSection = discoveryPage.querySelector('[data-discovery-recent]');
-	const recentGrid = discoveryPage.querySelector('[data-discovery-recent-grid]');
-	const clearRecent = discoveryPage.querySelector('[data-discovery-clear-recent]');
-	const hasRecentCards = Boolean(recentGrid?.querySelector('[data-discovery-card]'));
-	recentSection?.classList.toggle('hidden', !hasRecentCards);
-	recentSection?.classList.toggle('grid', hasRecentCards);
-	recentGrid?.classList.toggle('hidden', !hasRecentCards);
-	clearRecent?.classList.toggle('hidden', !hasRecentCards);
-	clearRecent?.classList.toggle('inline-flex', hasRecentCards);
-};
-
-const showDiscoveryHint = (message) => {
-	if (!discoveryPage) return;
-	const hint = discoveryPage.querySelector('[data-discovery-hint]');
-	if (!hint) return;
-	hint.textContent = message;
-	hint.classList.toggle('hidden', !message);
-};
-
-if (dashboardSearchInput?.form && !discoveryPage) {
-	dashboardSearchInput.addEventListener('focus', () => {
-		dashboardSearchInput.value = '';
-		const targetUrl = new URL(dashboardSearchInput.form.action, window.location.href);
-		targetUrl.searchParams.delete('search');
-		targetUrl.searchParams.delete('page');
-		targetUrl.searchParams.set('search_mode', '1');
-		targetUrl.hash = 'agency-search';
-		window.location.assign(targetUrl.href);
-	}, { once: true });
-}
-
-if (discoveryPage && dashboardSearchInput?.form) {
-	const searchForm = dashboardSearchInput.form;
-	const resultsSection = discoveryPage.querySelector('[data-discovery-results-section]');
-	const resultsContent = discoveryPage.querySelector('[data-discovery-results-content]');
-	const loadingState = discoveryPage.querySelector('[data-discovery-loading]');
-	const browseSections = [
-		discoveryPage.querySelector('[data-discovery-hero]'),
-		discoveryPage.querySelector('[data-discovery-recent]'),
-		discoveryPage.querySelector('[data-discovery-popular]'),
-		discoveryPage.querySelector('[data-discovery-featured]'),
-	].filter(Boolean);
-	let searchMode = discoveryPage.dataset.searchMode === 'true';
-	let searchDebounce;
-	let searchRequest;
-	let pointerDownWithinSearch = false;
-
-	const ensureSearchModeField = () => {
-		let field = searchForm.querySelector('input[name="search_mode"]');
-		if (!field) {
-			field = document.createElement('input');
-			field.type = 'hidden';
-			field.name = 'search_mode';
-			searchForm.append(field);
-		}
-		field.value = '1';
-	};
-
-	const updateSearchUrl = (query) => {
-		const url = new URL(window.location.href);
-		url.searchParams.set('search_mode', '1');
-		url.searchParams.delete('page');
-		if (query) {
-			url.searchParams.set('search', query);
-		} else {
-			url.searchParams.delete('search');
-		}
-		window.history.replaceState(null, '', `${url.pathname}${url.search}`);
-	};
-
-	const activateSearchMode = () => {
-		if (searchMode) return;
-		searchMode = true;
-		discoveryPage.dataset.searchMode = 'true';
-		browseSections.forEach((section) => {
-			section.classList.add('hidden');
-			section.classList.remove('grid');
-		});
-		ensureSearchModeField();
-		updateSearchUrl(dashboardSearchInput.value.trim());
-	};
-
-	const restoreBrowseSections = () => {
-		browseSections.forEach((section) => {
-			if (section.hasAttribute('data-discovery-hero')) {
-				section.classList.remove('hidden');
-				return;
-			}
-			const hasCards = Boolean(section.querySelector('[data-discovery-card]'));
-			section.classList.toggle('hidden', !hasCards);
-			section.classList.toggle('grid', hasCards);
-		});
-	};
-
-	const setResultsVisible = (isVisible) => {
-		resultsSection.classList.toggle('hidden', !isVisible);
-		resultsSection.classList.toggle('grid', isVisible);
-	};
-
-	const setLoadingState = (isLoading) => {
-		setResultsVisible(true);
-		resultsSection.setAttribute('aria-busy', String(isLoading));
-		resultsContent.classList.toggle('hidden', isLoading);
-		loadingState.classList.toggle('hidden', !isLoading);
-		loadingState.classList.toggle('flex', isLoading);
-	};
-
-	const clearSearchResults = () => {
-		window.clearTimeout(searchDebounce);
-		searchRequest?.abort();
-		searchRequest = null;
-		updateSearchUrl('');
-		setResultsVisible(false);
-		resultsSection.setAttribute('aria-busy', 'false');
-		resultsContent.replaceChildren();
-		resultsContent.classList.add('hidden');
-		loadingState.classList.add('hidden');
-		loadingState.classList.remove('flex');
-		showDiscoveryHint('');
-	};
-
-	const deactivateSearchMode = () => {
-		if (!searchMode) return;
-		window.clearTimeout(searchDebounce);
-		searchRequest?.abort();
-		searchRequest = null;
-		searchMode = false;
-		discoveryPage.dataset.searchMode = 'false';
-		dashboardSearchInput.value = '';
-		searchForm.querySelector('input[name="search_mode"]')?.remove();
-		restoreBrowseSections();
-		clearSearchResults();
-		const url = new URL(window.location.href);
-		url.searchParams.delete('search_mode');
-		window.history.replaceState(null, '', `${url.pathname}${url.search}`);
-	};
-
-	const scheduleSearchModeDeactivation = () => {
-		const pointerInteraction = pointerDownWithinSearch;
-		window.setTimeout(() => {
-			if (!searchMode || pointerInteraction || pointerDownWithinSearch) return;
-			if (dashboardSearchInput === document.activeElement || resultsSection.contains(document.activeElement)) return;
-			deactivateSearchMode();
-		}, 0);
-	};
-
-	const fetchSearchResults = async (query) => {
-		const request = new AbortController();
-		searchRequest = request;
-		const searchUrl = new URL(discoveryPage.dataset.searchUrl, window.location.href);
-		searchUrl.searchParams.set('search', query);
-		searchUrl.searchParams.delete('page');
-		searchUrl.searchParams.set('lang', getCurrentLocale());
-
-		try {
-			const response = await fetch(searchUrl, {
-				headers: { Accept: 'text/html' },
-				credentials: 'same-origin',
-				signal: request.signal,
-			});
-			if (!response.ok) throw new Error('Agency search failed');
-			const html = await response.text();
-			if (dashboardSearchInput.value.trim() !== query) return;
-			resultsContent.innerHTML = html;
-			setLoadingState(false);
-			showDiscoveryHint('');
-		} catch (error) {
-			if (error.name === 'AbortError' || dashboardSearchInput.value.trim() !== query) return;
-			console.error(error);
-			setLoadingState(false);
-			resultsContent.classList.add('hidden');
-			showDiscoveryHint(discoveryPage.dataset.errorMessage);
-		} finally {
-			if (searchRequest === request) searchRequest = null;
-		}
-	};
-
-	if (searchMode) ensureSearchModeField();
-	dashboardSearchInput.addEventListener('focus', activateSearchMode);
-	dashboardSearchInput.addEventListener('focusout', scheduleSearchModeDeactivation);
-	resultsSection.addEventListener('focusout', scheduleSearchModeDeactivation);
-	searchForm.addEventListener('submit', (event) => {
-		if (searchMode) event.preventDefault();
-	});
-	document.addEventListener('pointerdown', (event) => {
-		const target = event.target;
-		pointerDownWithinSearch = target instanceof Node
-			&& (dashboardSearchInput.contains(target) || resultsSection.contains(target));
-		if (searchMode && !pointerDownWithinSearch) deactivateSearchMode();
-	});
-	document.addEventListener('pointerup', () => {
-		pointerDownWithinSearch = false;
-	});
-	document.addEventListener('pointercancel', () => {
-		pointerDownWithinSearch = false;
-	});
-	dashboardSearchInput.addEventListener('input', () => {
-		activateSearchMode();
-		const query = dashboardSearchInput.value.trim();
-		window.clearTimeout(searchDebounce);
-		searchRequest?.abort();
-		showDiscoveryHint('');
-		updateSearchUrl(query);
-
-		if (!query) {
-			clearSearchResults();
-			return;
-		}
-
-		resultsContent.replaceChildren();
-		setLoadingState(true);
-		searchDebounce = window.setTimeout(() => fetchSearchResults(query), 240);
-	});
-
-	if (window.location.hash === '#agency-search' || searchMode || new URL(window.location.href).searchParams.has('search')) {
-		dashboardSearchInput.focus({ preventScroll: true });
-		if (window.location.hash === '#agency-search') {
-			window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
-		}
-	}
-}
-
-if (discoveryPage) {
-	const recentGrid = discoveryPage.querySelector('[data-discovery-recent-grid]');
-	discoveryPage.querySelector('[data-discovery-clear-recent]')?.addEventListener('click', async (event) => {
-		const button = event.currentTarget;
-		button.disabled = true;
-		try {
-			const response = await fetch(discoveryPage.dataset.recentClearUrl, {
-				method: 'DELETE',
-				headers: {
-					'X-CSRF-TOKEN': discoveryPage.dataset.csrfToken,
-					Accept: 'application/json',
-				},
-				credentials: 'same-origin',
-			});
-			if (!response.ok) throw new Error('Recent agency history could not be cleared');
-			recentGrid.replaceChildren();
-			refreshRecentSection();
-			showDiscoveryHint('');
-		} catch (error) {
-			console.error(error);
-			showDiscoveryHint(discoveryPage.dataset.errorMessage);
-		} finally {
-			button.disabled = false;
-		}
-	});
-}
 
 document.querySelectorAll('[data-rating]').forEach((ratingButton) => {
 	ratingButton.addEventListener('click', () => {
@@ -622,6 +335,169 @@ document.querySelectorAll('[data-destination-carousel]').forEach((carousel) => {
 	start();
 });
 
+document.querySelectorAll('[data-agency-search]').forEach((form) => {
+	const input = form.querySelector('input[name="search"]');
+	if (!input) return;
+
+	const results = document.createElement('div');
+	results.id = input.getAttribute('aria-controls');
+	results.className = 'absolute left-0 right-0 top-full z-50 mt-2 hidden max-h-[min(70vh,28rem)] overflow-y-auto border border-[#dbe3e5] bg-white p-2 shadow-xl';
+	results.setAttribute('role', 'listbox');
+	results.setAttribute('aria-live', 'polite');
+	results.dataset.agencySearchResults = '';
+	form.append(results);
+
+	let debounceTimer = null;
+	let activeRequest = null;
+	let searchRevision = 0;
+
+	const closeResults = () => {
+		results.classList.add('hidden');
+		input.setAttribute('aria-expanded', 'false');
+	};
+
+	const showMessage = (message, isError = false) => {
+		const status = document.createElement('p');
+		status.className = 'px-3 py-3 text-sm ' + (isError ? 'text-[#b42318]' : 'text-[#607985]');
+		status.setAttribute('role', isError ? 'alert' : 'status');
+		status.textContent = message;
+		results.replaceChildren(status);
+		results.classList.remove('hidden');
+		input.setAttribute('aria-expanded', 'true');
+	};
+
+	const showAgencies = (agencies) => {
+		results.replaceChildren();
+		if (agencies.length === 0) {
+			showMessage(form.dataset.searchEmpty);
+			return;
+		}
+
+		agencies.forEach((agency) => {
+			const link = document.createElement('a');
+			link.href = agency.url;
+			link.className = 'flex items-center gap-3 border-b border-[#e4e9e7] px-3 py-3 last:border-b-0 hover:bg-[#f7f8f6] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#e76f51]';
+			link.setAttribute('role', 'option');
+
+			const imageFrame = document.createElement('span');
+			imageFrame.className = 'flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden bg-[#f1f6f4] text-sm font-bold text-[#173042]';
+			if (agency.image_url) {
+				const image = document.createElement('img');
+				image.src = agency.image_url;
+				image.alt = '';
+				image.loading = 'lazy';
+				image.className = 'h-full w-full object-cover';
+				image.addEventListener('error', () => {
+					image.replaceWith(document.createTextNode(agency.name.trim().slice(0, 2).toUpperCase()));
+				}, { once: true });
+				imageFrame.append(image);
+			} else {
+				imageFrame.textContent = agency.name.trim().slice(0, 2).toUpperCase();
+			}
+			link.append(imageFrame);
+
+			const details = document.createElement('span');
+			details.className = 'grid min-w-0 flex-1 gap-1';
+			const name = document.createElement('span');
+			name.className = 'truncate text-sm font-bold text-[#173042]';
+			name.textContent = agency.name;
+			details.append(name);
+
+			const metadata = [agency.destinations.join(', '), agency.service, agency.location]
+				.filter(Boolean)
+				.join(' · ');
+			if (metadata) {
+				const description = document.createElement('span');
+				description.className = 'truncate text-xs text-[#607985]';
+				description.textContent = metadata;
+				details.append(description);
+			}
+
+			if (agency.rating) {
+				const rating = document.createElement('span');
+				rating.className = 'text-xs font-semibold text-[#607985]';
+				rating.textContent = '★ ' + agency.rating + ' · ' + agency.review_count;
+				details.append(rating);
+			}
+
+			link.append(details);
+			if (agency.saved) {
+				const saved = document.createElement('span');
+				saved.className = 'shrink-0 text-xs font-semibold text-[#e76f51]';
+				saved.textContent = '♥';
+				saved.setAttribute('aria-label', form.dataset.savedLabel);
+				link.append(saved);
+			}
+			results.append(link);
+		});
+
+		results.classList.remove('hidden');
+		input.setAttribute('aria-expanded', 'true');
+	};
+
+	const searchAgencies = async (revision) => {
+		const query = input.value.trim();
+		if (query.length < 2) {
+			closeResults();
+			return;
+		}
+
+		activeRequest?.abort();
+		const request = new AbortController();
+		activeRequest = request;
+		const url = new URL(form.dataset.searchUrl, window.location.origin);
+		url.searchParams.set('search', query);
+		showMessage(form.dataset.searchLoading);
+
+		try {
+			const response = await fetch(url, {
+				headers: { Accept: 'application/json' },
+				signal: request.signal,
+			});
+			if (!response.ok) throw new Error('Agency search request failed.');
+
+			const payload = await response.json();
+			if (!Array.isArray(payload.data)) throw new Error('Agency search response was invalid.');
+			if (revision !== searchRevision) return;
+			showAgencies(payload.data);
+		} catch (error) {
+			if (error.name === 'AbortError' || revision !== searchRevision) return;
+			showMessage(form.dataset.searchError, true);
+		}
+	};
+
+	const scheduleSearch = () => {
+		window.clearTimeout(debounceTimer);
+		activeRequest?.abort();
+		searchRevision += 1;
+		const revision = searchRevision;
+
+		if (input.value.trim().length < 2) {
+			closeResults();
+			return;
+		}
+
+		showMessage(form.dataset.searchLoading);
+		debounceTimer = window.setTimeout(() => searchAgencies(revision), 220);
+	};
+
+	input.addEventListener('input', scheduleSearch);
+	input.addEventListener('focus', () => {
+		if (input.value.trim().length >= 2) {
+			scheduleSearch();
+		} else {
+			showMessage(form.dataset.searchPrompt);
+		}
+	});
+	input.addEventListener('keydown', (event) => {
+		if (event.key === 'Escape') closeResults();
+		if (event.key === 'ArrowDown') results.querySelector('a')?.focus();
+	});
+	document.addEventListener('click', (event) => {
+		if (!form.contains(event.target)) closeResults();
+	});
+});
+
 document.querySelectorAll('[data-admin-shell]').forEach((shell) => {
 	const sidebar = shell.querySelector('#admin-sidebar');
 	const sidebarToggle = shell.querySelector('[data-admin-sidebar-toggle]');
@@ -633,7 +509,11 @@ document.querySelectorAll('[data-admin-shell]').forEach((shell) => {
 	const searchResults = shell.querySelector('[data-admin-search-results]');
 	const searchForm = shell.querySelector('[data-admin-search-form]');
 	const searchItems = Array.from(shell.querySelectorAll('[data-admin-search-index] a'))
-		.map((link) => ({ label: link.textContent.trim(), url: link.href }));
+		.map((link) => ({
+			label: link.textContent.trim(),
+			context: link.dataset.adminSearchContext,
+			url: link.href,
+		}));
 	const themeKey = 'travelconnect-dashboard-theme';
 	const localeValues = ['en', 'fr'];
 
@@ -720,7 +600,8 @@ document.querySelectorAll('[data-admin-shell]').forEach((shell) => {
 		}
 
 		const matches = searchItems
-			.filter((item) => item.label.toLocaleLowerCase().includes(query))
+			.filter((item) => item.label.toLocaleLowerCase().includes(query)
+				|| (item.context ?? '').toLocaleLowerCase().includes(query))
 			.slice(0, 8);
 
 		if (matches.length === 0) {
@@ -732,8 +613,16 @@ document.querySelectorAll('[data-admin-shell]').forEach((shell) => {
 			matches.forEach((item) => {
 				const link = document.createElement('a');
 				link.href = item.url;
-				link.className = 'admin-nav-link block rounded-lg px-3 py-2 text-sm font-medium';
-				link.textContent = item.label;
+				link.className = 'admin-nav-link flex flex-col gap-0.5 rounded-lg px-3 py-2 text-sm font-medium';
+				const label = document.createElement('span');
+				label.textContent = item.label;
+				link.append(label);
+				if (item.context) {
+					const context = document.createElement('span');
+					context.className = 'text-xs font-normal admin-muted';
+					context.textContent = item.context;
+					link.append(context);
+				}
 				searchResults.append(link);
 			});
 		}

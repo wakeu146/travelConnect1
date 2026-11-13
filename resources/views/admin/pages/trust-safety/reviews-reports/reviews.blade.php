@@ -39,97 +39,57 @@
         </div>
     @endif
 
-    @forelse ($reviews as $review)
-        @php
-            $reviewStatus = $review->status->value;
-            $hasPolicyIndicator = $reviewStatus === 'flagged';
-        @endphp
-        <article class="admin-empty-state grid gap-5 border p-4 sm:p-5" data-admin-review-id="{{ $review->id }}" data-review-signal-count="{{ (int) ($review->reports_count > 0) + (int) $hasPolicyIndicator }}">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-                <div class="grid gap-2">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <span class="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-800 dark:text-amber-200">
-                            <x-admin.icon name="star" class="h-3.5 w-3.5" />
+    <div class="admin-empty-state overflow-x-auto border">
+        <table class="w-full min-w-[68rem] text-left text-sm">
+            <thead class="border-b admin-border">
+                <tr class="text-xs uppercase tracking-wide admin-muted">
+                    <th scope="col" class="px-4 py-3">{{ __('messages.trust_safety.rating_label') }}</th>
+                    <th scope="col" class="px-4 py-3">{{ __('messages.trust_safety.author') }}</th>
+                    <th scope="col" class="px-4 py-3">{{ __('messages.trust_safety.related_agency') }}</th>
+                    <th scope="col" class="px-4 py-3">{{ __('messages.trust_safety.status') }}</th>
+                    <th scope="col" class="px-4 py-3">{{ __('messages.trust_safety.created') }}</th>
+                    <th scope="col" class="px-4 py-3">{{ __('messages.admin_users.actions') }}</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y admin-border">
+                @forelse ($reviews as $review)
+                    @php
+                        $reviewStatus = $review->status->value;
+                        $hasPolicyIndicator = $reviewStatus === 'flagged';
+                    @endphp
+                    <tr data-admin-review-id="{{ $review->id }}" data-review-signal-count="{{ (int) ($review->reports_count > 0) + (int) $hasPolicyIndicator }}">
+                        <td class="px-4 py-3 font-semibold admin-heading">
                             {{ __('messages.trust_safety.rating', ['rating' => $review->rating]) }}
-                        </span>
-                        <span class="admin-badge rounded-full px-2.5 py-1 text-xs font-semibold">
-                            {{ __('messages.trust_safety.status_labels.'.$reviewStatus) }}
-                        </span>
-                        @if ($review->is_hidden)
-                            <span class="rounded-full border border-slate-500/40 bg-slate-500/10 px-2.5 py-1 text-xs font-semibold admin-muted">{{ __('messages.trust_safety.hidden') }}</span>
-                        @else
-                            <span class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-800 dark:text-emerald-200">{{ __('messages.trust_safety.visible') }}</span>
-                        @endif
-                    </div>
-                    <p class="text-xs admin-muted">{{ __('messages.trust_safety.created') }} · <time datetime="{{ $review->created_at->toIso8601String() }}">{{ $review->created_at->format('M j, Y · H:i') }}</time></p>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                    @if ($review->reports_count > 0)
-                        <span data-review-signal="report" class="inline-flex items-center gap-1 rounded-full border border-rose-500/40 bg-rose-500/10 px-2.5 py-1 text-xs font-semibold text-rose-800 dark:text-rose-200">
-                            <x-admin.icon name="flag" class="h-3.5 w-3.5" />
-                            {{ __('messages.trust_safety.report_count', ['count' => $review->reports_count]) }}
-                        </span>
-                    @endif
-                    @if ($hasPolicyIndicator)
-                        <span data-review-signal="policy" class="rounded-full border border-orange-500/40 bg-orange-500/10 px-2.5 py-1 text-xs font-semibold text-orange-800 dark:text-orange-200">{{ __('messages.trust_safety.policy_indicator') }}</span>
-                    @endif
-                </div>
-            </div>
-
-            <blockquote class="text-sm leading-6 admin-heading">{{ $review->comment }}</blockquote>
-
-            <dl class="grid gap-3 border-t pt-4 text-sm admin-border sm:grid-cols-3">
-                <div class="grid gap-1">
-                    <dt class="text-xs font-semibold admin-muted">{{ __('messages.trust_safety.author') }}</dt>
-                    <dd class="font-medium admin-heading">{{ $review->user?->name ?? __('messages.trust_safety.unassigned') }}</dd>
-                </div>
-                <div class="grid gap-1">
-                    <dt class="text-xs font-semibold admin-muted">{{ __('messages.trust_safety.related_agency') }}</dt>
-                    <dd class="font-medium admin-heading">{{ $review->agency?->company_name ?? '—' }}</dd>
-                </div>
-                <div class="grid gap-1">
-                    <dt class="text-xs font-semibold admin-muted">{{ __('messages.trust_safety.related_package') }}</dt>
-                    <dd class="font-medium admin-heading">{{ $review->booking?->package?->title ?? '—' }}</dd>
-                </div>
-            </dl>
-
-            <div class="grid gap-4 border-t pt-4 admin-border lg:grid-cols-[minmax(0,1fr)_minmax(16rem,0.8fr)]">
-                <details class="grid gap-3">
-                    <summary class="cursor-pointer text-sm font-semibold admin-heading">{{ __('messages.trust_safety.audit_history') }}</summary>
-                    @if ($review->events->isNotEmpty())
-                        <ol class="grid gap-3 border-l pl-4">
-                            @foreach ($review->events as $event)
-                                <li class="grid gap-1 text-sm">
-                                    <span class="font-semibold admin-heading">{{ __('messages.trust_safety.action_labels.'.$event->action) }}</span>
-                                    <span class="text-xs admin-muted">{{ $event->actor?->name ?? __('messages.trust_safety.system_actor') }} · {{ $event->created_at->format('M j, Y · H:i') }}</span>
-                                    @if ($event->reason)
-                                        <span class="text-sm leading-5 admin-muted">{{ $event->reason }}</span>
-                                    @endif
-                                </li>
-                            @endforeach
-                        </ol>
-                    @else
-                        <p class="text-sm admin-muted">{{ __('messages.trust_safety.no_history') }}</p>
-                    @endif
-                </details>
-
-                <form method="POST" action="{{ route('admin.reviews.moderation', ['review' => $review->id, 'lang' => app()->getLocale()]) }}" class="grid content-start gap-3">
-                    @csrf
-                    <input type="hidden" name="decision" value="{{ $review->is_hidden ? 'restore' : 'hide' }}">
-                    <div class="grid gap-1.5">
-                        <label for="review-reason-{{ $review->id }}" class="text-xs font-semibold admin-heading">{{ __('messages.trust_safety.moderation_reason_optional') }}</label>
-                        <textarea id="review-reason-{{ $review->id }}" name="reason" minlength="10" maxlength="2000" rows="2" class="admin-input w-full border px-3 py-2 text-sm">{{ old('reason') }}</textarea>
-                        @error('reason')<span class="text-xs text-rose-700 dark:text-rose-300">{{ $message }}</span>@enderror
-                    </div>
-                    <button type="submit" class="admin-nav-link inline-flex min-h-10 w-fit items-center border px-4 py-2 text-sm font-semibold">
-                        {{ $review->is_hidden ? __('messages.trust_safety.restore_review') : __('messages.trust_safety.hide_review') }}
-                    </button>
-                </form>
-            </div>
-        </article>
-    @empty
-        <p class="admin-empty-state border p-6 text-sm admin-muted">{{ __('messages.trust_safety.no_reviews') }}</p>
-    @endforelse
+                            @if ($review->reports_count > 0)
+                                <span class="mt-1 block text-xs text-rose-700 dark:text-rose-300" data-review-signal="report">
+                                    {{ __('messages.trust_safety.report_count', ['count' => $review->reports_count]) }}
+                                </span>
+                            @endif
+                            @if ($hasPolicyIndicator)
+                                <span class="mt-1 block text-xs text-rose-700 dark:text-rose-300" data-review-signal="policy">
+                                    {{ __('messages.trust_safety.policy_indicator') }}
+                                </span>
+                            @endif
+                        </td>
+                        <td class="max-w-48 truncate px-4 py-3 admin-heading" title="{{ $review->user?->name ?? __('messages.trust_safety.unassigned') }}">{{ $review->user?->name ?? __('messages.trust_safety.unassigned') }}</td>
+                        <td class="max-w-56 truncate px-4 py-3 admin-heading" title="{{ $review->agency?->company_name ?? '—' }}">{{ $review->agency?->company_name ?? '—' }}</td>
+                        <td class="px-4 py-3">
+                            <span class="admin-badge inline-flex border px-2 py-1 text-xs font-semibold">{{ __('messages.trust_safety.status_labels.'.$reviewStatus) }}</span>
+                            <span class="mt-1 block text-xs admin-muted">{{ $review->is_hidden ? __('messages.trust_safety.hidden') : __('messages.trust_safety.visible') }}</span>
+                        </td>
+                        <td class="whitespace-nowrap px-4 py-3 text-xs admin-muted"><time datetime="{{ $review->created_at->toIso8601String() }}">{{ $review->created_at->format('M j, Y · H:i') }}</time></td>
+                        <td class="px-4 py-3">
+                            <a href="{{ route('admin.reviews.show', array_filter(['review' => $review->id, 'lang' => app()->getLocale(), 'search' => request('search'), 'status' => request('status')])) }}" class="admin-nav-link inline-flex min-h-9 items-center border px-3 py-1.5 text-xs font-semibold">
+                                {{ __('messages.admin_users.view_details') }}
+                            </a>
+                        </td>
+                    </tr>
+                @empty
+                    <tr><td colspan="6" class="p-8 text-center admin-muted">{{ __('messages.trust_safety.no_reviews') }}</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
 
     {{ $reviews->links() }}
 </section>

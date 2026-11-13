@@ -10,6 +10,8 @@ use App\Models\Agency;
 use App\Models\Booking;
 use App\Models\Package;
 use App\Models\PackageAvailability;
+use App\Models\TravelRequest;
+use App\Models\TravelRequestProposal;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
@@ -71,6 +73,51 @@ class AdminBookingManagementTest extends TestCase
             ->assertOk()
             ->assertSee($pending->booking_reference)
             ->assertDontSee($confirmed->booking_reference);
+    }
+
+    public function test_pending_booking_queue_loads_linked_custom_proposal(): void
+    {
+        $admin = $this->actingAsVerifiedAdmin();
+        $agency = Agency::factory()->create();
+        $traveler = User::factory()->withRole(UserRole::TRAVELER)->create();
+        $travelRequest = TravelRequest::factory()->create([
+            'user_id' => $traveler->id,
+            'status' => 'converted',
+        ]);
+        $proposal = TravelRequestProposal::factory()
+            ->for($travelRequest)
+            ->for($agency)
+            ->create(['owner_id' => $agency->owner->id]);
+        $booking = Booking::query()->create([
+            'agency_id' => $agency->id,
+            'package_id' => null,
+            'package_availability_id' => null,
+            'booking_type' => 'custom',
+            'custom_request_id' => $travelRequest->id,
+            'custom_proposal_id' => $proposal->id,
+            'quote_snapshot' => ['price' => '8000000.00', 'currency' => 'XAF'],
+            'user_id' => $traveler->id,
+            'booking_reference' => 'TC-ADMIN-CUSTOM-PENDING-001',
+            'status' => BookingStatus::PENDING,
+            'payment_status' => PaymentStatus::UNPAID,
+            'traveler_count' => 3,
+            'unit_price' => '8000000.00',
+            'total_amount' => '8000000.00',
+            'currency' => 'XAF',
+            'expires_at' => now()->addHour(),
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.bookings.pending', ['lang' => 'en']))
+            ->assertOk()
+            ->assertSee($booking->booking_reference)
+            ->assertSee($travelRequest->title);
+
+        $this->actingAs($admin)
+            ->get(route('admin.bookings.show', ['booking' => $booking->id, 'lang' => 'en']))
+            ->assertOk()
+            ->assertSee($booking->booking_reference)
+            ->assertSee($travelRequest->title);
     }
 
     public function test_admin_confirmation_preserves_payment_state_and_booking_price_snapshot(): void
@@ -149,6 +196,61 @@ class AdminBookingManagementTest extends TestCase
         $this->get(route('admin.bookings.show', ['booking' => $booking->id, 'lang' => 'en']))
             ->assertOk()
             ->assertSee($booking->booking_reference);
+    }
+
+    public function test_admin_booking_actions_use_one_status_selector_and_one_optional_reason(): void
+    {
+        $this->actingAsVerifiedAdmin();
+        $booking = $this->createBooking('TC-ADMIN-ACTIONS-001', 'pending');
+
+        $response = $this->get(route('admin.bookings.show', ['booking' => $booking->id, 'lang' => 'en']));
+        $content = $response->assertOk()->getContent();
+
+        $this->assertSame(1, substr_count($content, 'id="booking-transition-status"'));
+        $this->assertSame(1, substr_count($content, 'id="booking-transition-reason"'));
+        $this->assertStringContainsString(__('messages.admin_bookings.reason_optional'), $content);
+    }
+
+    public function test_admin_can_transition_booking_without_a_reason(): void
+    {
+        $admin = $this->actingAsVerifiedAdmin();
+        $booking = $this->createBooking('TC-ADMIN-OPTIONAL-REASON-001', 'pending');
+
+        $this->actingAs($admin)
+            ->patch(route('admin.bookings.status', ['booking' => $booking->id, 'lang' => 'en']), [
+                'status' => 'confirmed',
+            ])
+            ->assertRedirect(route('admin.bookings.show', ['booking' => $booking->id, 'lang' => 'en']));
+
+        $this->assertSame(BookingStatus::CONFIRMED, $booking->fresh()->status);
+        $this->assertDatabaseHas('booking_status_histories', [
+            'booking_id' => $booking->id,
+            'actor_id' => $admin->id,
+            'event_type' => 'status_transition',
+            'to_status' => 'confirmed',
+            'reason' => null,
+        ]);
+    }
+
+    public function test_admin_custom_booking_snapshot_labels_proposal_price_as_total_for_all_travelers(): void
+    {
+        $this->actingAsVerifiedAdmin();
+        $booking = $this->createBooking('TC-ADMIN-CUSTOM-QUOTE-001', 'pending', extras: [
+            'booking_type' => 'custom',
+            'traveler_count' => 3,
+            'unit_price' => '8000000.00',
+            'total_amount' => '8000000.00',
+            'quote_snapshot' => [
+                'price' => '8000000.00',
+                'currency' => 'XAF',
+            ],
+        ]);
+
+        $this->get(route('admin.bookings.show', ['booking' => $booking->id, 'lang' => 'en']))
+            ->assertOk()
+            ->assertSee(__('messages.admin_bookings.quote_total_context', ['count' => 3]))
+            ->assertSee('8000000.00 XAF')
+            ->assertDontSee(__('messages.admin_bookings.unit_price'));
     }
 
     public function test_booking_export_is_filtered_and_escapes_spreadsheet_formulas(): void

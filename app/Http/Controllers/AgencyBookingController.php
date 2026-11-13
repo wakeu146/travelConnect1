@@ -7,6 +7,7 @@ use App\Enums\PaymentStatus;
 use App\Models\Booking;
 use App\Notifications\AgencyActivityNotification;
 use App\Services\BookingService;
+use App\Services\PaymentSettlementService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -263,15 +264,24 @@ class AgencyBookingController extends Controller
         return redirect()->route('agency.bookings.show', ['booking' => $booking->id])->with('status', __('messages.booking_cancelled'));
     }
 
-    public function complete(Request $request, Booking $booking, BookingService $bookingService): RedirectResponse
-    {
+    public function complete(
+        Request $request,
+        Booking $booking,
+        BookingService $bookingService,
+        PaymentSettlementService $paymentSettlement,
+    ): RedirectResponse {
         $this->authorize('update', $booking);
 
         if ($booking->status !== BookingStatus::CONFIRMED) {
             return back()->withErrors(['status' => __('messages.only_confirmed_complete')]);
         }
 
-        $bookingService->transitionStatus($booking, BookingStatus::COMPLETED, actor: $request->user());
+        $bookingService->completeByAgency(
+            $booking,
+            __('messages.offline_payment_confirmed_by_agency'),
+            $request->user(),
+            $paymentSettlement,
+        );
         $this->notifyTraveler($booking, 'booking_completed_notification');
 
         return redirect()->route('agency.bookings.show', ['booking' => $booking->id])->with('status', __('messages.booking_completed'));
@@ -293,7 +303,7 @@ class AgencyBookingController extends Controller
         Booking $booking,
         BookingService $bookingService,
     ): bool {
-        if ($booking->status !== BookingStatus::PENDING || ! $booking->expires_at || ! $booking->expires_at->isPast()) {
+        if ($booking->status !== BookingStatus::PENDING || ! $booking->expires_at || $booking->expires_at->gt(now())) {
             return false;
         }
 

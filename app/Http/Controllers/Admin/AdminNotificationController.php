@@ -4,7 +4,10 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Agency;
+use App\Models\TravelRequest;
 use App\Notifications\AdminAgencyDocumentReceived;
+use App\Notifications\AdminAgencyRegistered;
+use App\Notifications\AdminCustomRequestReceived;
 use App\Notifications\AdminSecurityAlertReceived;
 use App\Notifications\AdminTravelerIssueReceived;
 use Illuminate\Http\RedirectResponse;
@@ -20,6 +23,8 @@ class AdminNotificationController extends Controller
                 AdminSecurityAlertReceived::class,
                 AdminTravelerIssueReceived::class,
                 AdminAgencyDocumentReceived::class,
+                AdminAgencyRegistered::class,
+                AdminCustomRequestReceived::class,
             ])
             ->whereKey($notification)
             ->firstOrFail();
@@ -58,6 +63,35 @@ class AdminNotificationController extends Controller
             ]);
         }
 
+        if ($adminNotification->type === AdminAgencyRegistered::class) {
+            abort_unless(isset($data['agency_id']) && is_int($data['agency_id']) && $data['agency_id'] > 0, 404);
+            abort_unless(Agency::query()->whereKey($data['agency_id'])->exists(), 404);
+
+            $adminNotification->markAsRead();
+
+            return redirect()->route('admin.agencies.show', [
+                'agency' => $data['agency_id'],
+                'lang' => app()->getLocale(),
+            ]);
+        }
+
+        if ($adminNotification->type === AdminCustomRequestReceived::class) {
+            abort_unless(
+                isset($data['travel_request_id'])
+                    && is_int($data['travel_request_id'])
+                    && $data['travel_request_id'] > 0,
+                404,
+            );
+            abort_unless(TravelRequest::query()->whereKey($data['travel_request_id'])->exists(), 404);
+
+            $adminNotification->markAsRead();
+
+            return redirect()->route('admin.custom-requests.show', [
+                'travelRequest' => $data['travel_request_id'],
+                'lang' => app()->getLocale(),
+            ]);
+        }
+
         abort_unless(isset($data['issue_id']) && is_int($data['issue_id']) && $data['issue_id'] > 0, 404);
 
         $adminNotification->markAsRead();
@@ -78,6 +112,8 @@ class AdminNotificationController extends Controller
                 AdminSecurityAlertReceived::class,
                 AdminTravelerIssueReceived::class,
                 AdminAgencyDocumentReceived::class,
+                AdminAgencyRegistered::class,
+                AdminCustomRequestReceived::class,
             ])
             ->update(['read_at' => now()]);
 

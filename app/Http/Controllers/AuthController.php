@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Notifications\PasswordResetCode;
 use App\Services\AdminAuthenticationService;
 use App\Services\AdminLoginSecurityService;
+use App\Services\AdminOperationalNotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -98,8 +99,10 @@ class AuthController extends Controller
         ]);
     }
 
-    public function registerAgency(Request $request): RedirectResponse
-    {
+    public function registerAgency(
+        Request $request,
+        AdminOperationalNotificationService $adminNotifications,
+    ): RedirectResponse {
         $data = $request->validate([
             'agency_name' => ['required', 'string', 'max:255'],
             'name' => ['required', 'string', 'max:255'],
@@ -113,7 +116,7 @@ class AuthController extends Controller
             'terms.accepted' => 'You must accept the terms to create an account.',
         ]);
 
-        $user = DB::transaction(function () use ($data): User {
+        $user = DB::transaction(function () use ($data, $adminNotifications): User {
             $user = new User([
                 'name' => $data['name'],
                 'email' => $data['email'],
@@ -121,12 +124,14 @@ class AuthController extends Controller
             ]);
             $user->forceFill(['role' => UserRole::AGENCY_OWNER])->save();
 
-            $user->agency()->create([
+            $agency = $user->agency()->create([
                 'company_name' => $data['agency_name'],
                 'description' => '',
                 'license_number' => '',
                 'email' => $data['email'],
             ]);
+
+            DB::afterCommit(fn () => $adminNotifications->agencyRegistered($agency));
 
             return $user;
         });
@@ -199,6 +204,11 @@ class AuthController extends Controller
 
     public function logout(Request $request): RedirectResponse
     {
+        $request->user()?->forceFill([
+            'is_online' => false,
+            'last_active_at' => now(),
+        ])->saveQuietly();
+
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();

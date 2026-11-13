@@ -22,70 +22,68 @@
         </div>
     </form>
 
-    <div class="grid min-w-0 gap-4 md:grid-cols-2" data-attention-agency-list>
-        @forelse ($agencies as $agency)
-            <article class="admin-empty-state grid min-w-0 content-start gap-4 border p-4 sm:p-5" data-attention-agency="{{ $agency->id }}">
-                <header class="grid min-w-0 gap-3">
-                    <div class="flex min-w-0 flex-wrap items-start justify-between gap-3">
-                        <h2 class="min-w-0 break-words text-base font-bold admin-heading">{{ $agency->company_name }}</h2>
-                        <span class="shrink-0 text-sm font-bold tabular-nums admin-heading">{{ __('messages.trust_scores.score_value', ['score' => $agency->trust_score]) }}</span>
-                    </div>
-                    <a href="{{ route('admin.agencies.show', ['agency' => $agency->id, 'lang' => app()->getLocale()]) }}" class="w-fit break-words text-xs font-semibold admin-accent underline decoration-current/30 underline-offset-4">
-                        {{ __('messages.trust_scores.open_agency') }}
-                    </a>
-                </header>
-
-                <ul class="grid min-w-0 gap-2 border-t pt-4 admin-border" aria-label="{{ __('messages.trust_scores.attention_reasons') }}">
-                    @if ($agency->verification_status->value !== 'verified')
-                        <li class="break-words text-sm admin-heading">{{ __('messages.trust_scores.verification_attention', ['status' => __('messages.admin_agencies.verification_statuses.'.$agency->verification_status->value)]) }}</li>
-                    @endif
-                    @if ($agency->operating_status === 'suspended')
-                        <li class="break-words text-sm admin-heading">{{ __('messages.trust_scores.suspension_attention') }}</li>
-                    @endif
-                    @if ($agency->flagged_reviews_count > 0)
-                        <li class="break-words text-sm admin-heading">{{ __('messages.trust_scores.flagged_reviews_attention', ['count' => $agency->flagged_reviews_count]) }}</li>
-                    @endif
-                    @if ($agency->hidden_reviews_count > 0)
-                        <li class="break-words text-sm admin-heading">{{ __('messages.trust_scores.hidden_reviews_attention', ['count' => $agency->hidden_reviews_count]) }}</li>
-                    @endif
-                    @if ($agency->active_reports_count > 0)
-                        <li class="break-words text-sm admin-heading">{{ __('messages.trust_scores.active_reports_attention', ['count' => $agency->active_reports_count]) }}</li>
-                    @endif
-                    @if ($agency->active_complaints_count > 0)
-                        <li class="break-words text-sm admin-heading">{{ __('messages.trust_scores.active_complaints_attention', ['count' => $agency->active_complaints_count]) }}</li>
-                    @endif
-                </ul>
-
-                <div class="flex min-w-0 flex-wrap gap-2 border-t pt-4 admin-border">
-                    @if ($agency->verification_status->value !== 'verified')
-                        @php($verificationQueue = $agency->verification_status->value === 'rejected' ? 'rejected' : 'verification_pending')
-                        <a href="{{ route('admin.agencies.show', ['agency' => $agency->id, 'queue' => $verificationQueue, 'lang' => app()->getLocale()]) }}" class="admin-nav-link inline-flex min-h-9 min-w-0 items-center break-words border px-3 py-1.5 text-xs font-semibold">
-                            {{ __('messages.trust_scores.open_verification') }}
-                        </a>
-                    @endif
-                    @if ($agency->flagged_reviews_count > 0 || $agency->hidden_reviews_count > 0)
-                        <a href="{{ route('admin.dashboard.page', ['page' => 'reviews_ratings', 'search' => $agency->company_name, 'lang' => app()->getLocale()]) }}" class="admin-nav-link inline-flex min-h-9 min-w-0 items-center break-words border px-3 py-1.5 text-xs font-semibold">
-                            {{ __('messages.trust_scores.open_reviews') }}
-                        </a>
-                    @endif
-                    @if ($agency->active_reports_count > 0)
-                        <a href="{{ route('admin.dashboard.page', ['page' => 'reported_content', 'search' => $agency->company_name, 'lang' => app()->getLocale()]) }}" class="admin-nav-link inline-flex min-h-9 min-w-0 items-center break-words border px-3 py-1.5 text-xs font-semibold">
-                            {{ __('messages.trust_scores.view_reports') }}
-                        </a>
-                    @endif
-                    @if ($agency->active_complaints_count > 0)
-                        <a href="{{ route('admin.dashboard.page', ['page' => 'user_agency_complaints', 'search' => $agency->company_name, 'lang' => app()->getLocale()]) }}" class="admin-nav-link inline-flex min-h-9 min-w-0 items-center break-words border px-3 py-1.5 text-xs font-semibold">
-                            {{ __('messages.trust_scores.open_complaints') }}
-                        </a>
-                        <a href="{{ route('admin.agencies.show', ['agency' => $agency->id, 'lang' => app()->getLocale()]) }}#agency-bookings" class="admin-nav-link inline-flex min-h-9 min-w-0 items-center break-words border px-3 py-1.5 text-xs font-semibold">
-                            {{ __('messages.trust_scores.open_bookings') }}
-                        </a>
-                    @endif
-                </div>
-            </article>
-        @empty
-            <p class="admin-empty-state border p-6 text-sm admin-muted md:col-span-2">{{ __('messages.trust_scores.no_attention') }}</p>
-        @endforelse
+    <div class="admin-empty-state overflow-x-auto border" data-attention-agency-list>
+        <table class="w-full min-w-[68rem] text-left text-sm">
+            <thead class="border-b admin-border">
+                <tr class="text-xs uppercase tracking-wide admin-muted">
+                    <th scope="col" class="px-4 py-3">{{ __('messages.trust_scores.agency') }}</th>
+                    <th scope="col" class="px-4 py-3">{{ __('messages.trust_scores.score_out_of_100') }}</th>
+                    <th scope="col" class="px-4 py-3">{{ __('messages.trust_scores.attention_reasons') }}</th>
+                    <th scope="col" class="px-4 py-3">{{ __('messages.admin_users.actions') }}</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y admin-border">
+                @forelse ($agencies as $agency)
+                    <tr data-attention-agency="{{ $agency->id }}">
+                        <td class="px-4 py-3 font-semibold admin-heading">{{ $agency->company_name }}</td>
+                        <td class="whitespace-nowrap px-4 py-3 font-semibold tabular-nums admin-heading">{{ $agency->trust_score }} / 100</td>
+                        <td class="px-4 py-3">
+                            <ul class="grid gap-1">
+                                @if ($agency->verification_status->value !== 'verified')
+                                    <li class="text-xs admin-heading">{{ __('messages.trust_scores.verification_attention', ['status' => __('messages.admin_agencies.verification_statuses.'.$agency->verification_status->value)]) }}</li>
+                                @endif
+                                @if ($agency->operating_status === 'suspended')
+                                    <li class="text-xs admin-heading">{{ __('messages.trust_scores.suspension_attention') }}</li>
+                                @endif
+                                @if ($agency->flagged_reviews_count > 0)
+                                    <li class="text-xs admin-heading">{{ __('messages.trust_scores.flagged_reviews_attention', ['count' => $agency->flagged_reviews_count]) }}</li>
+                                @endif
+                                @if ($agency->hidden_reviews_count > 0)
+                                    <li class="text-xs admin-heading">{{ __('messages.trust_scores.hidden_reviews_attention', ['count' => $agency->hidden_reviews_count]) }}</li>
+                                @endif
+                                @if ($agency->active_reports_count > 0)
+                                    <li class="text-xs admin-heading">{{ __('messages.trust_scores.active_reports_attention', ['count' => $agency->active_reports_count]) }}</li>
+                                @endif
+                                @if ($agency->active_complaints_count > 0)
+                                    <li class="text-xs admin-heading">{{ __('messages.trust_scores.active_complaints_attention', ['count' => $agency->active_complaints_count]) }}</li>
+                                @endif
+                            </ul>
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="flex min-w-40 flex-wrap gap-2">
+                                <a href="{{ route('admin.agencies.show', ['agency' => $agency->id, 'lang' => app()->getLocale()]) }}" class="admin-nav-link inline-flex min-h-9 items-center border px-3 py-1.5 text-xs font-semibold">{{ __('messages.trust_scores.open_agency') }}</a>
+                                @if ($agency->verification_status->value !== 'verified')
+                                    @php($verificationQueue = $agency->verification_status->value === 'rejected' ? 'rejected' : 'verification_pending')
+                                    <a href="{{ route('admin.agencies.show', ['agency' => $agency->id, 'queue' => $verificationQueue, 'lang' => app()->getLocale()]) }}" class="admin-nav-link inline-flex min-h-9 items-center border px-3 py-1.5 text-xs font-semibold">{{ __('messages.trust_scores.open_verification') }}</a>
+                                @endif
+                                @if ($agency->flagged_reviews_count > 0 || $agency->hidden_reviews_count > 0)
+                                    <a href="{{ route('admin.dashboard.page', ['page' => 'reviews_ratings', 'search' => $agency->company_name, 'lang' => app()->getLocale()]) }}" class="admin-nav-link inline-flex min-h-9 items-center border px-3 py-1.5 text-xs font-semibold">{{ __('messages.trust_scores.open_reviews') }}</a>
+                                @endif
+                                @if ($agency->active_reports_count > 0)
+                                    <a href="{{ route('admin.dashboard.page', ['page' => 'reported_content', 'search' => $agency->company_name, 'lang' => app()->getLocale()]) }}" class="admin-nav-link inline-flex min-h-9 items-center border px-3 py-1.5 text-xs font-semibold">{{ __('messages.trust_scores.view_reports') }}</a>
+                                @endif
+                                @if ($agency->active_complaints_count > 0)
+                                    <a href="{{ route('admin.dashboard.page', ['page' => 'user_agency_complaints', 'search' => $agency->company_name, 'lang' => app()->getLocale()]) }}" class="admin-nav-link inline-flex min-h-9 items-center border px-3 py-1.5 text-xs font-semibold">{{ __('messages.trust_scores.open_complaints') }}</a>
+                                    <a href="{{ route('admin.agencies.show', ['agency' => $agency->id, 'lang' => app()->getLocale()]) }}#agency-bookings" class="admin-nav-link inline-flex min-h-9 items-center border px-3 py-1.5 text-xs font-semibold">{{ __('messages.trust_scores.open_bookings') }}</a>
+                                @endif
+                            </div>
+                        </td>
+                    </tr>
+                @empty
+                    <tr><td colspan="4" class="p-8 text-center admin-muted">{{ __('messages.trust_scores.no_attention') }}</td></tr>
+                @endforelse
+            </tbody>
+        </table>
     </div>
 
     <div class="min-w-0 overflow-x-auto">{{ $agencies->links() }}</div>

@@ -118,10 +118,18 @@
         <section class="admin-empty-state grid content-start gap-4 border p-5" aria-labelledby="admin-booking-pricing">
             <h3 id="admin-booking-pricing" class="text-base font-bold admin-heading">{{ __('messages.admin_bookings.price_snapshot') }}</h3>
             <dl class="grid gap-3 sm:grid-cols-3">
-                <div class="grid gap-1">
-                    <dt class="text-xs font-semibold admin-muted">{{ __('messages.admin_bookings.unit_price') }}</dt>
-                    <dd class="text-sm admin-heading">{{ $booking->unit_price }} {{ $booking->currency }}</dd>
-                </div>
+                @if ($booking->booking_type === 'custom')
+                    <div class="grid gap-1">
+                        <dt class="text-xs font-semibold admin-muted">{{ __('messages.admin_bookings.quote_total') }}</dt>
+                        <dd class="text-sm admin-heading">{{ data_get($booking->quote_snapshot, 'price', $booking->total_amount) }} {{ $booking->currency }}</dd>
+                        <p class="text-xs admin-muted">{{ __('messages.admin_bookings.quote_total_context', ['count' => $booking->traveler_count]) }}</p>
+                    </div>
+                @else
+                    <div class="grid gap-1">
+                        <dt class="text-xs font-semibold admin-muted">{{ __('messages.admin_bookings.unit_price') }}</dt>
+                        <dd class="text-sm admin-heading">{{ $booking->unit_price }} {{ $booking->currency }}</dd>
+                    </div>
+                @endif
                 <div class="grid gap-1">
                     <dt class="text-xs font-semibold admin-muted">{{ __('messages.admin_bookings.travelers') }}</dt>
                     <dd class="text-sm admin-heading">{{ $booking->traveler_count }}</dd>
@@ -145,18 +153,23 @@
             };
         @endphp
         @if ($availableActions !== [])
-            <div class="grid gap-4 lg:grid-cols-2">
-                @foreach ($availableActions as $nextStatus)
-                    <form method="POST" action="{{ route('admin.bookings.status', ['booking' => $booking->id, 'lang' => app()->getLocale()]) }}" class="grid gap-3 border p-4 admin-border" onsubmit="return confirm(@js(__('messages.admin_bookings.confirm_transition', ['status' => __('messages.admin_bookings.statuses.'.$nextStatus)])))">
-                        @csrf
-                        @method('PATCH')
-                        <input type="hidden" name="status" value="{{ $nextStatus }}">
-                        <label for="reason-{{ $nextStatus }}" class="text-sm font-semibold admin-heading">{{ __('messages.admin_bookings.transition_reason', ['status' => __('messages.admin_bookings.statuses.'.$nextStatus)]) }}</label>
-                        <textarea id="reason-{{ $nextStatus }}" name="reason" minlength="10" maxlength="1000" required rows="3" class="admin-input w-full border p-3 text-sm" placeholder="{{ __('messages.admin_bookings.reason_placeholder') }}">{{ old('reason') }}</textarea>
-                        <button type="submit" class="admin-nav-link inline-flex min-h-10 w-fit items-center border px-4 py-2 text-sm font-semibold">{{ __('messages.admin_bookings.statuses.'.$nextStatus) }}</button>
-                    </form>
-                @endforeach
-            </div>
+            <form method="POST" action="{{ route('admin.bookings.status', ['booking' => $booking->id, 'lang' => app()->getLocale()]) }}" class="grid gap-3 border p-4 admin-border" data-confirm-transition="{{ __('messages.admin_bookings.confirm_transition', ['status' => ':status']) }}" onsubmit="return confirm(this.dataset.confirmTransition.replace(':status', this.elements.status.selectedOptions[0].textContent))">
+                @csrf
+                @method('PATCH')
+                <label for="booking-transition-status" class="grid gap-1.5 text-sm font-semibold admin-heading">
+                    {{ __('messages.admin_bookings.operational_action') }}
+                    <select id="booking-transition-status" name="status" required class="admin-input min-h-10 w-full border px-3 text-sm font-normal">
+                        @foreach ($availableActions as $nextStatus)
+                            <option value="{{ $nextStatus }}" @selected(old('status', $availableActions[0]) === $nextStatus)>{{ __('messages.admin_bookings.statuses.'.$nextStatus) }}</option>
+                        @endforeach
+                    </select>
+                </label>
+                <label for="booking-transition-reason" class="grid gap-1.5 text-sm font-semibold admin-heading">
+                    {{ __('messages.admin_bookings.reason_optional') }}
+                    <textarea id="booking-transition-reason" name="reason" maxlength="1000" rows="3" class="admin-input w-full border p-3 text-sm font-normal" placeholder="{{ __('messages.admin_bookings.reason_placeholder') }}">{{ old('reason') }}</textarea>
+                </label>
+                <button type="submit" class="admin-nav-link inline-flex min-h-10 w-fit items-center border px-4 py-2 text-sm font-semibold">{{ __('messages.admin_bookings.apply_action') }}</button>
+            </form>
         @else
             <p class="text-sm admin-muted">{{ __('messages.admin_bookings.no_actions') }}</p>
         @endif

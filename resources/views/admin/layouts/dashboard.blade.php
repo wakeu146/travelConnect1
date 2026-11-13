@@ -114,7 +114,7 @@
                                 </span>
                             @endif
                         </button>
-                        <section id="admin-notifications" class="admin-popover absolute right-0 top-full z-50 mt-2 hidden w-[min(22rem,calc(100vw-1.5rem))] rounded-xl border p-3 shadow-xl sm:p-4" aria-label="{{ __('messages.admin_nav.notifications') }}" data-admin-popover>
+                        <section id="admin-notifications" class="admin-popover absolute right-0 top-full z-50 mt-2 hidden w-[min(22rem,calc(100vw-1.5rem))] border p-3 shadow-xl sm:p-4" aria-label="{{ __('messages.admin_nav.notifications') }}" data-admin-popover>
                             <div class="flex items-center justify-between gap-3 border-b pb-3 admin-border">
                                 <div class="grid gap-1">
                                     <h2 class="text-sm font-bold admin-heading">{{ __('messages.admin_nav.notifications') }}</h2>
@@ -133,14 +133,25 @@
                                     $notificationData = $notification->data;
                                     $isSecurityNotification = isset($notificationData['kind']);
                                     $isAgencyDocumentNotification = $notification->type === \App\Notifications\AdminAgencyDocumentReceived::class;
+                                    $isAgencyRegistrationNotification = $notification->type === \App\Notifications\AdminAgencyRegistered::class;
+                                    $isCustomRequestNotification = $notification->type === \App\Notifications\AdminCustomRequestReceived::class;
+                                    $notificationTitle = match (true) {
+                                        $isSecurityNotification => __('messages.admin_nav.security_notification_title'),
+                                        $isAgencyDocumentNotification => __('messages.admin_nav.agency_document_notification_title'),
+                                        $isAgencyRegistrationNotification => __('messages.admin_nav.agency_registration_notification_title'),
+                                        $isCustomRequestNotification => __('messages.admin_nav.custom_request_notification_title'),
+                                        default => __('messages.admin_nav.traveler_issue_notification_title', [
+                                            'type' => __('messages.admin_alerts.categories.'.($notificationData['issue_type'] ?? 'complaint')),
+                                        ]),
+                                    };
                                 @endphp
-                                <a href="{{ route('admin.notifications.open', ['notification' => $notification->id, 'lang' => app()->getLocale()]) }}" data-admin-notification-type="{{ $isSecurityNotification ? 'security' : ($isAgencyDocumentNotification ? 'agency_document' : 'traveler_issue') }}" class="admin-notification-item flex items-start gap-3 border-b px-2 py-3 last:border-b-0 admin-border {{ is_null($notification->read_at) ? 'is-unread' : '' }} {{ $isSecurityNotification ? 'is-security-alert' : '' }}">
-                                    <span class="admin-notification-icon mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg">
-                                        <x-admin.icon :name="$isSecurityNotification ? 'alert_triangle' : ($isAgencyDocumentNotification ? 'file' : 'flag')" class="h-4 w-4" />
+                                <a href="{{ route('admin.notifications.open', ['notification' => $notification->id, 'lang' => app()->getLocale()]) }}" data-admin-notification-type="{{ $isSecurityNotification ? 'security' : ($isAgencyDocumentNotification ? 'agency_document' : ($isAgencyRegistrationNotification ? 'agency_registration' : ($isCustomRequestNotification ? 'custom_request' : 'traveler_issue'))) }}" class="admin-notification-item flex items-start gap-3 border-b px-2 py-3 last:border-b-0 admin-border {{ is_null($notification->read_at) ? 'is-unread' : '' }} {{ $isSecurityNotification ? 'is-security-alert' : '' }}">
+                                    <span class="admin-notification-icon mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center">
+                                        <x-admin.icon :name="$isSecurityNotification ? 'alert_triangle' : ($isAgencyDocumentNotification ? 'file' : ($isAgencyRegistrationNotification ? 'building' : ($isCustomRequestNotification ? 'clipboard' : 'flag')))" class="h-4 w-4" />
                                     </span>
                                     <span class="grid min-w-0 flex-1 gap-1">
                                         <span class="flex items-center justify-between gap-2">
-                                            <span class="text-xs font-bold admin-heading">{{ $isSecurityNotification ? __('messages.admin_nav.security_notification_title') : ($isAgencyDocumentNotification ? __('messages.admin_nav.agency_document_notification_title') : __('messages.admin_nav.traveler_issue_notification_title', ['type' => __('messages.admin_alerts.categories.'.($notificationData['issue_type'] ?? 'complaint'))])) }}</span>
+                                            <span class="text-xs font-bold admin-heading">{{ $notificationTitle }}</span>
                                             @if ($isSecurityNotification)
                                                 <span class="admin-security-alert-label shrink-0 rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide">{{ __('messages.admin_nav.urgent') }}</span>
                                             @endif
@@ -152,10 +163,14 @@
                                             <span class="break-words text-xs font-semibold leading-5 admin-security-alert-text">{{ __('messages.admin_nav.security_notification_messages.'.($notificationData['kind'] ?? 'unknown_device_password')) }}</span>
                                         @elseif ($isAgencyDocumentNotification)
                                             <span class="break-words text-xs leading-5 admin-muted">{{ __('messages.admin_nav.agency_document_notification_body', ['agency' => $notificationData['agency_name'] ?? '', 'type' => __('messages.admin_nav.agency_document_types.'.($notificationData['document_type'] ?? 'other'))]) }}</span>
+                                        @elseif ($isAgencyRegistrationNotification)
+                                            <span class="break-words text-xs leading-5 admin-muted">{{ __('messages.admin_nav.agency_registration_notification_body', ['agency' => $notificationData['agency_name'] ?? '']) }}</span>
+                                        @elseif ($isCustomRequestNotification)
+                                            <span class="break-words text-xs leading-5 admin-muted">{{ __('messages.admin_nav.custom_request_notification_body', ['reference' => $notificationData['reference'] ?? '']) }}</span>
                                         @else
                                             <span class="break-words text-xs leading-5 admin-muted">{{ $notificationData['subject'] ?? '' }}</span>
                                         @endif
-                                        <span class="text-[10px] admin-muted">{{ $notification->created_at->locale(app()->getLocale())->diffForHumans() }} · {{ $isAgencyDocumentNotification ? __('messages.admin_nav.view_agency_profile') : __('messages.admin_nav.view_alert') }}</span>
+                                        <span class="text-[10px] admin-muted">{{ $notification->created_at->locale(app()->getLocale())->diffForHumans() }} · {{ $isAgencyDocumentNotification || $isAgencyRegistrationNotification ? __('messages.admin_nav.view_agency_profile') : ($isCustomRequestNotification ? __('messages.admin_nav.view_custom_request') : __('messages.admin_nav.view_alert')) }}</span>
                                     </span>
                                 </a>
                             @empty
@@ -243,7 +258,12 @@
                                             @php
                                                 $pageRoute = config("admin_dashboard.page_routes.{$childPage}");
                                                 $pageUrl = $pageRoute
-                                                    ? route($pageRoute, ['lang' => app()->getLocale()])
+                                                    ? route($pageRoute, [
+                                                        'lang' => app()->getLocale(),
+                                                        ... (in_array($childPage, ['all_requests', 'new_requests', 'in_progress_requests', 'quoted_requests', 'accepted_converted_requests', 'closed_requests'], true)
+                                                            ? ['queue' => $childPage]
+                                                            : []),
+                                                    ])
                                                     : route('admin.dashboard.page', ['page' => $childPage, 'lang' => app()->getLocale()]);
                                             @endphp
                                             <a href="{{ $pageUrl }}" @if ($activePage === $childPage) aria-current="page" @endif class="admin-nav-link admin-child-link flex min-h-9 items-center rounded-md px-3 py-2 text-[13px] {{ $activePage === $childPage ? 'is-active' : '' }}">
@@ -295,7 +315,7 @@
 
         <div class="hidden" aria-hidden="true" data-admin-search-index>
             @foreach ($navigationSearchItems as $searchItem)
-                <a href="{{ $searchItem['url'] }}">{{ $searchItem['label'] }}</a>
+                <a href="{{ $searchItem['url'] }}" data-admin-search-context="{{ $searchItem['context'] }}">{{ $searchItem['label'] }}</a>
             @endforeach
         </div>
     </div>

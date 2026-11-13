@@ -7,14 +7,12 @@ use App\Enums\UserRole;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Collection;
 
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
@@ -35,8 +33,9 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'role' => UserRole::class,
-            'selected_agency_id' => 'integer',
             'admin_session_version' => 'integer',
+            'is_online' => 'boolean',
+            'last_active_at' => 'datetime',
         ];
     }
 
@@ -68,11 +67,6 @@ class User extends Authenticatable
     public function agency(): HasOne
     {
         return $this->hasOne(Agency::class);
-    }
-
-    public function selectedAgency(): BelongsTo
-    {
-        return $this->belongsTo(Agency::class, 'selected_agency_id');
     }
 
     public function bookings(): HasMany
@@ -120,43 +114,6 @@ class User extends Authenticatable
         return $this->hasMany(Favorite::class);
     }
 
-    public function recentAgencies(): HasMany
-    {
-        return $this->hasMany(RecentAgency::class);
-    }
-
-    public function recordRecentAgencies(Collection $agencies): void
-    {
-        if ($agencies->isEmpty()) {
-            return;
-        }
-
-        $timestamp = now();
-
-        RecentAgency::query()->upsert(
-            $agencies->map(fn (Agency $agency): array => [
-                'user_id' => $this->id,
-                'agency_id' => $agency->id,
-                'last_viewed_at' => $timestamp,
-                'created_at' => $timestamp,
-                'updated_at' => $timestamp,
-            ])->all(),
-            ['user_id', 'agency_id'],
-            ['last_viewed_at', 'updated_at'],
-        );
-
-        $expiredRecordIds = $this->recentAgencies()
-            ->orderByDesc('last_viewed_at')
-            ->orderByDesc('id')
-            ->get(['id'])
-            ->skip(12)
-            ->pluck('id');
-
-        if ($expiredRecordIds->isNotEmpty()) {
-            $this->recentAgencies()->whereIn('id', $expiredRecordIds)->delete();
-        }
-    }
-
     public function favoriteAgencies(): BelongsToMany
     {
         return $this->belongsToMany(Agency::class, 'favorites')->withTimestamps();
@@ -175,5 +132,11 @@ class User extends Authenticatable
     public function isTraveler(): bool
     {
         return $this->role === UserRole::TRAVELER;
+    }
+
+    public function isOnline(): bool
+    {
+        return $this->is_online
+            && $this->last_active_at?->greaterThan(now()->subMinutes(5)) === true;
     }
 }

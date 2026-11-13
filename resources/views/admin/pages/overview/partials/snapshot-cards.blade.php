@@ -1,4 +1,4 @@
-<section class="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4" aria-label="{{ __('messages.admin_overview.snapshot') }}">
+<section class="grid gap-4 sm:grid-cols-2 2xl:grid-cols-5" aria-label="{{ __('messages.admin_overview.snapshot') }}">
     @php
         $snapshotCards = [
             [
@@ -7,6 +7,13 @@
                 'value' => $overview['travelers'],
                 'icon' => 'users',
                 'page' => 'travelers',
+            ],
+            [
+                'key' => 'online-users',
+                'label' => __('messages.admin_overview.online_users'),
+                'value' => $overview['online_users'],
+                'icon' => 'users',
+                'page' => 'all_users',
             ],
             [
                 'key' => 'agencies',

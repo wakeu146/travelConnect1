@@ -62,6 +62,10 @@
             @else
                 @include('admin.pages.travel-management.destinations.index', $travelManagementData)
             @endif
+        @elseif (in_array($activePage, ['financial_overview', 'all_transactions', 'successful_payments', 'pending_failed_payments', 'refunds', 'payment_disputes', 'financial_reports'], true))
+            @include('admin.pages.business-insights.finance.index', ['financeData' => $financeData])
+        @elseif ($analyticsData !== null)
+            @include('admin.pages.business-insights.analytics.index', ['analyticsData' => $analyticsData])
         @elseif ($bookingPageData !== null)
             @include('admin.bookings.'.$bookingPageData['view'], $bookingPageData['data'])
         @elseif ($customRequestData !== null)
@@ -73,7 +77,9 @@
                 @include('admin.pages.trust-safety.trust-scores.attention', $trustScoreData)
             @endif
         @elseif ($reviewReportData !== null)
-            @if ($activePage === 'reviews_ratings' && isset($reviewReportData['reviews']))
+            @if (isset($reviewReportData['detailView']))
+                @include('admin.pages.trust-safety.reviews-reports.'.$reviewReportData['detailView'], $reviewReportData)
+            @elseif ($activePage === 'reviews_ratings' && isset($reviewReportData['reviews']))
                 @include('admin.pages.trust-safety.reviews-reports.reviews', $reviewReportData)
             @elseif ($activePage === 'reported_content' && isset($reviewReportData['reports']))
                 @include('admin.pages.trust-safety.reviews-reports.reports', $reviewReportData)

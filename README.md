@@ -1,51 +1,62 @@
 # TravelConnect
 
-TravelConnect is a Laravel marketplace connecting travelers with verified travel agencies. Travelers can discover agencies, search by destination or specialty, save agencies, view agency travel experiences, and submit moderated ratings and reviews.
+TravelConnect is a Laravel marketplace connecting travelers with travel agencies. Travelers can discover agencies and packages, make bookings, and communicate with agencies. Agency owners manage their business and bookings, while administrators oversee verification, platform operations, and Trust & Safety.
 
-This README is also the continuation handoff for future AI agents. Read the current-state and next-work sections before changing the architecture.
+This README covers the current product workflows and local development. It also serves as a continuation handoff; preserve the existing behavior and tests when making changes.
 
 ## Current features
 
-* Traveler registration, login, logout, and profile photo upload
-* Traveler dashboard with live saved-agency, inquiry, and review data
-* Traveler "My bookings" section with owner-scoped reservations, status/payment summaries, and in-page booking details
-* In-profile booking dialog for published agency packages, with capacity-checked checkout and localized validation/success dialogs
-* Verified agency directory with popular-agency ranking
-* Search by agency name, description, destination, or service with case-insensitive partial matching
-* Default directory shows the three most popular verified agencies
-* Country searches return every matching verified agency
-* Save and unsave agencies with persistent database state
-* Saved Agencies page with real agency images, ratings, and all destinations
-* Agency detail pages with multiple destinations, trust signals, ratings, and reviews
-* Real inquiry submission to agency owners and unread-activity notification counts
-* Traveler reviews require a completed booking and are limited to one review per booking
-* Agency-owned travel experience galleries backed by the database
-* Agency package, departure, booking, customer, review, payment-status, and analytics workspace
-* Traveler-facing agency profiles show only published packages with at least one active departure after today
-* Past departures expire automatically and are hidden from traveler profile and booking flows
-* Agency availability totals separate current reservations from completed travelers
-* Public agency profiles keep agency email and phone private
-* Dashboard brand marks are static and do not navigate when clicked
-* Package destinations are selected from the owning agency's configured countries and validated server-side
-* Owner-scoped icon deletion for saved agencies, packages and package images, eligible verification documents, closed inquiries, notifications, and agency travel experiences
-* Local traveler-experience images stored under `public/images/traveler\_experience`
-* Traveler review submission with 1-5 rating, comment validation, and pending moderation
-* English/French locale switching using the `?lang=en` or `?lang=fr` query parameter
-* Responsive account shell with mobile navigation, notification bell, and persistent light/dark theme
-* Admin dashboard with a real-record platform overview, current status summaries, attention queue, and recent activity
-* Admin Trust & Safety with persisted agency trust scores and their recorded factors, plus attention lists based on verification state, suspensions, flagged or hidden reviews, active reports, and open complaints
-* Admin review, reported-content, and complaint workflows with review moderation and linked report/case actions
-* Admin booking and custom travel-request workspaces with request search/filtering, CSV export, moderation, proposal history, private notes, and linked booking outcomes
-* Admin User directory with role/status filters, category tabs, profile photos, direct account deletion, and audited single/bulk account actions
-* Admin Alerts queue for overdue agency verification, flagged reviews, traveler complaints and booking disputes, failed jobs, suspicious login bursts, and Google/email integration errors
-* Traveler-owned complaint and booking-dispute intake with private case tracking and English/French status labels
-* Admin alert search, category/severity/status filters, pagination, source details, bilingual reason summaries, and audited acknowledge/resolve actions that move traveler cases through review
+### Travelers
+
+* Register or sign in with email/password or Google; manage a profile and profile photo.
+* Discover verified, active agencies and search by agency name, description, destination, or service.
+* Browse agency profiles, destinations, trust information, reviews, and published travel packages.
+* Save agencies, submit inquiries, and manage notifications.
+* Book available package departures with server-side availability and capacity checks, then view booking details and status.
+* Review an agency after a completed booking; reviews enter moderation before public display.
+* Submit complaints or booking disputes and track their status privately.
+
+### Agency owners
+
+* Create an agency account and submit one verification PDF packet containing the required license, identity proof, and business registration. The uploaded file can be replaced during its two-minute edit window; after rejection, one corrected resubmission is allowed, and a second rejection closes further submissions.
+* Manage agency profile information, destinations, verification documents, packages, departures, and travel-experience photos.
+* Handle inquiries, custom travel requests, bookings, and customer reviews from the agency workspace.
+* See booking and payment status. When an agency marks a booking complete, the agency confirms the offline payment; this is not online payment processing.
+* Use owner-scoped actions so agency data and uploaded files cannot be changed by another agency.
+
+### Administrators
+
+* Review and verify agencies, inspect submitted documents, and notify approved agencies by email.
+* Manage the country catalogue sourced from REST Countries. The admin can add or deactivate countries; deactivation preserves agency links. A local country list keeps the interface usable when the API is unavailable.
+* Monitor platform activity, online users, agency owner presence, and last-active times.
+* Manage users and review booking, custom travel request, and agency operations.
+* Work through paginated Trust & Safety tables for reviews, reports, complaints, trust scores, and agencies needing attention. Review and report records open on dedicated detail pages with their history and available actions.
+* Investigate alerts for overdue verification, flagged content, complaints, disputes, failed jobs, suspicious login activity, and integration errors.
+* Use Business & Insights for database-backed App Analysis and Finance pages, with date filtering and CSV/JSON exports where available.
+* Review custom travel requests through separate New, In Progress, Quoted, Accepted/Converted, and Closed queues; request details and moderation history are available in the admin workspace.
+* Receive admin bell notifications for supported security, traveler-issue, agency-document, agency-registration, and newly published custom-request events.
+* Use search, filters, pagination, CSV export, and audit history on supported admin workflows.
+
+### Shared experience
+
+* English and French interface via `?lang=en` and `?lang=fr`.
+* Responsive account dashboards, mobile navigation, notifications, and persistent light/dark theme.
+* Online/offline presence is based on recent authenticated activity; an offline status does not mean an account is disabled.
+
+### Current product boundaries
+
+* Online card payments and provider-based reconciliation/payouts are not configured. Booking completion records an agency's offline-payment confirmation, not a payment-gateway transaction.
+* Finance views use stored booking/payment transaction records. They do not create or imply a charge or refund; refunds are only represented when a corresponding record exists.
+* Settlement/payout records and payment-dispute/chargeback records are not stored. Booking disputes are traveler support cases and are not payment chargebacks.
+* App Analysis does not estimate package views, conversion rates, or other activity the application does not record.
+* Analytics exports are aggregate CSV or JSON files. CSV opens in Excel, but the application does not generate native `.xlsx` workbooks.
+* Country availability depends on an external API when reachable; the application falls back to local country data.
 
 ## Technology
 
 * PHP 8.3+
 * Laravel 13
-* MySQL (configured through `.env`)
+* MySQL or SQLite, configured through `.env`
 * Blade views
 * Tailwind CSS 4
 * Vite
@@ -143,6 +154,35 @@ The data foundation was intentionally preserved for future work:
 * `TravelRequest` model, factory, and migration
 
 Do not delete these preserved models or migrations when rebuilding the agency workspace.
+
+### Business Insights, Finance, and custom-request updates (2026-11-10)
+
+The admin Business & Insights pages and the custom travel-request workflows use stored application data and remain inside the existing responsive admin/account shells.
+
+#### App Analysis
+
+* Date filters are applied consistently to analytics pages and their exports. Charts are built from the corresponding stored user, agency, package publication, booking, cancellation, travel-request, inquiry, agency request-view, verification-event, and trust-score records.
+* Trend-chart Y-axes scale to the data and display five readable tick marks, so larger record counts are not capped at a small fixed range. Hovering, focusing, or touching a chart point shows its date/bucket and each series' value to three decimal places; keyboard users can inspect points with the arrow keys.
+* Agency growth is cumulative across the selected period. Destination rankings include bookings associated with either a package or a custom travel request; package performance remains specific to package bookings.
+* CSV and JSON exports contain date-bucketed aggregate counts, not personal, booking-reference, or payment details. The CSV format is Excel-compatible, but is not a native Excel workbook.
+* Package views and a comparable view-to-booking funnel are not recorded, so view counts and conversion rates are shown as unavailable rather than estimated.
+
+#### Finance
+
+* The finance overview distinguishes booking records from stored payment transactions and uses the selected date range. Only transactions present in the application's records contribute to transaction summaries and trends, with amounts kept separate by currency.
+* A booking status, including Completed, is not itself a gateway-confirmed payment. The agency may record offline payment completion; this does not mean the application processed an online charge.
+* Refunds are shown only when supported by stored refund records. No frontend action by itself indicates a refund was executed.
+* Online payment-provider integration, settlement/payout reporting, and payment-dispute/chargeback reporting are not implemented because the application does not store those provider records. Do not treat traveler booking disputes as payment disputes.
+
+#### Custom travel requests and administrator operations
+
+* Travelers provide their requested destinations, dates, party size, services, budget, purpose, and special requirements. Travelers, addressed agencies, and admins can review the applicable request details in their own role-scoped workspace.
+* Agencies can submit proposals. Selecting a proposal creates one custom booking using the proposal's quoted total for the whole party; the total is not multiplied by the number of travelers. Creating that booking does not record payment.
+* After proposal selection, the traveler remains on the custom-request page and sees the booking details in an automatically opened in-panel dialog. The booking reference, agency, trip details, traveler count, total/currency, payment state, expiry, and notes are shown when available.
+* Admin custom-request queues preserve their selected filter when navigating, filtering, exporting, and opening a request. Queue membership is based on stored request/proposal/recipient data: New requests have not been viewed or quoted; In Progress includes held or viewed-but-unquoted requests; Quoted requests have a submitted proposal; Accepted/Converted requests are converted; Closed includes closed, rejected, withdrawn, and expired requests.
+* The admin bell supports the stored security, traveler issue, agency document, agency registration, and custom-request publication notifications. Notification destinations are role-protected; sensitive gateway details and private request content are not included in notification summaries.
+* Moderation forms use an action selector and one optional reason field where supported. Authorization and valid state transitions remain enforced even when no reason is entered.
+* Admin, agency, and traveler custom-request screens are responsive, localized in English and French, and follow the project's square-corner style for bordered controls and panels.
 
 ## Requirements
 
@@ -335,13 +375,15 @@ This seeder replaces only the experience rows for each agency. It does not remov
 
 Factory-created user passwords default to `password` for local testing. Never use seeded credentials in production.
 
-## Remaining work before final polish
+## Recommended next improvements
 
-1. Add pagination to the activity notification feed, which currently shows the latest 20 notifications, and ensure review moderation/admin events produce notifications.
-2. Continue simplifying labels, help text, and empty states for users with limited computer experience.
-3. Select a payment provider and define reconciliation/payout rules before adding payout functionality; current booking payments are status tracking only.
-4. Add browser-level coverage for locale switching, profile-media replacement, booking dialogs, delete actions, and mobile navigation if a browser test tool is introduced.
-5. Keep booking transitions, cancellation, payment filters, and currency totals covered by focused feature tests.
+These are suggested follow-ups, not features currently available:
+
+1. **Define booking policies:** decide cancellation deadlines, refunds, and dispute outcomes before connecting online payments. Then choose a provider and document reconciliation and payout rules.
+2. **Prepare production operations:** confirm reliable email delivery, private document storage and backups, scheduled-task execution, and alert handling in the deployment environment.
+3. **Make key journeys easy to learn:** add short in-app guidance for agency verification and resubmission, traveler booking and complaints, and admin review/report handling.
+4. **Expand end-to-end coverage:** automate the traveler booking journey, agency verification and rejection/resubmission, offline completion, and admin review/report actions across both supported languages.
+5. **Polish notifications:** paginate the activity feed and ensure important review moderation and case-status changes notify the affected users.
 
 ## Continuing-project rules
 

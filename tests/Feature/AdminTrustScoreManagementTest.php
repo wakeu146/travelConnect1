@@ -58,6 +58,7 @@ class AdminTrustScoreManagementTest extends TestCase
 
         $this->get(route('admin.dashboard.page', ['page' => 'trust_score_overview', 'lang' => 'en']))
             ->assertSee('data-admin-trust-score-overview', false)
+            ->assertSee('<table', false)
             ->assertSee('data-trust-score-agency="'.$agency->id.'"', false)
             ->assertSee($agency->company_name)
             ->assertSee('4.50 / 5')
@@ -164,6 +165,7 @@ class AdminTrustScoreManagementTest extends TestCase
 
         $this->get(route('admin.dashboard.page', ['page' => 'agencies_requiring_attention', 'lang' => 'en']))
             ->assertSee('data-admin-agencies-requiring-attention', false)
+            ->assertSee('<table', false)
             ->assertSee(__('messages.trust_scores.verification_attention', [
                 'status' => __('messages.admin_agencies.verification_statuses.pending', [], 'en'),
             ], 'en'))
@@ -182,10 +184,27 @@ class AdminTrustScoreManagementTest extends TestCase
             ->assertSee($bookingsUrl);
 
         $this->get($reviewsUrl)
+            ->assertSee('<table', false)
+            ->assertSee($agency->company_name);
+
+        $this->get(route('admin.reviews.show', [
+            'review' => $review->id,
+            'lang' => 'en',
+            'search' => $agency->company_name,
+        ]))
+            ->assertSee('data-admin-review-detail', false)
             ->assertSee($review->comment);
 
         $this->get($reportsUrl)
             ->assertSee('data-admin-reported-content', false)
+            ->assertSee($agency->company_name);
+
+        $this->get(route('admin.reports.show', [
+            'report' => $report->id,
+            'lang' => 'en',
+            'search' => $agency->company_name,
+        ]))
+            ->assertSee('data-admin-report-detail', false)
             ->assertSee($report->reason)
             ->assertSee($agency->company_name);
 

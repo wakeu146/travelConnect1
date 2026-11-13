@@ -25,6 +25,7 @@ class AdminOverviewData
     /**
      * @return array{
      *     travelers: int,
+     *     online_users: int,
      *     agencies: int,
      *     agency_statuses: array<string, int>,
      *     pending_verifications: int,
@@ -70,6 +71,10 @@ class AdminOverviewData
 
         return [
             'travelers' => User::query()->where('role', UserRole::TRAVELER->value)->count(),
+            'online_users' => User::query()
+                ->where('is_online', true)
+                ->where('last_active_at', '>', now()->subMinutes(5))
+                ->count(),
             'agencies' => (int) $agencyCounts->sum(),
             'agency_statuses' => $agencyStatuses,
             'pending_verifications' => $agencyStatuses[VerificationStatus::PENDING->value],

@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Enums\DocumentStatus;
 use App\Enums\ReviewStatus;
 use App\Enums\VerificationStatus;
 use Illuminate\Database\Eloquent\Builder;
@@ -180,8 +179,7 @@ class Agency extends Model
     {
         return $query
             ->where('verification_status', VerificationStatus::VERIFIED)
-            ->where('operating_status', 'active')
-            ->whereHas('documents', fn ($documentQuery) => $documentQuery->where('status', DocumentStatus::APPROVED));
+            ->where('operating_status', 'active');
     }
     // Example: Agency::with(['countries', 'services'])->withAvg(['reviews' => fn ($q) => $q->where('status', 'published')], 'rating')->get();
 }

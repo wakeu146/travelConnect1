@@ -36,6 +36,13 @@
                     <span class="admin-badge inline-flex border px-2 py-1 text-xs font-bold {{ $userDetails->deleted_at ? 'border-rose-500/40 bg-rose-500/10 text-rose-800 dark:text-rose-200' : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200' }}">
                         {{ $userDetails->deleted_at ? __('messages.admin_users.statuses.deactivated') : __('messages.admin_users.statuses.active') }}
                     </span>
+                    @php
+                        $isUserOnline = ! $userDetails->deleted_at && $userDetails->isOnline();
+                    @endphp
+                    <span class="inline-flex items-center gap-2 text-xs admin-muted" data-user-presence="{{ $isUserOnline ? 'online' : 'offline' }}">
+                        <span class="h-2 w-2 rounded-full {{ $isUserOnline ? 'bg-emerald-500' : 'bg-slate-400' }}" aria-hidden="true"></span>
+                        <span>{{ $isUserOnline ? __('messages.admin_users.online_now') : __('messages.admin_users.offline') }}</span>
+                    </span>
                     <span class="admin-badge inline-flex border px-2 py-1 text-xs font-bold {{ $userDetails->email_verified_at ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200' : 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200' }}">
                         {{ $userDetails->email_verified_at ? __('messages.admin_users.email_verified') : __('messages.admin_users.email_unverified') }}
                     </span>
@@ -53,6 +60,15 @@
                 @endif
                 @if ($userDetails->deleted_at)
                     <span class="admin-muted">{{ __('messages.admin_users.deactivated_at') }}: {{ $userDetails->deleted_at->locale(app()->getLocale())->isoFormat('LL') }}</span>
+                @endif
+                @if (! $isUserOnline)
+                    <span class="admin-muted">
+                        @if ($userDetails->last_active_at)
+                            {{ __('messages.admin_users.last_active', ['time' => $userDetails->last_active_at->locale(app()->getLocale())->diffForHumans()]) }}
+                        @else
+                            {{ __('messages.admin_users.never_active') }}
+                        @endif
+                    </span>
                 @endif
             </div>
         </header>
