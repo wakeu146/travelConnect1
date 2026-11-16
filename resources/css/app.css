@@ -986,6 +986,12 @@ input:not([type='checkbox']):not([type='radio']) {
     background: #173042;
 }
 
+.dashboard-dark [data-discover-page] article:hover {
+    border-color: #486873;
+    background: #1d3a4a;
+    box-shadow: 0 16px 40px rgb(0 0 0 / 24%);
+}
+
 .dashboard-dark [data-verified-badge] {
     background: #f5f7f5;
     color: #173042;
@@ -1274,13 +1280,13 @@ input:not([type='checkbox']):not([type='radio']) {
 }
 
 .dashboard-dark [data-discover-page] [data-favorite-toggle] {
-    background-color: rgb(245 247 245 / 96%);
-    color: #173042;
+    background-color: rgb(23 48 66 / 92%);
+    color: #edf3f5;
 }
 
 .dashboard-dark [data-discover-page] [data-favorite-toggle]:hover {
-    background-color: #ffffff;
-    color: #c9573e;
+    background-color: #234552;
+    color: #f29a83;
 }
 
 .dashboard-dark [data-agency-show] [data-favorite-toggle] {

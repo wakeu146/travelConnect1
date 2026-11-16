@@ -17,6 +17,7 @@
     <script>
         const accountShell = document.querySelector('[data-account-shell]');
         const accountAgencySearch = document.querySelector('[data-account-main] header form[action*="/account/discover"]');
+        const discoverSearchPage = document.querySelector('[data-discover-page]');
         if (accountAgencySearch) {
             accountAgencySearch.dataset.agencySearch = 'true';
             accountAgencySearch.dataset.searchUrl = @json(route('discover.search', ['lang' => app()->getLocale()]));
@@ -24,13 +25,23 @@
             accountAgencySearch.dataset.searchEmpty = @json(__('messages.agency_search_empty'));
             accountAgencySearch.dataset.searchError = @json(__('messages.agency_search_error'));
             accountAgencySearch.dataset.savedLabel = @json(__('messages.agency_saved'));
+            accountAgencySearch.dataset.searchResults = @json(__('messages.agency_search_results'));
+            accountAgencySearch.dataset.searchNoResults = @json(__('messages.agency_search_no_results'));
+            accountAgencySearch.dataset.searchClear = @json(__('messages.agency_search_clear'));
+            accountAgencySearch.dataset.recentRemove = @json(__('messages.agency_recent_remove'));
             const accountAgencySearchInput = accountAgencySearch.querySelector('input[name="search"]');
             accountAgencySearchInput.value = new URLSearchParams(window.location.search).get('search') ?? '';
             accountAgencySearchInput.setAttribute('aria-label', @json(__('messages.search_agencies_or_destinations')));
-            accountAgencySearchInput?.setAttribute('aria-controls', 'account-agency-search-results');
-            accountAgencySearchInput?.setAttribute('aria-expanded', 'false');
-            accountAgencySearchInput?.setAttribute('aria-autocomplete', 'list');
             accountAgencySearchInput?.setAttribute('autocomplete', 'off');
+            if (discoverSearchPage) {
+                accountAgencySearchInput?.removeAttribute('aria-controls');
+                accountAgencySearchInput?.removeAttribute('aria-expanded');
+                accountAgencySearchInput?.removeAttribute('aria-autocomplete');
+            } else {
+                accountAgencySearchInput?.setAttribute('aria-controls', 'account-agency-search-results');
+                accountAgencySearchInput?.setAttribute('aria-expanded', 'false');
+                accountAgencySearchInput?.setAttribute('aria-autocomplete', 'list');
+            }
         }
         const accountProfileLink = Array.from(document.querySelectorAll('[data-account-main] header a[aria-label]'))
             .find((link) => link.getAttribute('aria-label') === @json(__('messages.settings')));

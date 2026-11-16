@@ -256,14 +256,41 @@ class TravelerDashboardTest extends TestCase
             ->assertJsonMissing(['name' => 'Japan Pending Agency']);
     }
 
-    public function test_agency_suggestions_require_at_least_two_search_characters(): void
+    public function test_agency_search_rejects_an_empty_query(): void
     {
         $traveler = User::factory()->create(['role' => 'traveler']);
 
         $this->actingAs($traveler)
-            ->getJson(route('discover.search', ['lang' => 'en', 'search' => 'J']))
+            ->getJson(route('discover.search', ['lang' => 'en', 'search' => '']))
             ->assertUnprocessable()
             ->assertJsonValidationErrors('search');
+    }
+
+    public function test_agency_search_returns_all_case_insensitive_partial_name_matches(): void
+    {
+        $traveler = User::factory()->create(['role' => 'traveler']);
+
+        foreach (range(1, 7) as $number) {
+            $this->createVerifiedAgency(sprintf('Cascadia Travel %02d', $number), 50);
+        }
+
+        $destinationOnlyMatch = $this->createVerifiedAgency('Alpine Routes', 40);
+        $destinationOnlyMatch->countries()->attach(Country::factory()->create(['name' => 'Canada']));
+
+        $response = $this->actingAs($traveler)->getJson(route('discover.search', [
+            'lang' => 'en',
+            'search' => 'c',
+        ]));
+
+        $response->assertOk()
+            ->assertJsonCount(7, 'data')
+            ->assertJsonPath('count', 7)
+            ->assertJsonPath('data.0.name', 'Cascadia Travel 01')
+            ->assertJsonPath('data.0.category', null)
+            ->assertJsonMissing(['name' => 'Alpine Routes']);
+
+        $this->assertSame(7, substr_count($response->json('cards_html'), 'data-favorite-toggle'));
+        $this->assertStringContainsString('data-verified-badge', $response->json('cards_html'));
     }
 
     public function test_all_agencies_page_paginates_and_preserves_search_filters(): void

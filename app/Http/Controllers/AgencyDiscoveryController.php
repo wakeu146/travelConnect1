@@ -31,14 +31,15 @@ class AgencyDiscoveryController extends Controller
             ->paginate(12)
             ->withQueryString();
 
-        $savedAgencyNames = $user->favoriteAgencies()
+        $savedAgencyIds = $user->favoriteAgencies()
             ->whereIn('agencies.id', $agencies->getCollection()->modelKeys())
-            ->pluck('company_name')
+            ->pluck('agencies.id')
+            ->map(fn ($id): int => (int) $id)
             ->all();
 
         return view('discover', [
             'agencies' => $agencies,
-            'savedAgencyNames' => $savedAgencyNames,
+            'savedAgencyIds' => $savedAgencyIds,
         ]);
     }
 
@@ -46,15 +47,14 @@ class AgencyDiscoveryController extends Controller
     {
         $request->merge(['search' => trim($request->string('search')->toString())]);
         $validated = $request->validate([
-            'search' => ['required', 'string', 'min:2', 'max:100'],
+            'search' => ['required', 'string', 'min:1', 'max:100'],
         ]);
         $search = $validated['search'];
 
-        $agencies = $this->applySearch($this->agencyQuery(), $search)
+        $agencies = $this->applyNameSearch($this->agencyQuery(), $search)
             ->orderByDesc('trust_score')
             ->orderBy('company_name')
             ->orderBy('id')
-            ->limit(6)
             ->get();
         $savedAgencyIds = $request->user()
             ->favoriteAgencies()
@@ -64,11 +64,17 @@ class AgencyDiscoveryController extends Controller
             ->all();
 
         return response()->json([
+            'count' => $agencies->count(),
+            'cards_html' => view('discover.partials.agency-cards', [
+                'agencies' => $agencies,
+                'savedAgencyIds' => $savedAgencyIds,
+            ])->render(),
             'data' => $agencies->map(fn (Agency $agency): array => [
                 'name' => $agency->company_name,
                 'location' => $agency->address,
                 'destinations' => $agency->countries->take(2)->pluck('name')->all(),
                 'service' => $agency->services->first()?->name,
+                'category' => $agency->services->first()?->name,
                 'rating' => $agency->published_reviews_count > 0
                     ? number_format((float) $agency->published_rating, 1)
                     : null,
@@ -81,6 +87,11 @@ class AgencyDiscoveryController extends Controller
                 ]),
             ])->all(),
         ]);
+    }
+
+    private function applyNameSearch(Builder $query, string $search): Builder
+    {
+        return $query->whereRaw('LOWER(company_name) LIKE ?', ['%'.mb_strtolower($search).'%']);
     }
 
     private function agencyQuery(): Builder

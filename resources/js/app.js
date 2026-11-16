@@ -252,38 +252,39 @@ document.querySelectorAll('[data-password-toggle]').forEach((toggle) => {
 	});
 });
 
-document.querySelectorAll('[data-favorite-toggle]').forEach((toggle) => {
-	toggle.addEventListener('click', async (event) => {
-		event.preventDefault();
-		if (toggle.dataset.authenticated !== 'true') {
-			window.location.href = toggle.dataset.loginUrl;
+document.addEventListener('click', async (event) => {
+	const toggle = event.target instanceof Element ? event.target.closest('[data-favorite-toggle]') : null;
+	if (!toggle) return;
+
+	event.preventDefault();
+	if (toggle.dataset.authenticated !== 'true') {
+		window.location.href = toggle.dataset.loginUrl;
+		return;
+	}
+	if (toggle.disabled) return;
+	toggle.disabled = true;
+	try {
+		const response = await fetch('/agencies/' + toggle.dataset.agencySlug + '/favorite', {
+			method: 'POST',
+			headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '', Accept: 'application/json' },
+		});
+		if (!response.ok) throw new Error('Favorite request failed');
+		const { saved } = await response.json();
+		toggle.setAttribute('aria-pressed', String(saved));
+		if (toggle.dataset.removeSavedAgency === 'true' && !saved) {
+			window.location.reload();
 			return;
 		}
-		if (toggle.disabled) return;
-		toggle.disabled = true;
-		try {
-			const response = await fetch('/agencies/' + toggle.dataset.agencySlug + '/favorite', {
-				method: 'POST',
-				headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '', Accept: 'application/json' },
-			});
-			if (!response.ok) throw new Error('Favorite request failed');
-			const { saved } = await response.json();
-			toggle.setAttribute('aria-pressed', String(saved));
-			if (toggle.dataset.removeSavedAgency === 'true' && !saved) {
-				window.location.reload();
-				return;
-			}
-			toggle.classList.toggle('text-[#e76f51]', saved);
-			const icon = toggle.querySelector('[data-favorite-icon]') || toggle;
-			const label = toggle.querySelector('[data-favorite-label]');
-			if (icon) icon.textContent = saved ? '?' : '?';
-			if (label) label.textContent = saved ? 'Agency saved' : 'Save agency';
-		} catch (error) {
-			console.error(error);
-		} finally {
-			toggle.disabled = false;
-		}
-	});
+		toggle.classList.toggle('text-[#e76f51]', saved);
+		const icon = toggle.querySelector('[data-favorite-icon]') || toggle;
+		const label = toggle.querySelector('[data-favorite-label]');
+		if (icon) icon.textContent = saved ? '♥' : '♡';
+		if (label) label.textContent = saved ? 'Agency saved' : 'Save agency';
+	} catch (error) {
+		console.error(error);
+	} finally {
+		toggle.disabled = false;
+	}
 });
 
 document.querySelectorAll('[data-rating]').forEach((ratingButton) => {
@@ -338,6 +339,323 @@ document.querySelectorAll('[data-destination-carousel]').forEach((carousel) => {
 document.querySelectorAll('[data-agency-search]').forEach((form) => {
 	const input = form.querySelector('input[name="search"]');
 	if (!input) return;
+
+	const discoverPage = document.querySelector('[data-discover-page]');
+	if (discoverPage) {
+		const grid = discoverPage.querySelector('[data-discover-grid]');
+		const heading = discoverPage.querySelector('[data-discover-heading]');
+		const pagination = discoverPage.querySelector('[data-discover-pagination]');
+		const mobileView = discoverPage.querySelector('[data-discover-mobile-search]');
+		const mobileInput = mobileView?.querySelector('[data-mobile-search-input]');
+		const recentSection = mobileView?.querySelector('[data-mobile-recent-searches]');
+		const recentList = mobileView?.querySelector('[data-mobile-recent-list]');
+		const recentEmpty = mobileView?.querySelector('[data-mobile-recent-empty]');
+		const clearRecentButton = mobileView?.querySelector('[data-mobile-search-clear-all]');
+		const mobileResults = mobileView?.querySelector('[data-mobile-search-results]');
+		if (!grid || !heading || !mobileView || !mobileInput || !recentSection || !recentList || !mobileResults) return;
+
+		const originalGrid = grid.innerHTML;
+		const originalHeading = heading.textContent;
+		const originalPaginationHidden = pagination?.hidden ?? false;
+		const recentStorageKey = 'travelconnect:recent-agency-searches';
+		const mobileBreakpoint = window.matchMedia('(max-width: 768px)');
+		let debounceTimer = null;
+		let activeRequest = null;
+		let searchRevision = 0;
+		let previousBodyOverflow = '';
+
+		const readRecentSearches = () => {
+			try {
+				const recentSearches = JSON.parse(window.localStorage.getItem(recentStorageKey) || '[]');
+				return Array.isArray(recentSearches)
+					? recentSearches.filter((search) => typeof search === 'string' && search.trim() !== '').slice(0, 8)
+					: [];
+			} catch (error) {
+				console.error('Recent agency searches could not be read.', error);
+				return [];
+			}
+		};
+
+		const writeRecentSearches = (recentSearches) => {
+			try {
+				window.localStorage.setItem(recentStorageKey, JSON.stringify(recentSearches));
+			} catch (error) {
+				console.error('Recent agency searches could not be saved.', error);
+			}
+		};
+
+		const renderRecentSearches = () => {
+			const recentSearches = readRecentSearches();
+			recentList.replaceChildren();
+			recentSearches.forEach((search) => {
+				const item = document.createElement('li');
+				item.className = 'flex items-center gap-2';
+
+				const searchButton = document.createElement('button');
+				searchButton.type = 'button';
+				searchButton.className = 'min-w-0 flex-1 truncate py-3 text-left text-sm text-[#173042] dark:text-white';
+				searchButton.textContent = search;
+				searchButton.addEventListener('click', () => {
+					mobileInput.value = search;
+					input.value = search;
+					scheduleSearch(mobileInput);
+				});
+
+				const removeButton = document.createElement('button');
+				removeButton.type = 'button';
+				removeButton.className = 'flex h-9 w-9 shrink-0 items-center justify-center text-lg text-[#607985] dark:text-white/70';
+				removeButton.setAttribute('aria-label', form.dataset.recentRemove.replace(':query', search));
+				removeButton.textContent = '×';
+				removeButton.addEventListener('click', () => {
+					writeRecentSearches(readRecentSearches().filter((item) => item !== search));
+					renderRecentSearches();
+				});
+
+				item.append(searchButton, removeButton);
+				recentList.append(item);
+			});
+
+			recentEmpty?.classList.toggle('hidden', recentSearches.length > 0);
+			if (clearRecentButton) clearRecentButton.hidden = recentSearches.length === 0;
+		};
+
+		const saveRecentSearch = (search) => {
+			const recentSearches = readRecentSearches().filter((item) => item.toLocaleLowerCase() !== search.toLocaleLowerCase());
+			writeRecentSearches([search, ...recentSearches].slice(0, 8));
+		};
+
+		const setMobileMessage = (message, isError = false) => {
+			const status = document.createElement('p');
+			status.className = 'py-4 text-sm ' + (isError ? 'text-[#b42318]' : 'text-[#607985] dark:text-white/70');
+			status.setAttribute('role', isError ? 'alert' : 'status');
+			status.textContent = message;
+			mobileResults.replaceChildren(status);
+			mobileResults.classList.remove('hidden');
+		};
+
+		const renderMobileMatches = (agencies, query) => {
+			mobileResults.replaceChildren();
+			if (agencies.length === 0) {
+				setMobileMessage(form.dataset.searchNoResults.replace(':query', query));
+				return;
+			}
+
+			const list = document.createElement('ul');
+			list.className = 'grid';
+			agencies.forEach((agency) => {
+				const item = document.createElement('li');
+				const link = document.createElement('a');
+				link.href = agency.url;
+				link.dataset.agencySearchResult = '';
+				link.className = 'flex items-center gap-3 border-b border-[#e4e9e7] py-3 dark:border-white/15';
+
+				const logo = document.createElement('span');
+				logo.className = 'flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden bg-[#f1f6f4] text-sm font-bold text-[#173042] dark:bg-white/10 dark:text-white';
+				if (agency.image_url) {
+					const image = document.createElement('img');
+					image.src = agency.image_url;
+					image.alt = '';
+					image.loading = 'lazy';
+					image.className = 'h-full w-full object-cover';
+					image.addEventListener('error', () => {
+						image.replaceWith(document.createTextNode(agency.name.trim().slice(0, 2).toUpperCase()));
+					}, { once: true });
+					logo.append(image);
+				} else {
+					logo.textContent = agency.name.trim().slice(0, 2).toUpperCase();
+				}
+
+				const details = document.createElement('span');
+				details.className = 'grid min-w-0 flex-1 gap-1';
+				const name = document.createElement('span');
+				name.className = 'truncate text-sm font-semibold text-[#173042] dark:text-white';
+				name.textContent = agency.name;
+				details.append(name);
+
+				const metadata = [agency.location, agency.category || agency.service].filter(Boolean).join(' · ');
+				if (metadata) {
+					const description = document.createElement('span');
+					description.className = 'truncate text-xs text-[#607985] dark:text-white/70';
+					description.textContent = metadata;
+					details.append(description);
+				}
+
+				link.append(logo, details);
+				item.append(link);
+				list.append(item);
+			});
+
+			mobileResults.append(list);
+			mobileResults.classList.remove('hidden');
+		};
+
+		const renderDesktopEmptyState = (query) => {
+			const emptyState = document.createElement('div');
+			emptyState.className = 'col-span-full border border-dashed border-[#cbd9d8] p-12 text-center dark:border-white/20';
+
+			const message = document.createElement('p');
+			message.className = 'font-semibold text-[#173042] dark:text-white';
+			message.textContent = form.dataset.searchNoResults.replace(':query', query);
+
+			const clearButton = document.createElement('button');
+			clearButton.type = 'button';
+			clearButton.className = 'mt-4 text-sm font-bold text-[#e76f51]';
+			clearButton.textContent = form.dataset.searchClear;
+			clearButton.addEventListener('click', clearSearch);
+
+			emptyState.append(message, clearButton);
+			grid.replaceChildren(emptyState);
+		};
+
+		const renderSearchResults = (payload, query) => {
+			if (!Array.isArray(payload.data) || typeof payload.count !== 'number' || typeof payload.cards_html !== 'string') {
+				throw new Error('Agency search response was invalid.');
+			}
+
+			grid.innerHTML = payload.cards_html;
+			heading.textContent = form.dataset.searchResults.replace(/:query|:count/g, (token) => (
+				token === ':query' ? query : String(payload.count)
+			));
+			if (pagination) pagination.hidden = true;
+			if (payload.count === 0) renderDesktopEmptyState(query);
+			renderMobileMatches(payload.data, query);
+		};
+
+		const restoreOriginalResults = () => {
+			grid.innerHTML = originalGrid;
+			heading.textContent = originalHeading;
+			if (pagination) pagination.hidden = originalPaginationHidden;
+			mobileResults.replaceChildren();
+			mobileResults.classList.add('hidden');
+		};
+
+		async function searchAgencies(query, revision) {
+			activeRequest?.abort();
+			const request = new AbortController();
+			activeRequest = request;
+			const url = new URL(form.dataset.searchUrl, window.location.origin);
+			url.searchParams.set('search', query);
+			mobileResults.replaceChildren();
+			setMobileMessage(form.dataset.searchLoading);
+
+			try {
+				const response = await fetch(url, {
+					headers: { Accept: 'application/json' },
+					signal: request.signal,
+				});
+				if (!response.ok) throw new Error('Agency search request failed.');
+
+				const payload = await response.json();
+				if (revision !== searchRevision) return;
+				renderSearchResults(payload, query);
+			} catch (error) {
+				if (error.name === 'AbortError' || revision !== searchRevision) return;
+				console.error(error);
+				grid.replaceChildren();
+				const errorMessage = document.createElement('p');
+				errorMessage.className = 'col-span-full py-4 text-sm text-[#b42318]';
+				errorMessage.setAttribute('role', 'alert');
+				errorMessage.textContent = form.dataset.searchError;
+				grid.append(errorMessage);
+				setMobileMessage(form.dataset.searchError, true);
+			}
+		}
+
+		function clearSearch() {
+			window.clearTimeout(debounceTimer);
+			activeRequest?.abort();
+			searchRevision += 1;
+			input.value = '';
+			mobileInput.value = '';
+			restoreOriginalResults();
+			if (!mobileView.classList.contains('hidden')) {
+				recentSection.classList.remove('hidden');
+				renderRecentSearches();
+			}
+		}
+
+		function scheduleSearch(sourceInput) {
+			const query = sourceInput.value.trim();
+			input.value = query;
+			if (sourceInput !== mobileInput) mobileInput.value = query;
+			window.clearTimeout(debounceTimer);
+			activeRequest?.abort();
+			searchRevision += 1;
+			const revision = searchRevision;
+
+			if (query === '') {
+				restoreOriginalResults();
+				if (sourceInput === mobileInput) {
+					recentSection.classList.remove('hidden');
+					renderRecentSearches();
+				}
+				return;
+			}
+
+			if (sourceInput === mobileInput) {
+				recentSection.classList.add('hidden');
+				mobileResults.classList.remove('hidden');
+				setMobileMessage(form.dataset.searchLoading);
+			}
+			debounceTimer = window.setTimeout(() => searchAgencies(query, revision), 300);
+		}
+
+		const openMobileSearch = () => {
+			if (!mobileBreakpoint.matches) return;
+			mobileInput.value = input.value;
+			previousBodyOverflow = document.body.style.overflow;
+			document.body.style.overflow = 'hidden';
+			mobileView.classList.remove('hidden');
+			mobileView.classList.add('flex');
+			mobileView.setAttribute('aria-hidden', 'false');
+			if (mobileInput.value.trim()) {
+				recentSection.classList.add('hidden');
+				scheduleSearch(mobileInput);
+			} else {
+				mobileResults.classList.add('hidden');
+				recentSection.classList.remove('hidden');
+				renderRecentSearches();
+			}
+			mobileInput.focus({ preventScroll: true });
+		};
+
+		const closeMobileSearch = () => {
+			mobileView.classList.remove('flex');
+			mobileView.classList.add('hidden');
+			mobileView.setAttribute('aria-hidden', 'true');
+			document.body.style.overflow = previousBodyOverflow;
+			input.value = mobileInput.value;
+		};
+
+		form.addEventListener('submit', (event) => event.preventDefault());
+		input.addEventListener('input', () => scheduleSearch(input));
+		input.addEventListener('focus', () => {
+			if (mobileBreakpoint.matches) {
+				input.blur();
+				openMobileSearch();
+			}
+		});
+		mobileInput.addEventListener('input', () => scheduleSearch(mobileInput));
+		mobileView.querySelector('[data-mobile-search-close]')?.addEventListener('click', closeMobileSearch);
+		clearRecentButton?.addEventListener('click', () => {
+			writeRecentSearches([]);
+			renderRecentSearches();
+		});
+		mobileResults.addEventListener('click', (event) => {
+			const result = event.target instanceof Element ? event.target.closest('[data-agency-search-result]') : null;
+			if (result) saveRecentSearch(mobileInput.value.trim());
+		});
+		document.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape' && !mobileView.classList.contains('hidden')) closeMobileSearch();
+		});
+		mobileBreakpoint.addEventListener('change', (event) => {
+			if (!event.matches && !mobileView.classList.contains('hidden')) closeMobileSearch();
+		});
+
+		if (input.value.trim()) scheduleSearch(input);
+
+		return;
+	}
 
 	const results = document.createElement('div');
 	results.id = input.getAttribute('aria-controls');
