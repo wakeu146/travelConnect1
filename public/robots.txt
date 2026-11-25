@@ -7,3 +7,4 @@ Disallow: /dashboard
 Disallow: /bookings/
 Disallow: /conversations/
 Disallow: /auth/
+Sitemap: https://www.travelconnect.cm/sitemap.xml
