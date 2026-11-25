@@ -9,8 +9,8 @@ COPY --from=vendor /app .
 RUN npm ci && npm run build
 
 FROM php:8.3-cli
-RUN apt-get update && apt-get install -y libzip-dev libpq-dev libsqlite3-dev unzip \
- && docker-php-ext-install pdo_mysql pdo_pgsql pdo_sqlite zip
+RUN apt-get update && apt-get install -y libzip-dev libpq-dev libsqlite3-dev libicu-dev unzip \
+ && docker-php-ext-install pdo_mysql pdo_pgsql pdo_sqlite zip intl
 WORKDIR /var/www
 COPY --from=vendor /app .
 COPY --from=assets /app/public/build public/build
