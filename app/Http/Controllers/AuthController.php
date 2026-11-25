@@ -23,19 +23,7 @@ use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 class AuthController extends Controller
 {
-    public function updateProfilePhoto(Request $request): RedirectResponse
-    {
-        $request->validate(['profile_photo' => ['required', 'image', 'max:2048']]);
-        $user = $request->user();
-
-        if ($user->profile_photo_path) {
-            Storage::disk('public')->delete($user->profile_photo_path);
-        }
-
-        $user->update(['profile_photo_path' => $request->file('profile_photo')->store('profile-photos', 'public')]);
-
-        return back()->with('status', 'Profile photo updated.');
-    }
+   
 
  public function updateProfilePhoto(Request $request): RedirectResponse
 {
