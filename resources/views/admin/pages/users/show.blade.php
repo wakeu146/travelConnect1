@@ -26,7 +26,7 @@
             <div class="grid min-w-0 gap-3">
                 <div class="flex h-14 w-14 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800 sm:h-16 sm:w-16" data-user-profile-photo>
                     @if ($userDetails->profile_photo_path)
-                        <img src="{{ asset('storage/'.$userDetails->profile_photo_path) }}" alt="{{ __('messages.admin_users.profile_photo_alt', ['name' => $userDetails->name]) }}" class="h-full w-full object-cover">
+                        <img src="{{ $userDetails->profilePhotoUrl() }}" alt="{{ __('messages.admin_users.profile_photo_alt', ['name' => $userDetails->name]) }}" class="h-full w-full object-cover">
                     @else
                         <span class="text-2xl font-bold text-slate-500 dark:text-slate-300" aria-hidden="true">{{ mb_substr($userDetails->name, 0, 1) }}</span>
                     @endif

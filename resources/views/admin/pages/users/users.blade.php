@@ -184,7 +184,7 @@
                                 <div class="flex min-w-0 items-center gap-3">
                                     <span class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border admin-border bg-[var(--admin-surface-soft)]" data-user-list-photo>
                                         @if ($user->profile_photo_path)
-                                            <img src="{{ asset('storage/'.$user->profile_photo_path) }}" alt="{{ __('messages.admin_users.profile_photo_alt', ['name' => $user->name]) }}" class="h-full w-full object-cover">
+                                            <img src="{{ $user->profilePhotoUrl() }}" alt="{{ __('messages.admin_users.profile_photo_alt', ['name' => $user->name]) }}" class="h-full w-full object-cover">
                                         @else
                                             <span class="text-sm font-bold admin-muted" aria-hidden="true">{{ mb_substr($user->name, 0, 1) }}</span>
                                         @endif

@@ -90,7 +90,7 @@
                     @if ($agency?->logoUrl())
                         <img src="{{ $agency->logoUrl() }}" alt="{{ $brandName }}" class="h-full w-full object-cover">
                     @elseif (auth()->user()?->profile_photo_path)
-                        <img src="{{ asset('storage/'.auth()->user()->profile_photo_path) }}" alt="{{ auth()->user()?->name ?? 'Agency owner' }}" class="h-full w-full object-cover">
+                        <img src="{{ auth()->user()->profilePhotoUrl() }}" alt="{{ auth()->user()?->name ?? 'Agency owner' }}" class="h-full w-full object-cover">
                     @else
                         {{ strtoupper(substr((auth()->user()?->name ?? 'A'), 0, 1)) }}
                     @endif
