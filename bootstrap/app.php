@@ -24,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->trustProxies(at: '*');
         $middleware->append(SetLocale::class);
         $middleware->appendToGroup('web', UpdateUserPresence::class);
         $middleware->alias([
