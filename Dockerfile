@@ -1,7 +1,7 @@
 FROM composer:2 AS vendor
 WORKDIR /app
 COPY . .
-RUN composer require league/flysystem-aws-s3-v3:"^3.0" --update-no-dev --prefer-dist --optimize-autoloader --no-scripts --ignore-platform-reqs --no-interaction
+RUN composer require league/flysystem-aws-s3-v3:"^3.0" resend/resend-php --update-no-dev --prefer-dist --optimize-autoloader --no-scripts --ignore-platform-reqs --no-interaction
 
 FROM node:22 AS assets
 WORKDIR /app
