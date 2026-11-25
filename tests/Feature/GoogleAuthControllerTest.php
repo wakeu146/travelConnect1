@@ -199,6 +199,23 @@ class GoogleAuthControllerTest extends TestCase
         $this->assertSame(route('dashboard'), session('success_redirect'));
     }
 
+    public function test_google_callback_redirects_to_https_when_behind_a_tls_terminating_proxy(): void
+    {
+        $this->fakeGoogleUser([
+            'id' => 'proxy-google-id',
+            'email' => 'proxy-user@gmail.com',
+            'email_verified' => true,
+        ]);
+
+        $response = $this->withServerVariables([
+            'HTTP_X_FORWARDED_PROTO' => 'https',
+        ])->get(route('google.callback'));
+
+        $response->assertRedirect();
+        $this->assertSame('https', parse_url($response->headers->get('Location'), PHP_URL_SCHEME));
+        $this->assertAuthenticated();
+    }
+
     public function test_creates_a_new_google_user_as_a_traveler_and_normalizes_email_verified(): void
     {
         $this->fakeGoogleUser([
