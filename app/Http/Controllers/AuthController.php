@@ -37,26 +37,26 @@ class AuthController extends Controller
         return back()->with('status', 'Profile photo updated.');
     }
 
-    public function updateProfile(Request $request): RedirectResponse
-    {
-        $user = $request->user();
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:191', 'unique:users,email,'.$user->id],
-            'phone' => ['nullable', 'string', 'max:30', 'regex:/^\+237\s?[0-9\s-]{9,15}$/'],
-        ]);
+ public function updateProfilePhoto(Request $request): RedirectResponse
+{
+    $request->validate(['profile_photo' => ['required', 'image', 'max:5120']]);
+    $user = $request->user();
+    $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
 
-        if (! empty($data['phone'])) {
-            $digits = preg_replace('/\D+/', '', $data['phone']);
-            if (preg_match('/^237\d{9,10}$/', $digits)) {
-                $data['phone'] = '+237 '.trim(chunk_split(substr($digits, 3), 3, ' '));
-            }
+    if ($user->profile_photo_path) {
+        try {
+            Storage::disk($disk)->delete($user->profile_photo_path);
+        } catch (\Throwable $e) {
+            report($e);
         }
-
-        $user->update($data);
-
-        return back()->with('status', 'Profile information updated.');
     }
+
+    $user->update([
+        'profile_photo_path' => $request->file('profile_photo')->store('profile-photos', $disk),
+    ]);
+
+    return back()->with('status', 'Profile photo updated.');
+}
 
     public function updatePassword(Request $request): RedirectResponse
     {
