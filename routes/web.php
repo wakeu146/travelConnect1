@@ -26,6 +26,10 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 
+Route::get('/robots.txt', fn () => response(file_get_contents(public_path('robots.txt')), 200, [
+    'Content-Type' => 'text/plain; charset=UTF-8',
+]))->name('robots');
+
 Route::get('/', function () {
     if (Auth::check()) {
         $user = Auth::user();
