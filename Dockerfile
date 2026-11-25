@@ -15,5 +15,5 @@ WORKDIR /var/www
 COPY --from=vendor /app .
 COPY --from=assets /app/public/build public/build
 RUN chmod -R 775 storage bootstrap/cache
-CMD php artisan serve --host=0.0.0.0 --port=$PORT
+CMD ["sh", "-c", "php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=10000"]
 
