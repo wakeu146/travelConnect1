@@ -4,6 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+    <link rel="icon" type="image/png" href="{{ asset('images/logo.png') }}" sizes="512x512">
+    <link rel="apple-touch-icon" href="{{ asset('images/logo.png') }}">
     <title>{{ $title ?? 'Account | TravelConnect' }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>

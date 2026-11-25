@@ -1,10 +1,65 @@
+@props([
+    'title' => 'TravelConnect',
+    'description' => 'Discover trusted travel agencies with TravelConnect.',
+    'image' => null,
+    'robots' => 'index, follow',
+])
+@php
+    $appUrl = rtrim(config('app.url', 'https://travelconnect.cm'), '/');
+    $canonical = $appUrl.request()->getPathInfo();
+    $socialImage = $image ?: $appUrl.'/images/destinations/new-york.jpg';
+    $structuredData = [
+        '@context' => 'https://schema.org',
+        '@graph' => [
+            [
+                '@type' => 'Organization',
+                '@id' => $appUrl.'/#organization',
+                'name' => 'TravelConnect',
+                'url' => $appUrl,
+                'logo' => [
+                    '@type' => 'ImageObject',
+                    'url' => $appUrl.'/images/logo.png',
+                ],
+            ],
+            [
+                '@type' => 'WebSite',
+                '@id' => $appUrl.'/#website',
+                'url' => $appUrl,
+                'name' => 'TravelConnect',
+                'publisher' => ['@id' => $appUrl.'/#organization'],
+                'inLanguage' => ['en', 'fr'],
+            ],
+        ],
+    ];
+@endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="{{ $description ?? 'Discover trusted travel agencies with TravelConnect.' }}">
-    <title>{{ $title ?? 'TravelConnect' }}</title>
+    <meta name="description" content="{{ $description }}">
+    <meta name="robots" content="{{ $robots }}">
+    <meta name="theme-color" content="#173042">
+    <link rel="canonical" href="{{ $canonical }}">
+    <link rel="alternate" hreflang="en" href="{{ $appUrl.request()->getPathInfo() }}?lang=en">
+    <link rel="alternate" hreflang="fr" href="{{ $appUrl.request()->getPathInfo() }}?lang=fr">
+    <link rel="alternate" hreflang="x-default" href="{{ $appUrl.request()->getPathInfo() }}">
+    <link rel="icon" href="{{ $appUrl.'/favicon.ico' }}" sizes="any">
+    <link rel="icon" type="image/png" href="{{ $appUrl.'/images/logo.png' }}" sizes="512x512">
+    <link rel="apple-touch-icon" href="{{ $appUrl.'/images/logo.png' }}">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="{{ app()->getLocale() === 'fr' ? 'fr_CM' : 'en_CM' }}">
+    <meta property="og:site_name" content="TravelConnect">
+    <meta property="og:title" content="{{ $title }}">
+    <meta property="og:description" content="{{ $description }}">
+    <meta property="og:url" content="{{ $canonical }}">
+    <meta property="og:image" content="{{ $socialImage }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ $title }}">
+    <meta name="twitter:description" content="{{ $description }}">
+    <meta name="twitter:image" content="{{ $socialImage }}">
+    <title>{{ $title }}</title>
+    <script type="application/ld+json">@json($structuredData)</script>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="flex min-h-screen flex-col bg-[#fbfaf7] text-[#173042] antialiased {{ auth()->check() ? 'authenticated' : '' }}">
