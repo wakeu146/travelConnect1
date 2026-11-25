@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Storage;
 
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
@@ -118,6 +119,17 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Agency::class, 'favorites')->withTimestamps();
     }
+
+    public function profilePhotoUrl(): ?string
+{
+    if (! $this->profile_photo_path) {
+        return null;
+    }
+
+    $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
+
+    return Storage::disk($disk)->url($this->profile_photo_path);
+}
 
     public function isAdmin(): bool
     {
