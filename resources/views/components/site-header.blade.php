@@ -205,7 +205,7 @@
             @else
                 <a href="{{ route('settings', ['lang' => app()->getLocale()]) }}" class="hidden px-3 py-2 text-sm font-medium text-[#607985] transition hover:text-[#173042] sm:block">{{ __('messages.settings') }}</a>
                 <form action="{{ route('logout') }}" method="POST" class="hidden sm:block">@csrf<button type="submit" class="px-3 py-2 text-sm font-semibold text-[#607985] transition hover:text-[#e76f51]">{{ __('messages.logout') }}</button></form>
-                <a href="{{ route('settings', ['lang' => app()->getLocale()]) }}" class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#173042] text-sm font-bold text-white" aria-label="{{ __('messages.settings') }}">@if (auth()->user()->profile_photo_path)<img src="{{ asset('storage/'.auth()->user()->profile_photo_path) }}" alt="{{ auth()->user()->name }}" class="h-full w-full object-cover">@else{{ str(auth()->user()->name)->substr(0, 1)->upper() }}@endif</a>
+                <a href="{{ route('settings', ['lang' => app()->getLocale()]) }}" class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#173042] text-sm font-bold text-white" aria-label="{{ __('messages.settings') }}">@if (auth()->user()->profile_photo_path)<img src="{{ auth()->user()->profilePhotoUrl() }}" alt="{{ auth()->user()->name }}" class="h-full w-full object-cover">@else{{ str(auth()->user()->name)->substr(0, 1)->upper() }}@endif</a>
             @endguest
 
 
