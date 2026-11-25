@@ -508,7 +508,7 @@ return [
     'support_status_text' => 'Notre équipe est disponible et surveille les nouvelles demandes.',
     'average_response' => 'Réponse habituelle',
     'average_response_value' => 'Sous 1 jour ouvré',
-    'support_email' => 'hello@travelconnect.test',
+    'support_email' => 'travelconnect.mail@gmail.com',
     'support_topics' => 'Rubriques d’aide',
     'topic_account' => 'Compte et accès',
     'topic_travelers' => 'Planifier en tant que voyageur',

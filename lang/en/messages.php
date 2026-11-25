@@ -507,7 +507,7 @@ return [
     'support_status_text' => 'Our support team is available and monitoring new requests.',
     'average_response' => 'Typical response',
     'average_response_value' => 'Within 1 business day',
-    'support_email' => 'hello@travelconnect.test',
+    'support_email' => 'travelconnect.mail@gmail.com',
     'support_topics' => 'Support topics',
     'topic_account' => 'Account & access',
     'topic_travelers' => 'Planning as a traveler',
