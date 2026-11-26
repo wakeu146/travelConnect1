@@ -14,6 +14,7 @@ use App\Http\Controllers\BookingController;
 use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\InquiryController;
+use App\Http\Controllers\PublicDirectoryController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\ReviewReportController;
 use App\Http\Controllers\TravelerConversationController;
@@ -53,7 +54,12 @@ Route::get('/discover/search', [AgencyDiscoveryController::class, 'search'])
     ->name('discover.search');
 Route::get('/discover', [AgencyDiscoveryController::class, 'index'])->middleware('auth')->name('discover');
 Route::get('/account/discover', [AgencyDiscoveryController::class, 'index'])->middleware('auth')->name('account.discover');
+Route::get('/agencies', [PublicDirectoryController::class, 'agencies'])->name('agencies.index');
 Route::get('/agencies/{slug}', function (string $slug) {
+    if (! Auth::check()) {
+        return app(PublicDirectoryController::class)->showAgency($slug);
+    }
+
     $fallbackAgencies = [
         'atlas-horizon-voyages' => ['name' => 'Atlas Horizon Voyages', 'country' => 'France', 'service' => 'Adventure travel', 'rating' => '4.9', 'reviews' => '38', 'description' => 'Tailor-made adventures across Europe and beyond, planned by a team that knows the routes personally.', 'cover' => asset('images/agencies/atlas-horizon.jpg')],
         'lumiere-routes' => ['name' => 'Lumiere Routes', 'country' => 'Portugal', 'service' => 'Luxury escapes', 'rating' => '4.8', 'reviews' => '31', 'description' => 'Slow travel and beautiful escapes, thoughtfully planned around the details that make a journey memorable.', 'cover' => asset('images/agencies/lumiere-routes.jpg')],
@@ -136,7 +142,7 @@ Route::get('/agencies/{slug}', function (string $slug) {
         : collect();
 
     return view('agency-show', ['agency' => $agencyData, 'agencyModel' => $agencyModel, 'packages' => $agencyModel?->packages ?? collect(), 'isSaved' => $agencyModel && $user->favoriteAgencies()->whereKey($agencyModel->id)->exists(), 'publishedReviews' => $publishedReviews, 'publishedReviewCount' => $publishedReviewCount, 'visibleReviewCount' => $visibleReviewCount, 'visibleRating' => $visibleRating, 'ratingCounts' => $ratingCounts, 'pendingReview' => $pendingReview, 'eligibleReviewBookings' => $eligibleReviewBookings]);
-})->middleware(['auth', PreventAuthenticatedWorkspaceCaching::class])->name('agency.show');
+})->middleware(PreventAuthenticatedWorkspaceCaching::class)->name('agency.show');
 Route::post('/agencies/{slug}/inquiries', [InquiryController::class, 'store'])->middleware('auth')->name('inquiries.store');
 Route::post('/agencies/{slug}/reviews', [ReviewController::class, 'store'])->middleware('auth')->name('reviews.store');
 Route::post('/reviews/{review}/report', [ReviewReportController::class, 'store'])->middleware(['auth', 'throttle:10,1'])->whereNumber('review')->name('reviews.report');
@@ -247,6 +253,7 @@ Route::middleware('auth')->prefix('account/conversations')->name('account.conver
     Route::post('/{conversation}/messages', [TravelerConversationController::class, 'send'])->name('messages.store');
 });
 
+Route::get('/packages', [PublicDirectoryController::class, 'packages'])->name('packages.index');
 Route::get('/packages/{package}', [BookingController::class, 'packageShow'])->name('packages.show');
 Route::middleware(['auth'])->get('/packages/{package}/book', [BookingController::class, 'create'])->name('bookings.create');
 Route::middleware(['auth'])->prefix('bookings')->name('bookings.')->group(function () {

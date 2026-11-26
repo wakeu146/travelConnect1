@@ -17,6 +17,7 @@ use App\Notifications\AgencyActivityNotification;
 use App\Services\BookingService;
 use App\Services\CountryCatalogueSynchronizer;
 use App\Services\PaymentSettlementService;
+use App\Support\CanonicalUrl;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\RedirectResponse;
@@ -165,12 +166,62 @@ class BookingController extends Controller
 
     public function packageShow(Package $package): View
     {
-        $package->load(['agency', 'images', 'availabilities' => fn ($query) => $query->where('status', 'active')->whereDate('departure_date', '>', today()->toDateString())->orderBy('departure_date')]);
-        abort_unless($package->agency?->operating_status === 'active', 404);
+        $availableDepartures = static fn (Builder $query): Builder => $query
+            ->where('status', PackageAvailabilityStatus::ACTIVE->value)
+            ->whereDate('departure_date', '>', today()->toDateString());
+        $isPublic = Package::query()
+            ->whereKey($package->getKey())
+            ->where('status', PackageStatus::PUBLISHED->value)
+            ->whereHas('agency', static fn (Builder $query): Builder => $query->verified())
+            ->whereHas('availabilities', $availableDepartures)
+            ->exists();
+
+        abort_unless($isPublic, 404);
+
+        $package->load([
+            'agency:id,company_name',
+            'images',
+            'availabilities' => fn (Builder $query): Builder => $availableDepartures($query)->orderBy('departure_date'),
+        ]);
+        $packageUrl = CanonicalUrl::absolute('/packages/'.$package->getRouteKey());
+        $images = $package->images
+            ->map(fn ($image): ?string => $image->publicUrl())
+            ->filter()
+            ->values()
+            ->all();
+        $title = __('messages.public_directory.package.title', ['package' => $package->title]);
+        $description = Str::limit(strip_tags($package->summary ?: $package->description), 150);
+        $schema = [
+            '@type' => 'Product',
+            '@id' => $packageUrl.'#package',
+            'name' => $package->title,
+            'description' => $description,
+            'url' => $packageUrl,
+            'category' => $package->destination,
+            'brand' => [
+                '@type' => 'Brand',
+                'name' => $package->agency->company_name,
+            ],
+            'offers' => [
+                '@type' => 'Offer',
+                'url' => $packageUrl,
+                'priceCurrency' => config('travelconnect.currency'),
+                'price' => (float) $package->price_from,
+                'availability' => 'https://schema.org/InStock',
+            ],
+        ];
+
+        if ($images !== []) {
+            $schema['image'] = $images;
+        }
 
         return view('packages.show', [
             'package' => $package,
             'activeAvailabilities' => $package->availabilities->filter(fn ($availability) => $availability->status->value === 'active'),
+            'images' => $images,
+            'schema' => [$schema],
+            'title' => $title,
+            'description' => $description,
         ]);
     }
 
