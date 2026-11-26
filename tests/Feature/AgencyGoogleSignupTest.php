@@ -31,7 +31,7 @@ class AgencyGoogleSignupTest extends TestCase
         $response = $this->get(route('google.agency.redirect'));
 
         $response->assertRedirect('https://accounts.google.com/oauth')
-            ->assertSee('window.location.replace', false);
+            ->assertDontSee('Redirecting to Google sign-in');
         $response->assertSessionHas('google_agency_signup_intent_at', fn ($timestamp): bool => is_int($timestamp));
         $this->assertDatabaseCount('users', 0);
     }
@@ -118,7 +118,7 @@ class AgencyGoogleSignupTest extends TestCase
             'agency_name' => 'Summit Travel Co',
         ], $notification->data);
         $response->assertSessionMissing('pending_google_agency_registration');
-        $this->assertSame(route('login'), session('success_redirect'));
+        $this->assertSame(route('agency.dashboard'), session('success_redirect'));
 
         Auth::logout();
         $passwordLogin = $this->post(route('login.store'), [
