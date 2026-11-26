@@ -130,6 +130,14 @@ class GoogleAuthController extends Controller
 
         $request->session()->forget(self::PENDING_AGENCY_REGISTRATION);
         Auth::login($user);
+
+        
+Log::info('GOOGLE CALLBACK after login', [
+    'check' => Auth::check(),
+    'user_id' => Auth::id(),
+    'session_id' => session()->getId(),
+]);
+        
         $request->session()->regenerate();
 
         return redirect()->route('auth.success')->with([
