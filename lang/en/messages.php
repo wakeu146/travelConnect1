@@ -1,6 +1,38 @@
 <?php
 
 return [
+    'seo' => [
+        'home' => [
+            'title' => 'Travel Agencies in Cameroon | TravelConnect',
+            'description' => 'Find verified travel agencies in Cameroon, compare travel packages and plan your next trip with TravelConnect.',
+            'heading' => 'Find verified travel agencies in Cameroon',
+        ],
+        'how_it_works' => [
+            'title' => 'How TravelConnect Works | Cameroon Travel',
+            'description' => 'Learn how travelers find verified Cameroon travel agencies, compare trips and connect with travel professionals.',
+            'heading' => 'How to find a travel agency in Cameroon',
+        ],
+        'for_agencies' => [
+            'title' => 'Travel Agencies in Cameroon | For Agencies',
+            'description' => 'Join TravelConnect to showcase your verified travel agency in Cameroon and connect with travelers planning trips.',
+            'heading' => 'Grow your travel agency in Cameroon',
+        ],
+        'terms' => [
+            'title' => 'TravelConnect Terms for Cameroon Travelers',
+            'description' => 'Read the terms for using TravelConnect, a marketplace connecting travelers and travel agencies in Cameroon.',
+            'heading' => 'Terms for TravelConnect travel services',
+        ],
+        'privacy' => [
+            'title' => 'TravelConnect Privacy | Cameroon Travel',
+            'description' => 'Learn how TravelConnect handles account data when travelers connect with travel agencies and travel packages.',
+            'heading' => 'Privacy for Cameroon travel services',
+        ],
+        'accessibility' => [
+            'title' => 'TravelConnect Accessibility | Cameroon',
+            'description' => 'Learn about accessibility on TravelConnect, a Cameroon marketplace for travelers and verified travel agencies.',
+            'heading' => 'Accessibility at TravelConnect Cameroon',
+        ],
+    ],
     'custom_requests' => [
         'my_requests' => 'My custom requests',
         'custom_request' => 'Custom Request',

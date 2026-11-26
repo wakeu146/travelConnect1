@@ -20,6 +20,22 @@ class SeoMetadataTest extends TestCase
         $response->assertSee('name="robots" content="index, follow"', false);
     }
 
+    public function test_home_json_ld_contains_valid_organization_and_website_data(): void
+    {
+        $response = $this->get('/');
+
+        preg_match('/<script type="application\/ld\+json">(.*?)<\/script>/s', $response->getContent(), $matches);
+
+        $this->assertNotEmpty($matches[1] ?? null);
+
+        $structuredData = json_decode($matches[1], true, flags: JSON_THROW_ON_ERROR);
+        $types = array_column($structuredData['@graph'], '@type');
+
+        $this->assertSame('https://schema.org', $structuredData['@context']);
+        $this->assertContains('Organization', $types);
+        $this->assertContains('WebSite', $types);
+    }
+
     public function test_auth_pages_are_noindexed(): void
     {
         $response = $this->get('/login');

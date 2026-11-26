@@ -3,14 +3,16 @@
     'description' => 'Discover trusted travel agencies with TravelConnect.',
     'image' => null,
     'robots' => 'index, follow',
+    'schema' => [],
 ])
 @php
-    $appUrl = rtrim(config('app.url', 'https://travelconnect.cm'), '/');
-    $canonical = $appUrl.request()->getPathInfo();
+    $appUrl = \App\Support\CanonicalUrl::base();
+    $pagePath = request()->getPathInfo();
+    $canonical = $appUrl.$pagePath;
     $socialImage = $image ?: $appUrl.'/images/destinations/new-york.jpg';
     $structuredData = [
         '@context' => 'https://schema.org',
-        '@graph' => [
+        '@graph' => array_merge([
             [
                 '@type' => 'Organization',
                 '@id' => $appUrl.'/#organization',
@@ -29,7 +31,7 @@
                 'publisher' => ['@id' => $appUrl.'/#organization'],
                 'inLanguage' => ['en', 'fr'],
             ],
-        ],
+        ], $schema),
     ];
 @endphp
 <!DOCTYPE html>
@@ -41,9 +43,9 @@
     <meta name="robots" content="{{ $robots }}">
     <meta name="theme-color" content="#173042">
     <link rel="canonical" href="{{ $canonical }}">
-    <link rel="alternate" hreflang="en" href="{{ $appUrl.request()->getPathInfo() }}?lang=en">
-    <link rel="alternate" hreflang="fr" href="{{ $appUrl.request()->getPathInfo() }}?lang=fr">
-    <link rel="alternate" hreflang="x-default" href="{{ $appUrl.request()->getPathInfo() }}">
+    <link rel="alternate" hreflang="en" href="{{ $appUrl.$pagePath }}?lang=en">
+    <link rel="alternate" hreflang="fr" href="{{ $appUrl.$pagePath }}?lang=fr">
+    <link rel="alternate" hreflang="x-default" href="{{ $canonical }}">
     <link rel="icon" href="{{ $appUrl.'/favicon.ico' }}" sizes="any">
     <link rel="icon" type="image/png" href="{{ $appUrl.'/images/logo.png' }}" sizes="512x512">
     <link rel="apple-touch-icon" href="{{ $appUrl.'/images/logo.png' }}">

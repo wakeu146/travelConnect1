@@ -1,6 +1,38 @@
 <?php
 
 return [
+    'seo' => [
+        'home' => [
+            'title' => 'Agences de voyage au Cameroun | TravelConnect',
+            'description' => 'Trouvez des agences de voyage vérifiées au Cameroun, comparez les forfaits et préparez votre prochain voyage.',
+            'heading' => 'Trouvez une agence de voyage vérifiée au Cameroun',
+        ],
+        'how_it_works' => [
+            'title' => 'Comment fonctionne TravelConnect | Voyage au Cameroun',
+            'description' => 'Découvrez comment trouver une agence vérifiée au Cameroun, comparer les offres et préparer un séjour.',
+            'heading' => 'Trouver une agence de voyage au Cameroun',
+        ],
+        'for_agencies' => [
+            'title' => 'Agence de voyage au Cameroun | TravelConnect',
+            'description' => 'Rejoignez TravelConnect pour présenter votre agence de voyage vérifiée au Cameroun et rencontrer des voyageurs.',
+            'heading' => 'Développez votre agence de voyage au Cameroun',
+        ],
+        'terms' => [
+            'title' => 'Conditions TravelConnect | Voyage au Cameroun',
+            'description' => 'Consultez les conditions d’utilisation de TravelConnect, plateforme reliant voyageurs et agences de voyage au Cameroun.',
+            'heading' => 'Conditions des services de voyage TravelConnect',
+        ],
+        'privacy' => [
+            'title' => 'Confidentialité | TravelConnect Cameroun',
+            'description' => 'Découvrez comment TravelConnect protège les données des voyageurs et des agences de voyage au Cameroun.',
+            'heading' => 'Confidentialité des services TravelConnect',
+        ],
+        'accessibility' => [
+            'title' => 'Accessibilité | TravelConnect Cameroun',
+            'description' => 'Découvrez les engagements d’accessibilité de TravelConnect, plateforme de voyage au Cameroun.',
+            'heading' => 'Accessibilité de TravelConnect au Cameroun',
+        ],
+    ],
     'custom_requests' => [
         'my_requests' => 'Mes demandes personnalisées',
         'custom_request' => 'Demande personnalisée',

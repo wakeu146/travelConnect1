@@ -146,9 +146,27 @@ Route::post('/agency/inquiries/{inquiry}/close', [AgencyController::class, 'clos
 Route::delete('/agency/inquiries/{inquiry}', [AgencyController::class, 'destroyInquiry'])->middleware(['auth', 'agency-owner'])->name('agency.inquiries.destroy');
 Route::view('/how-it-works', 'how-it-works')->name('how-it-works');
 Route::view('/for-agencies', 'for-agencies')->name('for-agencies');
-Route::get('/terms', fn () => view('static-page', ['pageTitle' => __('messages.terms_of_use'), 'pageIntro' => __('messages.terms_intro'), 'pageBody' => __('messages.terms_body')]))->name('terms');
-Route::get('/privacy', fn () => view('static-page', ['pageTitle' => __('messages.privacy_policy'), 'pageIntro' => __('messages.privacy_intro'), 'pageBody' => __('messages.privacy_body')]))->name('privacy');
-Route::get('/accessibility', fn () => view('static-page', ['pageTitle' => __('messages.accessibility'), 'pageIntro' => __('messages.accessibility_intro'), 'pageBody' => __('messages.accessibility_body')]))->name('accessibility');
+Route::get('/terms', fn () => view('static-page', [
+    'pageTitle' => __('messages.seo.terms.heading'),
+    'seoTitle' => __('messages.seo.terms.title'),
+    'seoDescription' => __('messages.seo.terms.description'),
+    'pageIntro' => __('messages.terms_intro'),
+    'pageBody' => __('messages.terms_body'),
+]))->name('terms');
+Route::get('/privacy', fn () => view('static-page', [
+    'pageTitle' => __('messages.seo.privacy.heading'),
+    'seoTitle' => __('messages.seo.privacy.title'),
+    'seoDescription' => __('messages.seo.privacy.description'),
+    'pageIntro' => __('messages.privacy_intro'),
+    'pageBody' => __('messages.privacy_body'),
+]))->name('privacy');
+Route::get('/accessibility', fn () => view('static-page', [
+    'pageTitle' => __('messages.seo.accessibility.heading'),
+    'seoTitle' => __('messages.seo.accessibility.title'),
+    'seoDescription' => __('messages.seo.accessibility.description'),
+    'pageIntro' => __('messages.accessibility_intro'),
+    'pageBody' => __('messages.accessibility_body'),
+]))->name('accessibility');
 Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('google.redirect');
 Route::get('/auth/google/agency', [GoogleAuthController::class, 'agencyRedirect'])->name('google.agency.redirect');
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->name('google.callback');
