@@ -1,8 +1,8 @@
-<x-public-layout title="{{ __('messages.for_travel_professionals') }} | TravelConnect" description="{{ __('messages.travelers_and_agencies_description') }}">
+<x-public-layout :title="__('messages.seo.for_agencies.title')" :description="__('messages.seo.for_agencies.description')">
     <x-site-header />
     <main class="mx-auto max-w-7xl px-6 py-16 lg:px-8 lg:py-24">
         <p class="text-xs font-bold uppercase tracking-[.2em] text-[#e76f51]">{{ __('messages.for_travel_professionals') }}</p>
-        <h1 class="mt-4 max-w-2xl font-serif text-5xl tracking-tight sm:text-6xl">{{ __('messages.turn_your_expertise') }}</h1>
+        <h1 class="mt-4 max-w-2xl font-serif text-5xl tracking-tight sm:text-6xl">{{ __('messages.seo.for_agencies.heading') }}</h1>
         <p class="mt-6 max-w-xl text-lg leading-8 text-[#607985]">{{ __('messages.create_trusted_profile') }}</p>
         <div id="join" class="mt-16 grid gap-6 md:grid-cols-3">
             <x-agency-benefit number="01" title="{{ __('messages.present_your_expertise') }}" description="{{ __('messages.showcase_destinations') }}" />
