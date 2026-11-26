@@ -347,7 +347,7 @@ Route::get('/reset-blade', function () {
     return view('emails/password-reset-code');
 });
 
-oute::get('/debug-auth', fn () => response()->json([
+Route::get('/debug-auth', fn () => response()->json([
     'check' => Auth::check(),
     'user_id' => Auth::id(),
     'session_id' => session()->getId(),
