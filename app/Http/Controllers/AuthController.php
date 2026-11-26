@@ -23,28 +23,26 @@ use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 class AuthController extends Controller
 {
-   
+    public function updateProfilePhoto(Request $request): RedirectResponse
+    {
+        $request->validate(['profile_photo' => ['required', 'image', 'max:5120']]);
+        $user = $request->user();
+        $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
 
- public function updateProfilePhoto(Request $request): RedirectResponse
-{
-    $request->validate(['profile_photo' => ['required', 'image', 'max:5120']]);
-    $user = $request->user();
-    $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
-
-    if ($user->profile_photo_path) {
-        try {
-            Storage::disk($disk)->delete($user->profile_photo_path);
-        } catch (\Throwable $e) {
-            report($e);
+        if ($user->profile_photo_path) {
+            try {
+                Storage::disk($disk)->delete($user->profile_photo_path);
+            } catch (\Throwable $e) {
+                report($e);
+            }
         }
+
+        $user->update([
+            'profile_photo_path' => $request->file('profile_photo')->store('profile-photos', $disk),
+        ]);
+
+        return back()->with('status', 'Profile photo updated.');
     }
-
-    $user->update([
-        'profile_photo_path' => $request->file('profile_photo')->store('profile-photos', $disk),
-    ]);
-
-    return back()->with('status', 'Profile photo updated.');
-}
 
     public function updatePassword(Request $request): RedirectResponse
     {
@@ -83,7 +81,7 @@ class AuthController extends Controller
 
         return redirect()->route('auth.success')->with([
             'message' => 'Registration successful',
-            'success_redirect' => route('login'),
+            'success_redirect' => route('dashboard'),
         ]);
     }
 
@@ -129,7 +127,7 @@ class AuthController extends Controller
 
         return redirect()->route('auth.success')->with([
             'message' => 'Registration successful',
-            'success_redirect' => route('login'),
+            'success_redirect' => route('agency.dashboard'),
         ]);
     }
 

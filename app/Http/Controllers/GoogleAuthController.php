@@ -134,7 +134,7 @@ class GoogleAuthController extends Controller
 
         return redirect()->route('auth.success')->with([
             'message' => 'Registration successful',
-            'success_redirect' => route('login'),
+            'success_redirect' => route('agency.dashboard'),
         ]);
     }
 
@@ -467,8 +467,6 @@ class GoogleAuthController extends Controller
     private function googleRedirectResponse(): RedirectResponse
     {
         $response = Socialite::driver('google')->redirect();
-        $googleUrl = $response->getTargetUrl();
-        $response->setContent(view('auth.google-redirect', compact('googleUrl'))->render());
         $response->headers->set('Cache-Control', 'no-store, private');
 
         return $response;

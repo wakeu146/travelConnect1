@@ -18,7 +18,7 @@ class GoogleAuthControllerTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_google_sign_in_redirect_includes_an_automatic_navigation_fallback(): void
+    public function test_google_sign_in_uses_an_http_redirect_and_starts_a_session(): void
     {
         $googleUrl = 'https://accounts.google.com/oauth';
         $provider = Mockery::mock(Provider::class);
@@ -30,10 +30,13 @@ class GoogleAuthControllerTest extends TestCase
             ->with('google')
             ->andReturn($provider);
 
-        $this->get(route('google.redirect'))
+        $response = $this->get(route('google.redirect'));
+
+        $response
             ->assertRedirect($googleUrl)
-            ->assertSee('window.location.replace', false)
-            ->assertSee('href="'.$googleUrl.'"', false);
+            ->assertDontSee('Redirecting to Google sign-in');
+
+        $this->assertNotEmpty($response->headers->all('set-cookie'));
     }
 
     public function test_links_a_gmail_account_without_changing_existing_account_data(): void
