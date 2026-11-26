@@ -36,5 +36,6 @@ class SeoMetadataTest extends TestCase
         $response->assertSee('Disallow: /admin/', false);
         $response->assertSee('Disallow: /account/', false);
         $response->assertSee('Disallow: /agency/', false);
+        $response->assertSee('Sitemap: https://travelconnect.cm/sitemap.xml', false);
     }
 }

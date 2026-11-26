@@ -30,7 +30,8 @@ class AgencyGoogleSignupTest extends TestCase
 
         $response = $this->get(route('google.agency.redirect'));
 
-        $response->assertRedirect('https://accounts.google.com/oauth');
+        $response->assertRedirect('https://accounts.google.com/oauth')
+            ->assertSee('window.location.replace', false);
         $response->assertSessionHas('google_agency_signup_intent_at', fn ($timestamp): bool => is_int($timestamp));
         $this->assertDatabaseCount('users', 0);
     }
