@@ -329,21 +329,4 @@ Route::get('/reset-blade', function () {
     return view('emails/password-reset-code');
 });
 
-Route::get('/debug-session', function (\Illuminate\Http\Request $request) {
-    return response()->json([
-        'secure_request' => $request->secure(),
-        'host' => $request->getHost(),
-        'scheme_seen' => $request->getScheme(),
-        'cookie_names_received' => array_keys($request->cookies->all()),
-        'session_id_prefix' => substr($request->session()->getId(), 0, 8),
-        'session_visits' => $request->session()->increment('debug_visits'),
-        'config_session_driver' => config('session.driver'),
-        'config_cookie_name' => config('session.cookie'),
-        'config_domain' => config('session.domain'),
-        'config_secure' => config('session.secure'),
-        'config_same_site' => config('session.same_site'),
-        'config_path' => config('session.path'),
-        'config_app_url' => config('app.url'),
-        'has_app_key' => config('app.key') !== null && config('app.key') !== '',
-    ]);
-});
+
