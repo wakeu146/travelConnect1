@@ -3,6 +3,8 @@
 use App\Http\Middleware\EnsureAdminSession;
 use App\Http\Middleware\EnsureAgencyOwner;
 use App\Http\Middleware\EnsurePendingAdminLogin;
+use App\Http\Middleware\OAuthResponseDiagnostics;
+use App\Http\Middleware\OAuthSessionDiagnostics;
 use App\Http\Middleware\SetLocale;
 use App\Http\Middleware\UpdateUserPresence;
 use Illuminate\Foundation\Application;
@@ -26,7 +28,9 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->trustProxies(at: '*');
         $middleware->append(SetLocale::class);
+        $middleware->prependToGroup('web', OAuthResponseDiagnostics::class);
         $middleware->appendToGroup('web', UpdateUserPresence::class);
+        $middleware->appendToGroup('web', OAuthSessionDiagnostics::class);
         $middleware->alias([
             'agency-owner' => EnsureAgencyOwner::class,
             'admin.pending' => EnsurePendingAdminLogin::class,
