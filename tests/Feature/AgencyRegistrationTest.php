@@ -27,6 +27,7 @@ class AgencyRegistrationTest extends TestCase
         ]);
 
         $response->assertRedirect(route('auth.success'));
+        $response->assertSessionHas('success_redirect', route('agency.dashboard'));
 
         $user = User::where('email', 'alex@example.com')->firstOrFail();
 
