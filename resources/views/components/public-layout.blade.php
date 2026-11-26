@@ -3,6 +3,7 @@
     'description' => 'Discover trusted travel agencies with TravelConnect.',
     'image' => null,
     'robots' => 'index, follow',
+    'schema' => [],
 ])
 @php
     $appUrl = \App\Support\CanonicalUrl::base();
@@ -11,7 +12,7 @@
     $socialImage = $image ?: $appUrl.'/images/destinations/new-york.jpg';
     $structuredData = [
         '@context' => 'https://schema.org',
-        '@graph' => [
+        '@graph' => array_merge([
             [
                 '@type' => 'Organization',
                 '@id' => $appUrl.'/#organization',
@@ -30,7 +31,7 @@
                 'publisher' => ['@id' => $appUrl.'/#organization'],
                 'inLanguage' => ['en', 'fr'],
             ],
-        ],
+        ], $schema),
     ];
 @endphp
 <!DOCTYPE html>
