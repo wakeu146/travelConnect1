@@ -6,6 +6,7 @@ use App\Enums\UserRole;
 use App\Models\Agency;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Socialite\Contracts\Provider;
 use Laravel\Socialite\Facades\Socialite;
@@ -16,6 +17,24 @@ use Tests\TestCase;
 class GoogleAuthControllerTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_google_sign_in_redirect_includes_an_automatic_navigation_fallback(): void
+    {
+        $googleUrl = 'https://accounts.google.com/oauth';
+        $provider = Mockery::mock(Provider::class);
+        $provider->shouldReceive('redirect')
+            ->once()
+            ->andReturn(new RedirectResponse($googleUrl));
+        Socialite::shouldReceive('driver')
+            ->once()
+            ->with('google')
+            ->andReturn($provider);
+
+        $this->get(route('google.redirect'))
+            ->assertRedirect($googleUrl)
+            ->assertSee('window.location.replace', false)
+            ->assertSee('href="'.$googleUrl.'"', false);
+    }
 
     public function test_links_a_gmail_account_without_changing_existing_account_data(): void
     {

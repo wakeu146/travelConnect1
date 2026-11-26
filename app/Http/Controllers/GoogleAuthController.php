@@ -31,7 +31,7 @@ class GoogleAuthController extends Controller
     public function redirect(): RedirectResponse
     {
         try {
-            return Socialite::driver('google')->redirect();
+            return $this->googleRedirectResponse();
         } catch (Throwable $exception) {
             $this->recordGoogleFailure('sign_in_redirect', $exception);
 
@@ -45,7 +45,7 @@ class GoogleAuthController extends Controller
         $request->session()->put(self::AGENCY_SIGNUP_INTENT, now()->timestamp);
 
         try {
-            return Socialite::driver('google')->redirect();
+            return $this->googleRedirectResponse();
         } catch (Throwable $exception) {
             $this->recordGoogleFailure('agency_signup_redirect', $exception);
             $request->session()->forget(self::AGENCY_SIGNUP_INTENT);
@@ -462,6 +462,16 @@ class GoogleAuthController extends Controller
     private function redirectToLoginWithError(string $message): RedirectResponse
     {
         return redirect()->route('login')->withErrors(['email' => $message]);
+    }
+
+    private function googleRedirectResponse(): RedirectResponse
+    {
+        $response = Socialite::driver('google')->redirect();
+        $googleUrl = $response->getTargetUrl();
+        $response->setContent(view('auth.google-redirect', compact('googleUrl'))->render());
+        $response->headers->set('Cache-Control', 'no-store, private');
+
+        return $response;
     }
 
     private function recordGoogleFailure(string $operation, Throwable $exception): void
