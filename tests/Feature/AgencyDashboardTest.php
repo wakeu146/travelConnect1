@@ -27,6 +27,13 @@ class AgencyDashboardTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_login_page_is_not_cached(): void
+    {
+        $this->get(route('login'))
+            ->assertOk()
+            ->assertHeader('Cache-Control', 'max-age=0, must-revalidate, no-cache, no-store, private');
+    }
+
     public function test_a_traveler_login_redirects_to_the_traveler_dashboard(): void
     {
         $traveler = User::factory()->create([
