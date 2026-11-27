@@ -22,6 +22,7 @@ use App\Http\Controllers\TravelerIssueController;
 use App\Http\Middleware\PreventAuthenticatedWorkspaceCaching;
 use App\Models\Agency;
 use App\Models\User;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
@@ -170,7 +171,14 @@ Route::get('/accessibility', fn () => view('static-page', [
 Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('google.redirect');
 Route::get('/auth/google/agency', [GoogleAuthController::class, 'agencyRedirect'])->name('google.agency.redirect');
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->name('google.callback');
-Route::view('/login', 'auth.login')->name('login');
+Route::get('/login', function (Request $request) {
+    $response = response()->view('auth.login');
+    $response->headers->set('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0');
+    $response->headers->set('Pragma', 'no-cache');
+    $response->headers->set('Expires', '0');
+
+    return $response;
+})->name('login');
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login')->name('login.store');
 Route::view('/register', 'auth.account-type')->name('register');
 Route::get('/register/agency', [GoogleAuthController::class, 'showAgencyRegistration'])->name('register.agency');
@@ -184,7 +192,9 @@ Route::get('/verify-reset-code', [AuthController::class, 'showCodeForm'])->name(
 Route::post('/verify-reset-code', [AuthController::class, 'verifyResetCode'])->middleware('throttle:password.code')->name('password.code.verify');
 Route::get('/reset-password', [AuthController::class, 'showResetForm'])->name('password.reset');
 Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:password.reset')->name('password.update');
-Route::view('/login-successful', 'auth.success')->middleware('auth')->name('auth.success');
+Route::view('/login-successful', 'auth.success')
+    ->middleware(['auth', PreventAuthenticatedWorkspaceCaching::class])
+    ->name('auth.success');
 Route::middleware(['auth', 'agency-owner', PreventAuthenticatedWorkspaceCaching::class])->prefix('agency')->name('agency.')->group(function () {
     Route::get('/dashboard', [AgencyController::class, 'dashboard'])->name('dashboard');
     Route::get('/profile', [AgencyController::class, 'profile'])->name('profile');
