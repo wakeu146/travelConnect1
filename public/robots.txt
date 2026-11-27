@@ -7,4 +7,9 @@ Disallow: /dashboard
 Disallow: /bookings/
 Disallow: /conversations/
 Disallow: /auth/
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify-reset-code
 Sitemap: https://travelconnect.cm/sitemap.xml

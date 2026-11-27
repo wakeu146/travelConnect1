@@ -21,11 +21,59 @@ use App\Http\Controllers\TravelerCustomRequestController;
 use App\Http\Controllers\TravelerIssueController;
 use App\Http\Middleware\PreventAuthenticatedWorkspaceCaching;
 use App\Models\Agency;
+use App\Models\Package;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
+
+Route::get('/sitemap.xml', function () {
+    $baseUrl = rtrim((string) config('app.url'), '/');
+
+    $urls = [
+        ['loc' => $baseUrl.'/', 'changefreq' => 'daily', 'priority' => '1.0'],
+        ['loc' => $baseUrl.'/how-it-works', 'changefreq' => 'monthly', 'priority' => '0.7'],
+        ['loc' => $baseUrl.'/for-agencies', 'changefreq' => 'monthly', 'priority' => '0.7'],
+        ['loc' => $baseUrl.'/terms', 'changefreq' => 'yearly', 'priority' => '0.3'],
+        ['loc' => $baseUrl.'/privacy', 'changefreq' => 'yearly', 'priority' => '0.3'],
+        ['loc' => $baseUrl.'/accessibility', 'changefreq' => 'yearly', 'priority' => '0.3'],
+    ];
+
+    Package::query()
+        ->with('agency')
+        ->where('status', PackageStatus::PUBLISHED->value)
+        ->whereHas('availabilities', fn ($query) => $query
+            ->where('status', 'active')
+            ->whereDate('departure_date', '>', today()->toDateString()))
+        ->latest('updated_at')
+        ->get()
+        ->each(function (Package $package) use (&$urls, $baseUrl): void {
+            $urls[] = [
+                'loc' => $baseUrl.'/packages/'.urlencode((string) $package->getRouteKey()),
+                'changefreq' => 'weekly',
+                'priority' => '0.6',
+            ];
+        });
+
+    $xml = '<?xml version="1.0" encoding="UTF-8"?>'."\n";
+    $xml .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'."\n";
+
+    foreach ($urls as $url) {
+        $xml .= '  <url>'."\n";
+        $xml .= '    <loc>'.htmlspecialchars($url['loc'], ENT_XML1 | ENT_QUOTES, 'UTF-8').'</loc>'."\n";
+        $xml .= '    <changefreq>'.$url['changefreq'].'</changefreq>'."\n";
+        $xml .= '    <priority>'.$url['priority'].'</priority>'."\n";
+        $xml .= '  </url>'."\n";
+    }
+
+    $xml .= '</urlset>'."\n";
+
+    return response($xml, 200, [
+        'Content-Type' => 'application/xml; charset=UTF-8',
+        'Cache-Control' => 'public, max-age=3600',
+    ]);
+})->name('sitemap');
 
 Route::get('/robots.txt', fn () => response(file_get_contents(public_path('robots.txt')), 200, [
     'Content-Type' => 'text/plain; charset=UTF-8',

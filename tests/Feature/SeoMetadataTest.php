@@ -2,10 +2,13 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class SeoMetadataTest extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_public_home_has_canonical_social_metadata_and_brand_schema(): void
     {
         config()->set('app.url', 'https://travelconnect.cm');
@@ -52,6 +55,20 @@ class SeoMetadataTest extends TestCase
         $response->assertSee('Disallow: /admin/', false);
         $response->assertSee('Disallow: /account/', false);
         $response->assertSee('Disallow: /agency/', false);
+        $response->assertSee('Disallow: /login', false);
         $response->assertSee('Sitemap: https://travelconnect.cm/sitemap.xml', false);
+    }
+
+    public function test_sitemap_contains_public_routes_in_xml_format(): void
+    {
+        config()->set('app.url', 'https://travelconnect.cm');
+
+        $response = $this->get('/sitemap.xml');
+
+        $response->assertOk();
+        $response->assertHeader('Content-Type', 'application/xml; charset=UTF-8');
+        $response->assertSee('<loc>https://travelconnect.cm/</loc>', false);
+        $response->assertSee('<loc>https://travelconnect.cm/how-it-works</loc>', false);
+        $response->assertSee('<loc>https://travelconnect.cm/for-agencies</loc>', false);
     }
 }
