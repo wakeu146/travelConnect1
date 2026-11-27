@@ -39,6 +39,11 @@ class GoogleAuthControllerTest extends TestCase
         $this->assertNotEmpty($response->headers->all('set-cookie'));
     }
 
+    public function test_auth_debug_endpoint_is_not_public(): void
+    {
+        $this->get('/debug-auth')->assertNotFound();
+    }
+
     public function test_links_a_gmail_account_without_changing_existing_account_data(): void
     {
         $verifiedAt = now()->subDays(5);
