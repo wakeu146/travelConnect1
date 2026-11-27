@@ -466,8 +466,12 @@ class GoogleAuthController extends Controller
 
     private function googleRedirectResponse(): RedirectResponse
     {
-        $response = Socialite::driver('google')->redirect();
+        $providerResponse = Socialite::driver('google')->redirect();
+        $response = redirect()->away($providerResponse->getTargetUrl());
         $response->headers->set('Cache-Control', 'no-store, private');
+        $response->headers->set('Pragma', 'no-cache');
+        $response->headers->set('Expires', '0');
+        $response->headers->set('X-Robots-Tag', 'noindex, nofollow');
 
         return $response;
     }
