@@ -9,7 +9,7 @@
     $appUrl = \App\Support\CanonicalUrl::base();
     $pagePath = request()->getPathInfo();
     $canonical = $appUrl.$pagePath;
-    $socialImage = $image ?: $appUrl.'/images/destinations/new-york.jpg';
+    $socialImage = $image ?: $appUrl.'/images/logos/travelconnect1.png';
     $structuredData = [
         '@context' => 'https://schema.org',
         '@graph' => array_merge([
@@ -20,7 +20,7 @@
                 'url' => $appUrl,
                 'logo' => [
                     '@type' => 'ImageObject',
-                    'url' => $appUrl.'/images/logo.png',
+                    'url' => $appUrl.'/images/logos/travelconnect1.png',
                 ],
             ],
             [
@@ -47,8 +47,8 @@
     <link rel="alternate" hreflang="fr" href="{{ $appUrl.$pagePath }}?lang=fr">
     <link rel="alternate" hreflang="x-default" href="{{ $canonical }}">
     <link rel="icon" href="{{ $appUrl.'/favicon.ico' }}" sizes="any">
-    <link rel="icon" type="image/png" href="{{ $appUrl.'/images/logo.png' }}" sizes="512x512">
-    <link rel="apple-touch-icon" href="{{ $appUrl.'/images/logo.png' }}">
+    <link rel="icon" type="image/png" href="{{ $appUrl.'/images/logos/travelconnect1.png' }}" sizes="512x512">
+    <link rel="apple-touch-icon" href="{{ $appUrl.'/images/logos/travelconnect1.png' }}">
     <meta property="og:type" content="website">
     <meta property="og:locale" content="{{ app()->getLocale() === 'fr' ? 'fr_CM' : 'en_CM' }}">
     <meta property="og:site_name" content="TravelConnect">
@@ -56,6 +56,10 @@
     <meta property="og:description" content="{{ $description }}">
     <meta property="og:url" content="{{ $canonical }}">
     <meta property="og:image" content="{{ $socialImage }}">
+    @if (! $image)
+        <meta property="og:image:width" content="570">
+        <meta property="og:image:height" content="217">
+    @endif
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ $title }}">
     <meta name="twitter:description" content="{{ $description }}">
@@ -67,9 +71,7 @@
 <body class="flex min-h-screen flex-col bg-[#fbfaf7] text-[#173042] antialiased {{ auth()->check() ? 'authenticated' : '' }}">
     <div id="page-loader" class="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center bg-[#fbfaf7] opacity-0 transition-opacity duration-300" aria-live="polite" aria-label="{{ __('messages.loading_page') }}" role="status">
         <div class="flex flex-col items-center gap-5 text-center">
-            <span class="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-white shadow-[0_12px_30px_rgba(23,48,66,0.08)]">
-                <img src="{{ asset('images/logo.png') }}" alt="TravelConnect logo" class="h-full w-full object-contain">
-            </span>
+            <x-brand-logo class="h-12 w-auto max-w-[80vw] sm:h-16" />
             <div class="flex flex-col items-center gap-3">
                 <span class="h-8 w-8 animate-spin rounded-full border-[3px] border-[#dfe8e8] border-t-[#e76f51]" aria-label="{{ __('messages.loading') }}"></span>
                 <div>
