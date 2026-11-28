@@ -14,13 +14,7 @@
         <a href="{{ auth()->check() ? route('dashboard', ['lang' => app()->getLocale()]) : route('home') }}"
             class="flex items-center gap-2.5 text-base font-semibold tracking-tight text-[#173042] sm:gap-3 sm:text-lg">
 
-            <span
-                class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm sm:h-10 sm:w-10 lg:h-11 lg:w-11">
-                <img
-                    src="{{ asset('images/logo.png') }}"
-                    alt="TravelConnect logo"
-                    class="h-full w-full object-contain">
-            </span>
+            <x-brand-logo class="h-7 w-auto shrink-0 sm:h-8 lg:h-9" />
 
             <span>
                 Travel<span class="font-normal text-[#e76f51]">Connect</span>
@@ -258,14 +252,7 @@
                     href="{{ auth()->check() ? route('dashboard', ['lang' => app()->getLocale()]) : route('home') }}"
                     class="flex items-center gap-2.5">
 
-                    <span
-                        class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#fbfaf7] shadow-sm">
-
-                        <img
-                            src="{{ asset('images/logo.png') }}"
-                            alt="TravelConnect logo"
-                            class="h-full w-full object-contain">
-                    </span>
+                    <x-brand-logo class="h-7 w-auto shrink-0" />
 
                     <span class="text-base font-semibold tracking-tight">
                         Travel<span class="font-normal text-[#e76f51]">Connect</span>

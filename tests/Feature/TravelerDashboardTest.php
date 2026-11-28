@@ -42,7 +42,11 @@ class TravelerDashboardTest extends TestCase
                 false,
             )
             ->assertSee('<div data-account-brand', false)
-            ->assertDontSee('<a data-account-brand', false);
+            ->assertDontSee('<a data-account-brand', false)
+            ->assertSee('data-brand-logo-light', false)
+            ->assertSee('images/logos/travelconnect1.png', false)
+            ->assertSee('data-brand-logo-dark', false)
+            ->assertSee('images/logos/travelconnect.png', false);
         $response->assertSee('Good to see you, Maya Chen.');
         $response->assertSee('North Star Travel');
         $response->assertSee('>1</p>', false);

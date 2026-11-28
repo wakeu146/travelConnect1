@@ -29,14 +29,8 @@
                     >
                         <x-admin.icon name="menu" class="h-5 w-5" />
                     </button>
-                    <a href="{{ route('admin.dashboard', ['lang' => app()->getLocale()]) }}" class="flex min-w-0 items-center gap-2.5 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2">
-                        <span class="admin-brand-mark flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">
-                            <x-admin.icon name="globe" class="h-5 w-5" />
-                        </span>
-                        <span class="min-w-0">
-                            <span class="block truncate text-sm font-extrabold tracking-tight">TravelConnect</span>
-                            <span class="hidden text-[10px] font-bold uppercase tracking-[.14em] admin-muted sm:block">{{ __('messages.admin_nav.super_admin') }}</span>
-                        </span>
+                    <a href="{{ route('admin.dashboard', ['lang' => app()->getLocale()]) }}" class="flex min-w-0 items-center rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2" aria-label="TravelConnect admin dashboard">
+                        <x-brand-logo variant="both" class="h-8 w-auto shrink-0 sm:h-10" />
                     </a>
                 </div>
 

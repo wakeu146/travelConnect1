@@ -19,7 +19,9 @@ class SeoMetadataTest extends TestCase
         $response->assertSee('rel="canonical" href="https://travelconnect.cm/"', false);
         $response->assertSee('property="og:site_name" content="TravelConnect"', false);
         $response->assertSee('type="application/ld+json"', false);
-        $response->assertSee('https://travelconnect.cm/images/logo.png', false);
+        $response->assertSee('property="og:image" content="https://travelconnect.cm/images/logos/travelconnect1.png"', false);
+        $response->assertSee('property="og:image:width" content="570"', false);
+        $response->assertSee('property="og:image:height" content="217"', false);
         $response->assertSee('name="robots" content="index, follow"', false);
     }
 
