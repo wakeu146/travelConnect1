@@ -54,6 +54,24 @@
     --review-divider: rgba(199, 214, 220, 0.12);
 }
 
+ [data-brand-logo-light] {
+    display: block;
+}
+
+[data-brand-logo-dark] {
+    display: none;
+}
+
+.dashboard-dark [data-brand-logo-light],
+.admin-dashboard[data-admin-theme="dark"] [data-brand-logo-light] {
+    display: none !important;
+}
+
+.dashboard-dark [data-brand-logo-dark],
+.admin-dashboard[data-admin-theme="dark"] [data-brand-logo-dark] {
+    display: block !important;
+}
+
 html {
     scrollbar-color: var(--app-scrollbar-thumb) var(--app-scrollbar-track);
     scrollbar-width: thin;
@@ -1474,11 +1492,6 @@ input:not([type='checkbox']):not([type='radio']) {
 
 .admin-border {
     border-color: var(--admin-border);
-}
-
-.admin-brand-mark {
-    background: var(--admin-active-bg);
-    color: var(--admin-active-text);
 }
 
 .admin-icon-button,

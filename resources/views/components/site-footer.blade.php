@@ -2,7 +2,7 @@
     <div class="mx-auto max-w-7xl px-6 py-16 lg:px-8">
         <div class="grid gap-12 border-b border-white/15 pb-14 lg:grid-cols-[1.4fr_1fr_1fr_1.2fr]">
             <div class="max-w-sm">
-                <a href="{{ route('home') }}" class="flex items-center gap-3 text-lg font-semibold tracking-tight"><span class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white"><img src="{{ asset('images/logo.png') }}" alt="TravelConnect logo" class="h-full w-full object-contain"></span><span>Travel<span class="font-normal text-[#f6c9bb]">Connect</span></span></a>
+                <a href="{{ route('home') }}" class="flex items-center gap-3 text-lg font-semibold tracking-tight"><x-brand-logo variant="dark" class="h-10 w-auto shrink-0 sm:h-12" /><span>Travel<span class="font-normal text-[#f6c9bb]">Connect</span></span></a>
                 <p class="mt-4 max-w-xs text-xl font-serif leading-8 text-white">{{ __('messages.travelconnect') }}</p>
                 <p class="mt-3 max-w-sm text-sm leading-6 text-white/55">{{ __('messages.travelers_and_agencies_description') }}</p>
                 <div class="mt-5 flex gap-3"><a href="#" aria-label="Instagram" class="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 text-xs hover:border-[#e76f51]">IG</a><a href="#" aria-label="Facebook" class="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 text-xs hover:border-[#e76f51]">FB</a><a href="#" aria-label="LinkedIn" class="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 text-xs hover:border-[#e76f51]">IN</a></div>

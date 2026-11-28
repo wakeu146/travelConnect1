@@ -6,17 +6,15 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="robots" content="noindex, nofollow">
     <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
-    <link rel="icon" type="image/png" href="{{ asset('images/logo.png') }}" sizes="512x512">
-    <link rel="apple-touch-icon" href="{{ asset('images/logo.png') }}">
+    <link rel="icon" type="image/png" href="{{ asset('images/logos/travelconnect1.png') }}" sizes="512x512">
+    <link rel="apple-touch-icon" href="{{ asset('images/logos/travelconnect1.png') }}">
     <title>{{ $title ?? 'Account | TravelConnect' }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-[#f1f6f4] text-[#173042] antialiased">
     <div id="page-loader" class="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center bg-[#fbfaf7] opacity-0 transition-opacity duration-300" aria-live="polite" aria-label="{{ __('messages.loading_page') }}" role="status">
         <div class="flex flex-col items-center gap-5 text-center">
-            <span class="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-white shadow-[0_12px_30px_rgba(23,48,66,0.08)]">
-                <img src="{{ asset('images/logo.png') }}" alt="TravelConnect logo" class="h-full w-full object-contain">
-            </span>
+            <x-brand-logo class="h-12 w-auto max-w-[80vw] sm:h-16" />
             <div class="flex flex-col items-center gap-3">
                 <span class="h-8 w-8 animate-spin rounded-full border-[3px] border-[#dfe8e8] border-t-[#e76f51]" aria-label="{{ __('messages.loading') }}"></span>
                 <div>

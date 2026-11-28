@@ -1,3 +1,29 @@
+const syncDashboardBrandLogos = () => {
+	const adminShell = document.querySelector('[data-admin-shell]');
+	const dark = adminShell?.dataset.adminTheme === 'dark'
+		|| document.body.classList.contains('dashboard-dark');
+
+	document.querySelectorAll('[data-brand-logo-light]').forEach((logo) => {
+		logo.hidden = dark;
+		logo.classList.toggle('hidden', dark);
+		logo.style.display = dark ? 'none' : 'block';
+	});
+
+	document.querySelectorAll('[data-brand-logo-dark]').forEach((logo) => {
+		logo.hidden = !dark;
+		logo.classList.toggle('hidden', !dark);
+		logo.style.display = dark ? 'block' : 'none';
+	});
+};
+
+syncDashboardBrandLogos();
+
+const dashboardThemeObserver = new MutationObserver(syncDashboardBrandLogos);
+dashboardThemeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+document.querySelectorAll('[data-admin-shell]').forEach((shell) => {
+	dashboardThemeObserver.observe(shell, { attributes: true, attributeFilter: ['data-admin-theme'] });
+});
+
 document.querySelectorAll('[data-carousel]').forEach((carousel) => {
 	const track = carousel.querySelector('[data-carousel-track]');
 	if (!track) return;

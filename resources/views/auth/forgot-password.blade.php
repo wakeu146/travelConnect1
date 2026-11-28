@@ -5,9 +5,7 @@
             <div class="absolute inset-0 bg-[linear-gradient(145deg,rgba(16,39,54,.95),rgba(23,48,66,.35))]"></div>
             <div class="relative flex h-full flex-col justify-between p-12 text-white xl:p-16">
                 <a href="{{ route('home', ['lang' => app()->getLocale()]) }}" class="flex items-center gap-3 text-lg font-semibold">
-                    <span class="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm">
-                        <img src="{{ asset('images/logo.png') }}" alt="TravelConnect logo" class="h-full w-full object-contain">
-                    </span>
+                    <x-brand-logo variant="dark" class="h-10 w-auto sm:h-12" />
                     Travel<span class="font-normal text-[#f6c9bb]">Connect</span>
                 </a>
                 <div class="max-w-sm">
@@ -23,9 +21,7 @@
             <div class="w-full max-w-md">
                 <div class="mb-10 flex items-center justify-between lg:hidden">
                     <a href="{{ route('home', ['lang' => app()->getLocale()]) }}" class="flex items-center gap-3 text-lg font-semibold">
-                        <span class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm">
-                            <img src="{{ asset('images/logo.png') }}" alt="TravelConnect logo" class="h-full w-full object-contain">
-                        </span>
+                        <x-brand-logo class="h-8 w-auto sm:h-10" />
                         Travel<span class="font-normal text-[#e76f51]">Connect</span>
                     </a>
                     <a href="{{ route('home', ['lang' => app()->getLocale()]) }}" class="text-sm font-semibold text-[#607985]">{{ __('messages.home') }}</a>
