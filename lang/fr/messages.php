@@ -17,6 +17,10 @@ return [
             'description' => 'Rejoignez TravelConnect pour présenter votre agence de voyage vérifiée au Cameroun et rencontrer des voyageurs.',
             'heading' => 'Développez votre agence de voyage au Cameroun',
         ],
+        'agency' => [
+            'title' => ':name | Agence de voyage au Cameroun | TravelConnect',
+            'description' => 'Découvrez :name sur TravelConnect, plateforme d’agences de voyage vérifiées au Cameroun. Services : :service. Destinations : :destinations. :description',
+        ],
         'terms' => [
             'title' => 'Conditions TravelConnect | Voyage au Cameroun',
             'description' => 'Consultez les conditions d’utilisation de TravelConnect, plateforme reliant voyageurs et agences de voyage au Cameroun.',
@@ -1034,7 +1038,7 @@ return [
     'collapse_navigation' => 'Réduire la navigation',
     'expand_navigation' => 'Développer la navigation',
     'public_home_title' => 'Commencez par une destination inoubliable.',
-    'public_home_intro' => 'Découvrez les lieux qui vous inspireront pour votre prochain voyage. Créez un compte pour découvrir des agences de confiance et planifier sereinement.',
+    'public_home_intro' => 'Trouvez des agences de voyage de confiance au Cameroun, comparez les destinations et préparez votre prochain voyage.',
     'explore_destinations' => 'Explorer les destinations',
     'public_home_info' => 'TravelConnect rassemble la préparation de voyage en un seul endroit. Les visiteurs peuvent explorer les destinations et découvrir la plateforme. Les membres peuvent trouver des agences, enregistrer leurs idées et gérer leurs conversations depuis leur compte privé.',
     'activity_title' => 'Votre activité',

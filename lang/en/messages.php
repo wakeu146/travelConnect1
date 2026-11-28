@@ -17,6 +17,10 @@ return [
             'description' => 'Join TravelConnect to showcase your verified travel agency in Cameroon and connect with travelers planning trips.',
             'heading' => 'Grow your travel agency in Cameroon',
         ],
+        'agency' => [
+            'title' => ':name | Travel agency in Cameroon | TravelConnect',
+            'description' => 'Explore :name on TravelConnect, a marketplace for verified travel agencies in Cameroon. Services: :service. Destinations: :destinations. :description',
+        ],
         'terms' => [
             'title' => 'TravelConnect Terms for Cameroon Travelers',
             'description' => 'Read the terms for using TravelConnect, a marketplace connecting travelers and travel agencies in Cameroon.',
@@ -1033,7 +1037,7 @@ return [
     'collapse_navigation' => 'Collapse navigation',
     'expand_navigation' => 'Expand navigation',
     'public_home_title' => 'Start with a destination worth remembering.',
-    'public_home_intro' => 'Explore the places that inspire your next journey. When you are ready, create an account to discover trusted travel agencies and plan with confidence.',
+    'public_home_intro' => 'Find trusted travel agencies in Cameroon, compare destinations and plan your next journey with confidence.',
     'explore_destinations' => 'Explore destinations',
     'public_home_info' => 'TravelConnect brings thoughtful travel planning into one place. Visitors can explore destinations and learn how the platform works. Members can discover agencies, save ideas, and manage every conversation from their private account.',
     'activity_title' => 'Your activity',
