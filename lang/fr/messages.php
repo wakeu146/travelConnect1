@@ -428,6 +428,7 @@ return [
     'join_as_agency' => 'Rejoindre comme agence',
     'explore' => 'Explorer',
     'find_an_agency' => 'Trouver une agence',
+    'sitemap' => 'Plan du site',
     'stay_inspired' => 'Restez inspiré',
     'monthly_note' => 'Une lettre mensuelle avec des idées de destination, des connaissances locales et de meilleures façons de voyager.',
     'subscribe_to_journal' => 'S’abonner au journal',

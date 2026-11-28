@@ -427,6 +427,7 @@ return [
     'join_as_agency' => 'Join as an agency',
     'explore' => 'Explore',
     'find_an_agency' => 'Find an agency',
+    'sitemap' => 'Sitemap',
     'stay_inspired' => 'Stay inspired',
     'monthly_note' => 'A monthly note with destination ideas, local knowledge, and better ways to travel.',
     'subscribe_to_journal' => 'Subscribe to the journal',
