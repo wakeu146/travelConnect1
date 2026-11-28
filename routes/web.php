@@ -23,6 +23,7 @@ use App\Http\Middleware\PreventAuthenticatedWorkspaceCaching;
 use App\Models\Agency;
 use App\Models\Package;
 use App\Models\User;
+use App\Support\CanonicalUrl;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -39,6 +40,16 @@ Route::get('/sitemap.xml', function () {
         ['loc' => $baseUrl.'/privacy', 'changefreq' => 'yearly', 'priority' => '0.3'],
         ['loc' => $baseUrl.'/accessibility', 'changefreq' => 'yearly', 'priority' => '0.3'],
     ];
+
+    Agency::verified()
+        ->get(['company_name'])
+        ->each(function (Agency $agency) use (&$urls, $baseUrl): void {
+            $urls[] = [
+                'loc' => $baseUrl.'/agencies/'.urlencode(Str::slug($agency->company_name)),
+                'changefreq' => 'weekly',
+                'priority' => '0.7',
+            ];
+        });
 
     Package::query()
         ->with('agency')
@@ -94,7 +105,13 @@ Route::get('/', function () {
         return redirect()->route('dashboard', ['lang' => app()->getLocale()]);
     }
 
-    return view('public-home');
+    return view('public-home', [
+        'featuredAgencies' => Agency::verified()
+            ->with('services:id,name')
+            ->latest('updated_at')
+            ->limit(6)
+            ->get(['id', 'company_name', 'description', 'updated_at']),
+    ]);
 })->middleware(PreventAuthenticatedWorkspaceCaching::class)->name('home');
 
 Route::get('/discover/search', [AgencyDiscoveryController::class, 'search'])
@@ -103,6 +120,9 @@ Route::get('/discover/search', [AgencyDiscoveryController::class, 'search'])
 Route::get('/discover', [AgencyDiscoveryController::class, 'index'])->middleware('auth')->name('discover');
 Route::get('/account/discover', [AgencyDiscoveryController::class, 'index'])->middleware('auth')->name('account.discover');
 Route::get('/agencies/{slug}', function (string $slug) {
+    /** @var User|null $user */
+    $user = Auth::user();
+
     $fallbackAgencies = [
         'atlas-horizon-voyages' => ['name' => 'Atlas Horizon Voyages', 'country' => 'France', 'service' => 'Adventure travel', 'rating' => '4.9', 'reviews' => '38', 'description' => 'Tailor-made adventures across Europe and beyond, planned by a team that knows the routes personally.', 'cover' => asset('images/agencies/atlas-horizon.jpg')],
         'lumiere-routes' => ['name' => 'Lumiere Routes', 'country' => 'Portugal', 'service' => 'Luxury escapes', 'rating' => '4.8', 'reviews' => '31', 'description' => 'Slow travel and beautiful escapes, thoughtfully planned around the details that make a journey memorable.', 'cover' => asset('images/agencies/lumiere-routes.jpg')],
@@ -119,12 +139,16 @@ Route::get('/agencies/{slug}', function (string $slug) {
         'blue-fern-expeditions' => ['New Zealand', 'Australia', 'Fiji'],
     ];
 
-    /** @var User $user */
-    $user = Auth::user();
-    $agencyModel = Agency::query()
-        ->with(['countries', 'services', 'experiences' => fn ($query) => $query->latest('published_at')])
-        ->where('operating_status', 'active')
-        ->get()
+    $agencyQuery = Agency::query()
+        ->with(['countries', 'services', 'experiences' => fn ($query) => $query->latest('published_at')]);
+
+    if ($user) {
+        $agencyQuery->where('operating_status', 'active');
+    } else {
+        $agencyQuery->verified();
+    }
+
+    $agencyModel = $agencyQuery->get()
         ->first(fn (Agency $agency) => Str::slug($agency->company_name) === $slug);
     $suspendedAgencyExists = Agency::query()
         ->where('operating_status', 'suspended')
@@ -133,7 +157,7 @@ Route::get('/agencies/{slug}', function (string $slug) {
 
     abort_if($suspendedAgencyExists, 404);
 
-    if (! $agencyModel && ! isset($fallbackAgencies[$slug])) {
+    if (! $agencyModel && (! $user || ! isset($fallbackAgencies[$slug]))) {
         abort(404);
     }
 
@@ -167,6 +191,32 @@ Route::get('/agencies/{slug}', function (string $slug) {
 
     $agencyData['countries'] = $agencyModel ? $agencyData['countries'] : ($agencyCountries[$slug] ?? [$agencyData['country']]);
 
+    if (! $user) {
+        $profileUrl = CanonicalUrl::absolute('/agencies/'.$slug);
+        $seoTitle = Str::limit(__('messages.seo.agency.title', ['name' => $agencyData['name']]), 65);
+        $seoDescription = Str::limit(__('messages.seo.agency.description', [
+            'name' => $agencyData['name'],
+            'service' => $agencyData['service'],
+            'destinations' => implode(', ', $agencyData['countries']),
+            'description' => $agencyData['description'],
+        ]), 160);
+
+        return view('public-agency-show', [
+            'agency' => $agencyData,
+            'packages' => $agencyModel?->packages ?? collect(),
+            'seoTitle' => $seoTitle,
+            'seoDescription' => $seoDescription,
+            'schema' => [[
+                '@type' => 'Organization',
+                '@id' => $profileUrl.'#agency',
+                'name' => $agencyData['name'],
+                'url' => $profileUrl,
+                'description' => $agencyData['description'],
+                'image' => asset($agencyData['cover']),
+            ]],
+        ]);
+    }
+
     $publishedReviewCount = $agencyModel?->reviews()->where('status', 'published')->where('is_hidden', false)->count() ?? 0;
     $publishedReviews = $agencyModel?->reviews()->with('user')->where('status', 'published')->where('is_hidden', false)->orderByDesc('rating')->orderByDesc('created_at')->limit(5)->get() ?? collect();
     $visibleReviewCount = $publishedReviewCount;
@@ -185,7 +235,7 @@ Route::get('/agencies/{slug}', function (string $slug) {
         : collect();
 
     return view('agency-show', ['agency' => $agencyData, 'agencyModel' => $agencyModel, 'packages' => $agencyModel?->packages ?? collect(), 'isSaved' => $agencyModel && $user->favoriteAgencies()->whereKey($agencyModel->id)->exists(), 'publishedReviews' => $publishedReviews, 'publishedReviewCount' => $publishedReviewCount, 'visibleReviewCount' => $visibleReviewCount, 'visibleRating' => $visibleRating, 'ratingCounts' => $ratingCounts, 'pendingReview' => $pendingReview, 'eligibleReviewBookings' => $eligibleReviewBookings]);
-})->middleware(['auth', PreventAuthenticatedWorkspaceCaching::class])->name('agency.show');
+})->middleware(PreventAuthenticatedWorkspaceCaching::class)->name('agency.show');
 Route::post('/agencies/{slug}/inquiries', [InquiryController::class, 'store'])->middleware('auth')->name('inquiries.store');
 Route::post('/agencies/{slug}/reviews', [ReviewController::class, 'store'])->middleware('auth')->name('reviews.store');
 Route::post('/reviews/{review}/report', [ReviewReportController::class, 'store'])->middleware(['auth', 'throttle:10,1'])->whereNumber('review')->name('reviews.report');

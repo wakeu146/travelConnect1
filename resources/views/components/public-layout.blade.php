@@ -18,9 +18,15 @@
                 '@id' => $appUrl.'/#organization',
                 'name' => 'TravelConnect',
                 'url' => $appUrl,
+                'description' => __('messages.seo.home.description'),
+                'areaServed' => [
+                    '@type' => 'Country',
+                    'name' => 'Cameroon',
+                ],
+                'knowsLanguage' => ['en', 'fr'],
                 'logo' => [
                     '@type' => 'ImageObject',
-                    'url' => $appUrl.'/images/logos/travelconnect1.png',
+                    'url' => $appUrl.'/images/logos/travelconnect-square.png',
                 ],
             ],
             [
@@ -46,9 +52,9 @@
     <link rel="alternate" hreflang="en" href="{{ $appUrl.$pagePath }}?lang=en">
     <link rel="alternate" hreflang="fr" href="{{ $appUrl.$pagePath }}?lang=fr">
     <link rel="alternate" hreflang="x-default" href="{{ $canonical }}">
-    <link rel="icon" href="{{ $appUrl.'/favicon.ico' }}" sizes="any">
-    <link rel="icon" type="image/png" href="{{ $appUrl.'/images/logos/travelconnect1.png' }}" sizes="512x512">
-    <link rel="apple-touch-icon" href="{{ $appUrl.'/images/logos/travelconnect1.png' }}">
+    <link rel="icon" type="image/x-icon" href="{{ $appUrl.'/favicon.ico' }}">
+    <link rel="icon" type="image/png" href="{{ $appUrl.'/images/logos/travelconnect-square.png' }}" sizes="256x256">
+    <link rel="apple-touch-icon" href="{{ $appUrl.'/images/logos/travelconnect-square.png' }}">
     <meta property="og:type" content="website">
     <meta property="og:locale" content="{{ app()->getLocale() === 'fr' ? 'fr_CM' : 'en_CM' }}">
     <meta property="og:site_name" content="TravelConnect">
